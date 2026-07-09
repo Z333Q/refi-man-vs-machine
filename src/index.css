@@ -1,0 +1,270 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    background-color: #050806;
+  }
+
+  body {
+    background-color: #050806;
+    color: #0CD4A0;
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background-color: rgba(12, 212, 160, 0.25);
+    color: #79FFD7;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #08110D;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #27634E;
+    border-radius: 0;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #0A8F68;
+  }
+}
+
+@layer components {
+  .terminal-screen {
+    background:
+      linear-gradient(
+        rgba(18, 255, 170, 0.018) 50%,
+        rgba(0, 0, 0, 0.035) 50%
+      ),
+      #050806;
+    background-size: 100% 4px;
+    min-height: 100vh;
+    position: relative;
+  }
+
+  .terminal-glow {
+    text-shadow:
+      0 0 4px rgba(12, 212, 160, 0.22),
+      0 0 12px rgba(12, 212, 160, 0.08);
+  }
+
+  .terminal-glow-strong {
+    text-shadow:
+      0 0 4px rgba(121, 255, 215, 0.4),
+      0 0 12px rgba(121, 255, 215, 0.2),
+      0 0 24px rgba(121, 255, 215, 0.08);
+  }
+
+  .terminal-panel {
+    border: 1px solid rgba(12, 212, 160, 0.25);
+    background-color: #0C1712;
+    border-radius: 3px;
+  }
+
+  .terminal-panel-deep {
+    border: 1px solid rgba(12, 212, 160, 0.18);
+    background-color: #08110D;
+    border-radius: 3px;
+  }
+
+  .cmd-button {
+    border: 1px solid rgba(12, 212, 160, 0.5);
+    background: transparent;
+    padding: 0.5rem 1.25rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: #0CD4A0;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 150ms ease;
+    border-radius: 2px;
+  }
+
+  .cmd-button:hover {
+    background-color: rgba(12, 212, 160, 0.1);
+    color: #79FFD7;
+    border-color: rgba(12, 212, 160, 0.8);
+    box-shadow: 0 0 4px rgba(12, 212, 160, 0.22), 0 0 12px rgba(12, 212, 160, 0.08);
+  }
+
+  .cmd-button:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(12, 212, 160, 0.5);
+  }
+
+  .cmd-button-primary {
+    border-color: #0CD4A0;
+    color: #79FFD7;
+    background: rgba(12, 212, 160, 0.08);
+  }
+
+  .cmd-button-primary:hover {
+    background-color: rgba(12, 212, 160, 0.18);
+    color: #B8FFD9;
+  }
+
+  .data-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    color: #79FFD7;
+  }
+
+  .data-label {
+    font-family: 'JetBrains Mono', monospace;
+    color: #0A8F68;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .positive-value {
+    color: #0CD4A0;
+  }
+
+  .negative-value {
+    color: #D94C4C;
+    text-shadow: 0 0 4px rgba(217, 76, 76, 0.3);
+  }
+
+  .warning-value {
+    color: #D6A647;
+  }
+
+  .cursor-blink::after {
+    content: '_';
+    animation: cursorBlink 1s steps(1, end) infinite;
+    color: #0CD4A0;
+  }
+
+  .ascii-art {
+    font-family: 'JetBrains Mono', monospace;
+    white-space: pre;
+    line-height: 0.82;
+    letter-spacing: -0.045em;
+    font-size: clamp(7px, 0.7vw, 11px);
+    color: #27634E;
+  }
+
+  .progress-bar-track {
+    background-color: #08110D;
+    border: 1px solid rgba(12, 212, 160, 0.2);
+    height: 8px;
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background-color: #0CD4A0;
+    transition: width 300ms ease;
+  }
+
+  .node-locked { color: #27634E; }
+  .node-available { color: #0A8F68; }
+  .node-active { color: #0CD4A0; text-shadow: 0 0 4px rgba(12, 212, 160, 0.4); }
+  .node-passed { color: #79FFD7; }
+  .node-machine-beaten { color: #B8FFD9; }
+
+  .nav-key {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(12, 212, 160, 0.35);
+    padding: 1px 5px;
+    font-size: 0.65rem;
+    color: #0A8F68;
+    border-radius: 2px;
+    margin-right: 4px;
+  }
+}
+
+@keyframes cursorBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes scanMove {
+  0% { background-position-y: 0px; }
+  100% { background-position-y: 4px; }
+}
+
+@keyframes interference {
+  0% { transform: translateX(0); filter: none; }
+  33% { transform: translateX(-1px); filter: contrast(1.05); }
+  66% { transform: translateX(1px); filter: contrast(0.98); }
+  100% { transform: translateX(0); filter: none; }
+}
+
+@keyframes bootFade {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes constellationPulse {
+  0%, 100% { opacity: 0.18; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(1.06); }
+}
+
+@keyframes machineCompile {
+  0% { opacity: 0.2; }
+  50% { opacity: 1; }
+  100% { opacity: 0.2; }
+}
+
+@keyframes pipelineFlow {
+  0% { stroke-dashoffset: 12; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes revealChar {
+  0% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-8px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-slide-in {
+  animation: slideInLeft 200ms ease forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 200ms ease forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-screen {
+    background: #050806;
+  }
+
+  .cursor-blink::after {
+    animation: none;
+    opacity: 1;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
