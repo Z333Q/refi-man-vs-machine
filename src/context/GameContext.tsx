@@ -172,17 +172,18 @@ function reducer(state: GameState, action: GameAction): GameState {
       return { ...state, run: { ...state.run, pendingConfidence: action.confidence } };
 
     case 'COMMIT_DECISION': {
-      if (!state.run || !state.run.pendingAction) return state;
       const { run } = state;
+      if (!run || !run.pendingAction) return state;
+      const pendingAction = run.pendingAction;
       const cp = getCheckpoint(run.currentCheckpoint);
       if (!cp) return state;
 
-      const branch = cp.availableActions.find(a => a.actionCode === run.pendingAction);
+      const branch = cp.availableActions.find(a => a.actionCode === pendingAction);
       const flags: BehavioralFlag[] = branch?.branchEffect.flagsAdd ?? [];
       const dimUpdates = branch?.branchEffect.alphaImpact ?? {};
 
       const score = scoreCheckpoint({
-        action: run.pendingAction,
+        action: pendingAction,
         checkpoint: cp,
         flags,
         confidence: run.pendingConfidence,
@@ -193,7 +194,7 @@ function reducer(state: GameState, action: GameAction): GameState {
 
       const newDecision: RunDecision = {
         checkpointSequence: run.currentCheckpoint,
-        actionCode: run.pendingAction,
+        actionCode: pendingAction,
         thesisCode: run.pendingThesis ?? undefined,
         confidence: run.pendingConfidence,
         modulesConsulted: run.investigatedModules,
@@ -204,7 +205,7 @@ function reducer(state: GameState, action: GameAction): GameState {
         committed: true,
       };
 
-      const newPortfolio = simulatePortfolioAdvance(run.portfolio, run.pendingAction, run.currentCheckpoint);
+      const newPortfolio = simulatePortfolioAdvance(run.portfolio, pendingAction, run.currentCheckpoint);
       const newPlayerScore = Math.round((run.playerScore * (run.currentCheckpoint - 1) + score.totalScore) / run.currentCheckpoint);
       const newMachineScore = Math.round((run.machineScore * (run.currentCheckpoint - 1) + score.machineScore) / run.currentCheckpoint);
       const xpEarned = computeXpAward(score, cp.isRegimeChange);

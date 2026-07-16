@@ -170,8 +170,6 @@ export default function TutorialScreen({ onComplete }: Props) {
     setOrderAction(null);
   };
 
-  const isCompleteStep = step.id === 'COMPLETE';
-
   return (
     <div className="min-h-screen bg-terminal-black font-mono flex flex-col">
 

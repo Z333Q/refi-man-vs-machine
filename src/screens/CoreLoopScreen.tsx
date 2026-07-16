@@ -120,7 +120,6 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         emitVisual({
           type: 'REGIME_SHIFT',
           intensity: 0.8,
-          blocking: true,
           payload: {
             regime: currentCheckpointData.phase.replace(/_/g, ' '),
             description: currentCheckpointData.signalTitle,
@@ -162,7 +161,6 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         emitVisual({
           type: 'DRAWDOWN_WARNING',
           intensity: Math.min(1, Math.abs(run.portfolio.drawdown) / 0.2),
-          blocking: true,
           payload: {
             drawdown: run.portfolio.drawdown,
             message: `PORTFOLIO DRAWDOWN AT ${(run.portfolio.drawdown * 100).toFixed(1)}%. REVIEW RISK EXPOSURE.`,
@@ -181,7 +179,6 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         emitVisual({
           type: 'CORRELATION_COLLAPSE',
           intensity: run.portfolio.correlationIndex,
-          blocking: false,
           payload: {
             correlationBefore: 0.35,
             correlationAfter: run.portfolio.correlationIndex,
@@ -202,7 +199,6 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         emitVisual({
           type: 'CASH_RAISED',
           intensity: run.portfolio.cashWeight,
-          blocking: true,
           payload: {
             cashBefore: Math.max(0, run.portfolio.cashWeight - 0.12),
             cashAfter: run.portfolio.cashWeight,

@@ -3,7 +3,7 @@ import {
   useRef, type ReactNode,
 } from 'react';
 import {
-  TIP_LIBRARY, getTipsByTrigger, isVisibleInMode,
+  getTipsByTrigger, isVisibleInMode,
   type TipDef, type TipState, type GuidanceMode, type TipTriggerEvent, type TipAction,
 } from '../lib/tipDefinitions';
 import { supabase, getSessionId } from '../lib/supabase';

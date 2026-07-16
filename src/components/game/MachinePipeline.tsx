@@ -32,7 +32,9 @@ interface Props {
 
 export default function MachinePipeline({
   activeStage = 0,
-  animate = true,
+  // `animate` is part of the props contract for future motion gating,
+  // but this build always animates via reducedMotion + autoPlay only.
+  animate: _animate = true,
   autoPlay = false,
   autoPlayDurationMs = 1800,
   reducedMotion = false,

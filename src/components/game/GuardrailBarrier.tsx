@@ -18,7 +18,9 @@ export default function GuardrailBarrier({
   label,
   proposedValue,
   limitValue,
-  unit = '%',
+  // Unit is part of the props contract for future callers that want a
+  // suffix on the tick label; the current formatFn owns rendering.
+  unit: _unit = '%',
   formatFn = defaultFormat,
   reducedMotion = false,
   onBlocked,
