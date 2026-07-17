@@ -1,3 +1,5 @@
+import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
+
 interface Props {
   onContinue: () => void;
   onViewAutopsy: () => void;
@@ -38,6 +40,9 @@ export default function CheckpointScoreScreen({ onContinue, onViewAutopsy, resul
         <div className="max-w-3xl w-full space-y-6">
           {/* Score table */}
           <div className="terminal-panel p-5 space-y-4">
+            {/* Human-vs-machine scores are a simulation of player decisions,
+                not live performance (§62 / §3.4 gate 1). */}
+            <ResultCategoryLabel category="SIMULATION_RESULT" />
             {isContinue && (
               <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-3">
                 CHECKPOINT 07 OF 22

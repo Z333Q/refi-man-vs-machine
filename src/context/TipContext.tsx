@@ -51,7 +51,10 @@ function loadSeenFromStorage(): Set<string> {
 function saveSeenToStorage(codes: Set<string>) {
   try {
     localStorage.setItem(LS_SEEN_KEY, JSON.stringify([...codes]));
-  } catch {}
+  } catch {
+    // localStorage unavailable (private mode / quota) — seen-state is
+    // best-effort, so a failed write is intentionally ignored.
+  }
 }
 
 function loadModeFromStorage(): GuidanceMode {

@@ -8,7 +8,10 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "label-gate": "node scripts/label-gate.mjs",
+    "provenance-gate": "node scripts/provenance-gate.mjs",
+    "ci-gates": "npm run label-gate && npm run provenance-gate"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

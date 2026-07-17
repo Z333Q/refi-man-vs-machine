@@ -23,6 +23,13 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // Underscore-prefixed identifiers are intentional: props kept in a
+      // component's contract for future callers but not yet consumed, and
+      // deliberately-ignored caught errors.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
     },
   }
 );
