@@ -5,6 +5,7 @@ import TipOverlay from './components/TipOverlay';
 import { VisualEventProvider } from './components/game/VisualEventLayer';
 import BootScreen from './screens/BootScreen';
 import TitleScreen from './screens/TitleScreen';
+import { OnboardingBridge } from './components/onboarding/OnboardingBridge';
 import ArenaMapScreen from './screens/ArenaMapScreen';
 import ArenaBriefingScreen from './screens/ArenaBriefingScreen';
 import MachineCardScreen from './screens/MachineCardScreen';
@@ -163,6 +164,11 @@ function AppInner() {
 
       {/* Help overlay */}
       {showHelp && <HelpScreen onClose={() => setShowHelp(false)} />}
+
+      {/* Never-trap onboarding bridge (§4.1): save-progress + optional exits
+          into formal ReFi onboarding. Hidden on the attract screen and during
+          fullscreen decision views. */}
+      {!isFullscreen && screen !== 'landing' && !showHelp && <OnboardingBridge />}
 
       {/* Dev nav bar */}
       {!isFullscreen && (
