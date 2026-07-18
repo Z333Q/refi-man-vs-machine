@@ -8,6 +8,9 @@ import MachineReveal from '../components/game/MachineReveal';
 import MachinePipeline from '../components/game/MachinePipeline';
 import MachineEvolution from '../components/game/MachineEvolution';
 import { useVisualEvents, visualRegistry } from '../components/game/VisualEventLayer';
+import { Spotlight } from '../components/onboarding/Spotlight';
+import { FiveQuestionSpine } from '../components/onboarding/FiveQuestionSpine';
+import { ArcRail } from '../components/onboarding/ArcRail';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,6 +101,46 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   const [countdown, setCountdown] = useState(3);
   const [revealDelay, setRevealDelay] = useState(0);
   const [commitConfirm, setCommitConfirm] = useState(false);
+
+  // ─── First-run coaching (P0 IA: a guided, spotlit first checkpoint) ───────────
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [coachStep, setCoachStep] = useState(0);
+  const [coachDone, setCoachDone] = useState(() => {
+    try { return localStorage.getItem('refi_cp1_coached') === '1'; } catch { return true; }
+  });
+  const COACH_STEPS = [
+    {
+      sel: '[data-spotlight="cp-signal"]',
+      title: 'READ WHAT CHANGED',
+      body: 'This is the market signal at this moment in history. It tells you what changed — it does not tell you what to do. That call is yours.',
+      hint: 'THE SIGNAL IS YOUR INFORMATION EDGE',
+    },
+    {
+      sel: '[data-spotlight="cp-actions"]',
+      title: 'CHOOSE ONE MOVE',
+      body: 'Order a change, or HOLD. HOLD is a real, scored decision — you never have to trade, and trading more is not rewarded.',
+      hint: 'ORDER · HOLD · REVIEW · COMMIT',
+    },
+  ];
+  const finishCoach = () => {
+    setCoachDone(true);
+    try { localStorage.setItem('refi_cp1_coached', '1'); } catch { /* best-effort */ }
+  };
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mq.matches);
+    const h = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
+
+  // Keep the signal panel visible while the first coaching step points at it.
+  useEffect(() => {
+    const active = !coachDone && run?.currentCheckpoint === 1 &&
+      (run?.phase === 'SIGNAL' || run?.phase === 'INVESTIGATING');
+    if (active && coachStep === 0) setActivePanel('SIGNAL');
+  }, [coachDone, coachStep, run?.currentCheckpoint, run?.phase]);
 
   // ─── Side effects ────────────────────────────────────────────────────────────
 
@@ -389,6 +432,10 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
           <span className="text-phosphor text-xs tracking-widest">
             CP {String(run.currentCheckpoint).padStart(2, '0')} / {String(run.totalCheckpoints).padStart(2, '0')}
           </span>
+          <div className="hidden lg:flex items-center gap-4">
+            <div className="h-4 w-px bg-phosphor/20" />
+            <ArcRail current="PLAY" />
+          </div>
           {isObservation && (
             <span className="text-alert-amber text-xs tracking-widest animate-pulse border border-alert-amber/40 px-2 py-0.5">
               OBSERVATION MODE
@@ -524,7 +571,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
                 {/* SIGNAL panel */}
                 {activePanel === 'SIGNAL' && (
-                  <div className="p-5">
+                  <div className="p-5" data-spotlight="cp-signal">
                     <div className="text-phosphor-dim text-xs tracking-widest mb-1">TODAY'S SIGNAL</div>
                     <div className="text-phosphor text-lg font-bold mb-3 leading-snug">{cp.signalTitle}</div>
                     <div className="text-phosphor-mid text-xs leading-relaxed mb-5">{cp.signalBody}</div>
@@ -1060,7 +1107,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
       {/* ── Contextual action bar ── */}
       {(phase === 'SIGNAL' || phase === 'INVESTIGATING') && (
-        <div className="border-t border-phosphor/15 px-4 py-2.5 flex items-center gap-4 bg-terminal-deep/40 flex-shrink-0">
+        <div data-spotlight="cp-actions" className="border-t border-phosphor/15 px-4 py-2.5 flex items-center gap-4 bg-terminal-deep/40 flex-shrink-0">
           <button
             onClick={() => { setActivePanel('PORTFOLIO'); }}
             className="text-xs tracking-widest text-phosphor-dim hover:text-phosphor transition-colors border border-phosphor/20 px-3 py-1.5 hover:border-phosphor/40"
@@ -1096,17 +1143,43 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
               REVIEW DRAFT ({draftOrders.length > 0 ? draftOrders.length : 'HOLD'}) →
             </button>
           )}
-          {/* 5-question footer */}
-          <div className="hidden xl:flex items-center gap-6 text-xs text-phosphor-dim ml-4 pl-4 border-l border-phosphor/10">
-            <div>WHAT: <span className="text-phosphor">{cp.crisisDay}</span></div>
-            <div>INFO: <span className="text-phosphor">SIGNAL+PORTFOLIO+RISK</span></div>
-            <div>DO: <span className="text-phosphor">ORDER·HOLD</span></div>
-            <div>VS MCH: <span className={run.playerScore >= run.machineScore ? 'text-paper-green' : 'text-risk-red'}>
-              {run.playerScore} · {run.machineScore}
-            </span></div>
-          </div>
         </div>
       )}
+
+      {/* §56 five-question spine — always answers "what do I do / why am I here" */}
+      <FiveQuestionSpine
+        answers={{
+          happening: `${cp.crisisDay} · ${cp.phase.replace(/_/g, ' ')}`,
+          info: 'SIGNAL · PORTFOLIO · RISK',
+          canDo: 'REDUCE · ADD · EXIT · HOLD',
+          onCommit: 'MARKET RESOLVES · MACHINE COMPARES',
+          vsMachine: `YOU ${run.playerScore} · MCH ${run.machineScore}`,
+        }}
+      />
+
+      {/* First-run guided spotlight on Checkpoint 1 — points at the signal,
+          then the moves, so the player is never dropped in without direction. */}
+      {(() => {
+        const coachActive = !coachDone && run.currentCheckpoint === 1 &&
+          (run.phase === 'SIGNAL' || run.phase === 'INVESTIGATING');
+        if (!coachActive) return null;
+        const cs = COACH_STEPS[coachStep];
+        return (
+          <Spotlight
+            targetSelector={cs.sel}
+            watch={[coachStep, activePanel]}
+            title={cs.title}
+            body={cs.body}
+            hint={cs.hint}
+            step={{ current: coachStep + 1, total: COACH_STEPS.length }}
+            nextLabel={coachStep === COACH_STEPS.length - 1 ? 'GOT IT — LET ME PLAY ▶' : 'NEXT →'}
+            onNext={() => { if (coachStep < COACH_STEPS.length - 1) setCoachStep(s => s + 1); else finishCoach(); }}
+            onBack={coachStep > 0 ? () => setCoachStep(s => Math.max(0, s - 1)) : undefined}
+            onSkip={finishCoach}
+            reducedMotion={reducedMotion}
+          />
+        );
+      })()}
     </div>
   );
 }
