@@ -10,6 +10,7 @@ import { supabase, getSessionId } from '../lib/supabase';
 import {
   emitEvent, beginRunTelemetry, endRunTelemetry, covidCrisisDayToISO,
 } from '../lib/events';
+import { markProgressSaved } from '../lib/alphaIdentity';
 
 // §56 checkpoint id from the arena code + sequence (e.g. cp_covid_black_swan_007).
 function checkpointId(arenaId: string, sequence: number): string {
@@ -468,8 +469,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Persist profile changes to Supabase
+  const progressSavedRef = useRef(false);
   useEffect(() => {
     if (!state.loaded) return;
+
+    // §4 Stage 2 "save progress": once the player has made real progress,
+    // ensure a lightweight Alpha identity exists and record the save for the
+    // onboarding funnel (once per session).
+    if (!progressSavedRef.current && state.profile.alphaXp > 0) {
+      progressSavedRef.current = true;
+      markProgressSaved();
+    }
+
     const sessionId = getSessionId();
 
     const save = async () => {
