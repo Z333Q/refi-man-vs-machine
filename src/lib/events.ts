@@ -17,8 +17,12 @@
 import { supabase, getSessionId } from './supabase';
 
 // The §57 event types emitted so far. Extend as more mutations are wired.
+// The onboarding.* pair is the top of the alpha funnel and feeds the same
+// conversion-funnel metrics as the ReFi SEC-facing product (§7 / §63).
 export type GameEventType =
   | 'session.started'
+  | 'onboarding.attract_viewed'
+  | 'onboarding.entered'
   | 'arena.started'
   | 'checkpoint.loaded'
   | 'decision.committed'
@@ -26,7 +30,70 @@ export type GameEventType =
   | 'arena.passed'
   | 'arena.failed'
   | 'arena.machine_beaten'
-  | 'score.run.computed';
+  | 'score.run.computed'
+  // §4 onboarding funnel — lightweight Alpha identity + handoff (§52/§59)
+  | 'player.created'
+  | 'player.progress_saved'
+  | 'conversion.paper_cta_viewed'
+  | 'conversion.paper_started'
+  | 'conversion.refi_handoff_started';
+
+// ─── Marketing-funnel attribution (§1.1 one-way bridge, §7) ──────────────────
+// First-touch attribution from the ReFi marketing funnel: UTM params plus a
+// `ref`/`aid` campaign id the SEC-facing shell can attach when it links into
+// the game. Captured once, persisted, and carried in the analytics envelope
+// so a later conversion (paper → handoff, §2.3) can be credited back to the
+// funnel. This is marketing attribution only — never suitability data, and
+// it stays in the game-analytics stream, separate from formal investor
+// records (rules 10–11, §6.6).
+
+export interface FunnelAttribution {
+  source?: string;
+  medium?: string;
+  campaign?: string;
+  content?: string;
+  term?: string;
+  ref?: string;
+  landing?: string;
+  capturedAt?: string;
+}
+
+const ATTRIBUTION_KEY = 'refi_attribution';
+
+export function captureFunnelAttribution(): FunnelAttribution {
+  // First-touch wins: never overwrite an existing capture.
+  const existing = getFunnelAttribution();
+  if (existing.capturedAt) return existing;
+
+  const params = new URLSearchParams(window.location.search);
+  const val = (k: string) => params.get(k) ?? undefined;
+  const attr: FunnelAttribution = {
+    source: val('utm_source'),
+    medium: val('utm_medium'),
+    campaign: val('utm_campaign'),
+    content: val('utm_content'),
+    term: val('utm_term'),
+    ref: val('ref') ?? val('aid'),
+    landing: window.location.pathname,
+    capturedAt: new Date().toISOString(),
+  };
+  try {
+    localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(attr));
+  } catch {
+    // localStorage unavailable — attribution is best-effort.
+  }
+  return attr;
+}
+
+export function getFunnelAttribution(): FunnelAttribution {
+  try {
+    const raw = localStorage.getItem(ATTRIBUTION_KEY);
+    if (raw) return JSON.parse(raw) as FunnelAttribution;
+  } catch {
+    // ignore malformed / unavailable storage
+  }
+  return {};
+}
 
 interface EmitOptions {
   arenaId?: string | null;
