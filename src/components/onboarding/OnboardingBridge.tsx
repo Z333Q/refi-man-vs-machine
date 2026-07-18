@@ -1,6 +1,13 @@
 import { useState } from 'react';
+import { useGame } from '../../context/GameContext';
 import { isProgressSaved, markProgressSaved } from '../../lib/alphaIdentity';
-import { buildHandoffToken, handoffRedirectUrl, type HandoffDestination } from '../../lib/handoff';
+import {
+  requestHandoffToken,
+  handoffClaimUrl,
+  handoffFallbackUrl,
+  type HandoffDestination,
+  type HandoffProgress,
+} from '../../lib/handoff';
 import { emitEvent } from '../../lib/events';
 
 // Never-trap onboarding bridge (§4.1) — a persistent, unobtrusive surface
@@ -16,8 +23,20 @@ const EXITS: { dest: HandoffDestination; label: string; note: string }[] = [
 ];
 
 export function OnboardingBridge() {
+  const { state } = useGame();
   const [saved, setSaved] = useState(() => isProgressSaved());
   const [open, setOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+
+  // Best-effort progress for the handoff token (§4.4 approved metadata only).
+  const p = state.profile;
+  const progress: HandoffProgress = {
+    completedArenas: [], // TODO: track real arena completion (prototype)
+    machineBuilderUnlocked: p.unlockedModules.length > 0,
+    machineVersionCount: 0,
+    machineBeatRate:
+      p.machineAttempts > 0 ? Number((p.machineBeats / p.machineAttempts).toFixed(4)) : null,
+  };
 
   const openMenu = () => {
     setOpen(o => {
@@ -27,11 +46,14 @@ export function OnboardingBridge() {
     });
   };
 
-  const startHandoff = (dest: HandoffDestination) => {
+  const startHandoff = async (dest: HandoffDestination) => {
+    if (leaving) return;
+    setLeaving(true);
     if (dest === 'PAPER') emitEvent('conversion.paper_started', { surface: 'onboarding_bridge' });
-    const token = buildHandoffToken(dest);
-    // User-initiated exit into the formal product (opaque handoff id only).
-    window.location.assign(handoffRedirectUrl(token));
+    const token = await requestHandoffToken(dest, progress);
+    // Signed token → same-origin shell claim page; otherwise fall back to the
+    // waitlist intake so the path still never traps the player (§4.1).
+    window.location.assign(token ? handoffClaimUrl(token) : handoffFallbackUrl());
   };
 
   return (
@@ -45,8 +67,9 @@ export function OnboardingBridge() {
             {EXITS.map(x => (
               <button
                 key={x.dest}
-                onClick={() => startHandoff(x.dest)}
-                className="w-full text-left border border-phosphor/25 rounded-terminal px-3 py-2 hover:border-phosphor/50 hover:bg-phosphor/5 transition-colors"
+                onClick={() => { void startHandoff(x.dest); }}
+                disabled={leaving}
+                className="w-full text-left border border-phosphor/25 rounded-terminal px-3 py-2 hover:border-phosphor/50 hover:bg-phosphor/5 transition-colors disabled:opacity-50"
               >
                 <div className="text-phosphor text-xs tracking-wide">{x.label} ▸</div>
                 <div className="text-phosphor-dim text-xs mt-0.5 leading-snug">{x.note}</div>
