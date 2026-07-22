@@ -1,3 +1,5 @@
+import ClaimHandoffButton from '../components/ClaimHandoffButton';
+
 interface Props {
   onBasketWriter: () => void;
   onBack: () => void;
@@ -152,6 +154,19 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
             <div className="font-mono text-xs text-phosphor-dim text-center mt-2">
               ONE WIN IS NOT CONSISTENCY. THREE DISTINCT REGIMES IS.
             </div>
+          </div>
+
+          {/* Handoff to the investor product */}
+          <div className="terminal-panel p-5 space-y-3">
+            <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-3">
+              TAKE YOUR ALPHA TO THE REAL PRODUCT
+            </div>
+            <div className="font-mono text-xs text-phosphor-mid leading-6">
+              Carry your progress into ReFi and continue to eligibility. Your
+              in-game behavioral scores stay in the game — only your arena and
+              machine milestones travel.
+            </div>
+            <ClaimHandoffButton destination="ELIGIBILITY" />
           </div>
         </div>
       </div>

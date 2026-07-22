@@ -1,0 +1,23 @@
+{
+  "name": "@refi-alpha/handoff",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloud Run service that mints the ES256 AlphaHandoffToken and hands the player off to the investor shell. Host-portable (Postgres over a connection string; GCP-native container).",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "jose": "^5.9.6",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
