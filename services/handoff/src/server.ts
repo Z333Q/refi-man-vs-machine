@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import type { JWK } from "jose";
 import { mintHandoff, HttpError, type MintRequest } from "./handler.js";
 import { loadPrivateJwk } from "./sign.js";
+import { verifyFirebaseIdToken } from "./firebase-auth.js";
 
 const PORT = Number(process.env["PORT"] ?? 8080);
 const SHELL_BASE_URL =
@@ -39,6 +40,17 @@ function clientIp(req: IncomingMessage): string {
   const first = Array.isArray(fwd) ? fwd[0] : fwd?.split(",")[0];
   return first?.trim() || req.socket.remoteAddress || "unknown";
 }
+
+// Identity: when a Firebase project is configured, the mint verifies the
+// caller's Firebase ID token and uses the uid as the token `sub`.
+const FIREBASE_PROJECT_ID = process.env["FIREBASE_PROJECT_ID"];
+const REQUIRE_VERIFIED_IDENTITY =
+  process.env["REQUIRE_VERIFIED_IDENTITY"] === "true";
+
+const verifyIdentity = FIREBASE_PROJECT_ID
+  ? async (bearer: string) =>
+      verifyFirebaseIdToken(bearer, { projectId: FIREBASE_PROJECT_ID })
+  : undefined;
 
 // Lazy singletons so cold start / health checks don't require the DB or key.
 let pool: Pool | undefined;
@@ -132,9 +144,18 @@ const server = createServer((req, res) => {
         throw new HttpError(400, "sessionId is required");
       }
       const result = await mintHandoff(
-        { db: db(), privateJwk: key(), shellBaseUrl: SHELL_BASE_URL },
+        {
+          db: db(),
+          privateJwk: key(),
+          shellBaseUrl: SHELL_BASE_URL,
+          ...(verifyIdentity ? { verifyIdentity } : {}),
+          requireVerifiedIdentity: REQUIRE_VERIFIED_IDENTITY,
+        },
         {
           sessionId: body.sessionId,
+          ...(typeof req.headers.authorization === "string"
+            ? { authorization: req.headers.authorization }
+            : {}),
           ...(typeof body.intendedDestination === "string"
             ? { intendedDestination: body.intendedDestination }
             : {}),

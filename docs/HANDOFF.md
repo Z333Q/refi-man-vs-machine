@@ -69,6 +69,24 @@ printf '%s' '<postgres-connection-string>' | gcloud secrets versions add handoff
 | `SHELL_BASE_URL` | Investor shell origin (default prod) |
 | `ALLOWED_ORIGIN` | CORS origin of the game frontend |
 | `PGSSLMODE` | `disable` only for a local plaintext DB |
+| `FIREBASE_PROJECT_ID` | Firebase project; enables verifying the caller's ID token → `sub`=uid |
+| `REQUIRE_VERIFIED_IDENTITY` | `true` to reject requests without a verified Firebase token (flip on once the game ships auth) |
+
+## Identity (Firebase Auth — GCP-native)
+The token `sub` should be a real, verifiable user, not the game's spoofable
+`session_id`. The client signs the player in with **Firebase anonymous auth**
+(`src/lib/firebase.ts`) and sends the ID token as `Authorization: Bearer …`.
+The service **verifies** it against Google's public keys (RS256, iss/aud pinned
+to the project — `src/firebase-auth.ts`) and uses the verified `uid` as `sub`.
+Progress is still keyed by `session_id` during the transition (documented
+below). Set the game build env:
+```
+VITE_FIREBASE_API_KEY=…   VITE_FIREBASE_PROJECT_ID=…   VITE_FIREBASE_APP_ID=…
+```
+Both sides are guarded: with no Firebase config the game falls back to the
+session-id identity, so nothing breaks pre-provisioning. Flip
+`REQUIRE_VERIFIED_IDENTITY=true` on the service once the client is live to fail
+closed.
 
 ## Testing
 ```bash
@@ -79,9 +97,11 @@ allowlist (no drift, no behavioral-score leakage) and that a token signed with
 one key does not verify with another.
 
 ## Required follow-ons (not in this seam)
-1. **Identity hardening** — the token `sub` is the game's `session_id` today
-   (spoofable). Add anonymous auth + magic-link (Firebase Auth, GCP-native) so
-   `sub` is a durable user before the handoff backs investor-facing claims.
+1. **Identity hardening** — anonymous Firebase auth + verified-uid `sub` is now
+   wired (see Identity above). Remaining: the **magic-link email upgrade** (so
+   `uid` carries an email), and keying **progress by `uid`** instead of
+   `session_id` (part of the CRUD migration in #5). Then flip
+   `REQUIRE_VERIFIED_IDENTITY=true`.
 2. **Durable progress snapshot** — persist a real snapshot row and use its id
    as `progressSnapshotId` (currently a fresh uuid).
 3. **Verify the progress SQL** in `services/handoff/src/progress.ts` against the
