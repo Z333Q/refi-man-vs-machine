@@ -13,7 +13,9 @@ export interface Queryable {
 
 export interface LoadProgressArgs {
   db: Queryable;
-  /** Player identity — session id today; auth uid once identity is upgraded. */
+  /** Verified identity that becomes the token `sub` (Firebase uid, else session id). */
+  sub: string;
+  /** Key the game's progress rows are stored under (session id today). */
   sessionId: string;
   progressSnapshotId: string;
   intendedDestination: IntendedDestination;
@@ -69,7 +71,7 @@ export async function loadProgress(
     attempts > 0 ? Math.min(1, Math.max(0, beats / attempts)) : null;
 
   const input: HandoffInput = {
-    sub: sessionId,
+    sub: args.sub,
     progressSnapshotId: args.progressSnapshotId,
     completedArenas: completed.rows.map((r) => r.arena_id),
     machineBuilderUnlocked: (unlock.rows[0]?.n ?? 0) > 0,
