@@ -116,10 +116,15 @@ export default function LandingScreen({ onEnter }: Props) {
         <div className="font-mono text-xs text-phosphor-dim tracking-[0.3em] mb-6">
           REFI.TRADING // MAN vs MACHINE
         </div>
-        <pre className="hidden md:block font-mono text-phosphor-hot terminal-glow-strong text-[10px] leading-[1.15] mb-2 overflow-x-auto">
+        {/* The ASCII wordmark is decorative; the real heading below stays in
+            the accessibility tree on every breakpoint (sr-only on desktop). */}
+        <pre
+          aria-hidden
+          className="hidden md:block font-mono text-phosphor-hot terminal-glow-strong text-[10px] leading-[1.15] mb-2 overflow-x-auto"
+        >
           {ASCII_BANNER}
         </pre>
-        <h1 className="md:hidden font-mono text-4xl font-bold text-phosphor-hot terminal-glow-strong mb-2">
+        <h1 className="max-md:font-mono max-md:text-4xl max-md:font-bold max-md:text-phosphor-hot max-md:terminal-glow-strong max-md:mb-2 md:sr-only">
           REFI ALPHA
         </h1>
         <div className="font-mono text-lg sm:text-2xl text-phosphor mb-6">
