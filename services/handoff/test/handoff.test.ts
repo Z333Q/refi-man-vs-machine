@@ -125,10 +125,13 @@ function fakeDb(): Queryable {
         return { rows: [{ arena_id: "covid_black_swan" }, { arena_id: "recovery" }] } as never;
       }
       if (text.includes("from player_profiles")) {
-        return { rows: [{ machine_beats: 3, machine_attempts: 10, machine_version_count: 4 }] } as never;
+        return { rows: [{ machine_beats: 3, machine_attempts: 10 }] } as never;
       }
       if (text.includes("from module_unlocks")) {
         return { rows: [{ n: 1 }] } as never;
+      }
+      if (text.includes("from player_machine_versions")) {
+        return { rows: [{ n: 4 }] } as never;
       }
       return { rows: [] };
     },

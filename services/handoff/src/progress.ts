@@ -25,9 +25,18 @@ export interface LoadProgressArgs {
  * Claims are SERVER-derived (never client-asserted), so a tampered client
  * cannot inflate its alpha achievements on the token.
  *
- * NOTE: the SQL column/table names below reflect the game's current schema
- * (arena_runs, player_profiles, module_unlocks). Verify against the live
- * migrations before deploy; keep the mapping here (single place) if they drift.
+ * SQL verified against the live migrations (20260707233113 game schema +
+ * 20260716150000 canonical objects):
+ *   - arena_runs(session_id, arena_id, state) — state vocabulary is
+ *     schema-defaulted 'ACTIVE'; matched case-insensitively.
+ *   - player_profiles(session_id, machine_beats, machine_attempts).
+ *   - module_unlocks(session_id, module_code) — column is module_code.
+ *   - player_machine_versions counted via the alpha_sessions link
+ *     (session → alpha_player_id); there is no machine_version_count column.
+ *
+ * Each read FAILS SOFT to zero progress: the token is the funnel credential,
+ * progress is only a waitlist-scoring bonus, so a schema drift must degrade
+ * the score — never 500 the mint. Failures are logged for detection.
  * Behavioral DimensionCode scores are deliberately NOT read — they never leave
  * the game (spec §6.6).
  */
@@ -36,48 +45,97 @@ export async function loadProgress(
 ): Promise<HandoffInput> {
   const { db, sessionId } = args;
 
-  const completed = await db.query<{ arena_id: string }>(
-    `select distinct arena_id
-       from arena_runs
-      where session_id = $1 and state = 'completed'`,
-    [sessionId],
+  const completedArenas = await failSoft(
+    "completed_arenas",
+    [] as string[],
+    async () => {
+      const completed = await db.query<{ arena_id: string }>(
+        `select distinct arena_id
+           from arena_runs
+          where session_id = $1 and upper(state) = 'COMPLETED'`,
+        [sessionId],
+      );
+      return completed.rows.map((r) => r.arena_id);
+    },
   );
 
-  const profile = await db.query<{
-    machine_beats: number | null;
-    machine_attempts: number | null;
-    machine_version_count: number | null;
-  }>(
-    `select machine_beats, machine_attempts, machine_version_count
-       from player_profiles
-      where session_id = $1
-      limit 1`,
-    [sessionId],
+  const { beats, attempts } = await failSoft(
+    "player_profile",
+    { beats: 0, attempts: 0 },
+    async () => {
+      const profile = await db.query<{
+        machine_beats: number | null;
+        machine_attempts: number | null;
+      }>(
+        `select machine_beats, machine_attempts
+           from player_profiles
+          where session_id = $1
+          limit 1`,
+        [sessionId],
+      );
+      const p = profile.rows[0];
+      return { beats: p?.machine_beats ?? 0, attempts: p?.machine_attempts ?? 0 };
+    },
   );
 
-  const unlock = await db.query<{ n: number }>(
-    `select count(*)::int as n
-       from module_unlocks
-      where session_id = $1 and module_id = 'machine_builder'`,
-    [sessionId],
+  const machineBuilderUnlocked = await failSoft(
+    "module_unlocks",
+    false,
+    async () => {
+      const unlock = await db.query<{ n: number }>(
+        `select count(*)::int as n
+           from module_unlocks
+          where session_id = $1 and module_code = 'machine_builder'`,
+        [sessionId],
+      );
+      return (unlock.rows[0]?.n ?? 0) > 0;
+    },
   );
 
-  const p = profile.rows[0];
-  const beats = p?.machine_beats ?? 0;
-  const attempts = p?.machine_attempts ?? 0;
+  const machineVersionCount = await failSoft(
+    "machine_versions",
+    0,
+    async () => {
+      const versions = await db.query<{ n: number }>(
+        `select count(*)::int as n
+           from player_machine_versions v
+           join alpha_sessions s on s.alpha_player_id = v.alpha_player_id
+          where s.id::text = $1`,
+        [sessionId],
+      );
+      return versions.rows[0]?.n ?? 0;
+    },
+  );
+
   const machineBeatRate =
     attempts > 0 ? Math.min(1, Math.max(0, beats / attempts)) : null;
 
   const input: HandoffInput = {
     sub: sessionId,
     progressSnapshotId: args.progressSnapshotId,
-    completedArenas: completed.rows.map((r) => r.arena_id),
-    machineBuilderUnlocked: (unlock.rows[0]?.n ?? 0) > 0,
-    machineVersionCount: p?.machine_version_count ?? 0,
+    completedArenas,
+    machineBuilderUnlocked,
+    machineVersionCount,
     machineBeatRate,
     intendedDestination: args.intendedDestination,
   };
   return args.campaignSource
     ? { ...input, campaignSource: args.campaignSource }
     : input;
+}
+
+async function failSoft<T>(
+  label: string,
+  fallback: T,
+  read: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await read();
+  } catch (err) {
+    console.error(
+      `loadProgress: ${label} read failed; degrading to zero progress:`,
+      err instanceof Error ? err.message : err,
+    );
+    return fallback;
+  }
 }

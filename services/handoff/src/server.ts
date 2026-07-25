@@ -7,8 +7,38 @@ import { loadPrivateJwk } from "./sign.js";
 const PORT = Number(process.env["PORT"] ?? 8080);
 const SHELL_BASE_URL =
   process.env["SHELL_BASE_URL"] ?? "https://refi-us-sec-ia-web.vercel.app";
-const ALLOWED_ORIGIN = process.env["ALLOWED_ORIGIN"] ?? "*";
+// Default to the game origin, not "*": the mint endpoint is public, so CORS
+// is one of the few browser-side abuse dampeners it has.
+const ALLOWED_ORIGIN =
+  process.env["ALLOWED_ORIGIN"] ?? "https://play.refi.trading";
 const MAX_BODY_BYTES = 16 * 1024;
+
+// Per-IP mint rate limit: fixed window, in-memory (per instance — a first
+// layer; Cloud Armor / a distributed limiter is the scale follow-on).
+const RATE_LIMIT_MAX = Number(process.env["RATE_LIMIT_MAX"] ?? 10);
+const RATE_LIMIT_WINDOW_MS = Number(
+  process.env["RATE_LIMIT_WINDOW_MS"] ?? 60_000,
+);
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const bucket = rateBuckets.get(ip);
+  if (!bucket || now >= bucket.resetAt) {
+    rateBuckets.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    // Opportunistic cleanup so the map cannot grow unboundedly.
+    if (rateBuckets.size > 10_000) {
+      for (const [k, v] of rateBuckets) if (now >= v.resetAt) rateBuckets.delete(k);
+    }
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > RATE_LIMIT_MAX;
+}
+function clientIp(req: IncomingMessage): string {
+  const fwd = req.headers["x-forwarded-for"];
+  const first = Array.isArray(fwd) ? fwd[0] : fwd?.split(",")[0];
+  return first?.trim() || req.socket.remoteAddress || "unknown";
+}
 
 // Lazy singletons so cold start / health checks don't require the DB or key.
 let pool: Pool | undefined;
@@ -17,12 +47,16 @@ function db(): Pool {
     pool = new Pool({
       connectionString: process.env["DATABASE_URL"],
       max: 3,
-      // Managed Postgres (Neon, Cloud SQL public IP) require TLS. Set
-      // PGSSLMODE=disable only for a local plaintext dev database.
+      // Managed Postgres (Neon, Cloud SQL public IP) require TLS, and both
+      // present publicly-trusted certs — so verify by default. Escape
+      // hatches: PGSSLMODE=disable for a local plaintext dev database, or
+      // PGSSL_NO_VERIFY=true for a self-signed target you explicitly trust.
       ssl:
         process.env["PGSSLMODE"] === "disable"
           ? false
-          : { rejectUnauthorized: false },
+          : process.env["PGSSL_NO_VERIFY"] === "true"
+            ? { rejectUnauthorized: false }
+            : { rejectUnauthorized: true },
     });
   }
   return pool;
@@ -86,6 +120,10 @@ const server = createServer((req, res) => {
     }
     if (req.method !== "POST" || !req.url?.startsWith("/mint-handoff")) {
       json(res, 404, { error: "not_found" });
+      return;
+    }
+    if (rateLimited(clientIp(req))) {
+      json(res, 429, { error: "rate_limited" });
       return;
     }
     try {
