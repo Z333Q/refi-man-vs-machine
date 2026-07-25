@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type {
   RunState, PlayerProfile, ActionCode, ThesisCode, ModuleCode,
   RunDecision, BehavioralFlag, DimensionCode,
@@ -7,6 +7,15 @@ import { COVID_CHECKPOINTS, getCheckpoint } from '../lib/covidArena';
 import { scoreCheckpoint, computeXpAward, getDimensionUpdates } from '../lib/scoringEngine';
 import { createDefaultProfile, updateDimensions, checkModuleUnlocks, getRankForXp } from '../lib/progressionEngine';
 import { supabase, getSessionId } from '../lib/supabase';
+import {
+  emitEvent, beginRunTelemetry, endRunTelemetry, covidCrisisDayToISO,
+} from '../lib/events';
+import { markProgressSaved } from '../lib/alphaIdentity';
+
+// §56 checkpoint id from the arena code + sequence (e.g. cp_covid_black_swan_007).
+function checkpointId(arenaId: string, sequence: number): string {
+  return `cp_${arenaId}_${String(sequence).padStart(3, '0')}`;
+}
 
 // ─── State shape ──────────────────────────────────────────────────────────────
 
@@ -172,17 +181,18 @@ function reducer(state: GameState, action: GameAction): GameState {
       return { ...state, run: { ...state.run, pendingConfidence: action.confidence } };
 
     case 'COMMIT_DECISION': {
-      if (!state.run || !state.run.pendingAction) return state;
       const { run } = state;
+      if (!run || !run.pendingAction) return state;
+      const pendingAction = run.pendingAction;
       const cp = getCheckpoint(run.currentCheckpoint);
       if (!cp) return state;
 
-      const branch = cp.availableActions.find(a => a.actionCode === run.pendingAction);
+      const branch = cp.availableActions.find(a => a.actionCode === pendingAction);
       const flags: BehavioralFlag[] = branch?.branchEffect.flagsAdd ?? [];
       const dimUpdates = branch?.branchEffect.alphaImpact ?? {};
 
       const score = scoreCheckpoint({
-        action: run.pendingAction,
+        action: pendingAction,
         checkpoint: cp,
         flags,
         confidence: run.pendingConfidence,
@@ -193,7 +203,7 @@ function reducer(state: GameState, action: GameAction): GameState {
 
       const newDecision: RunDecision = {
         checkpointSequence: run.currentCheckpoint,
-        actionCode: run.pendingAction,
+        actionCode: pendingAction,
         thesisCode: run.pendingThesis ?? undefined,
         confidence: run.pendingConfidence,
         modulesConsulted: run.investigatedModules,
@@ -204,7 +214,7 @@ function reducer(state: GameState, action: GameAction): GameState {
         committed: true,
       };
 
-      const newPortfolio = simulatePortfolioAdvance(run.portfolio, run.pendingAction, run.currentCheckpoint);
+      const newPortfolio = simulatePortfolioAdvance(run.portfolio, pendingAction, run.currentCheckpoint);
       const newPlayerScore = Math.round((run.playerScore * (run.currentCheckpoint - 1) + score.totalScore) / run.currentCheckpoint);
       const newMachineScore = Math.round((run.machineScore * (run.currentCheckpoint - 1) + score.machineScore) / run.currentCheckpoint);
       const xpEarned = computeXpAward(score, cp.isRegimeChange);
@@ -459,8 +469,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Persist profile changes to Supabase
+  const progressSavedRef = useRef(false);
   useEffect(() => {
     if (!state.loaded) return;
+
+    // §4 Stage 2 "save progress": once the player has made real progress,
+    // ensure a lightweight Alpha identity exists and record the save for the
+    // onboarding funnel (once per session).
+    if (!progressSavedRef.current && state.profile.alphaXp > 0) {
+      progressSavedRef.current = true;
+      markProgressSaved();
+    }
+
     const sessionId = getSessionId();
 
     const save = async () => {
@@ -495,7 +515,102 @@ export function GameProvider({ children }: { children: ReactNode }) {
     save();
   }, [state.profile, state.loaded]);
 
-  const startRun = useCallback(() => dispatch({ type: 'START_RUN' }), []);
+  // ─── Event-envelope emission (§56 / §4.2) ────────────────────────────────
+  // Emission lives in effects, not the reducer, so the reducer stays pure.
+  // Each effect watches a state transition and emits the matching §57 event.
+
+  // session.started — once per mount.
+  useEffect(() => {
+    emitEvent('session.started', { sessionId: getSessionId() });
+  }, []);
+
+  // checkpoint.loaded — whenever the active checkpoint changes.
+  const prevCheckpoint = useRef<number | null>(null);
+  useEffect(() => {
+    const run = state.run;
+    if (!run) { prevCheckpoint.current = null; return; }
+    if (run.currentCheckpoint !== prevCheckpoint.current) {
+      const cp = getCheckpoint(run.currentCheckpoint);
+      emitEvent('checkpoint.loaded',
+        { sequence: run.currentCheckpoint, phase: cp?.phase, crisisDay: cp?.crisisDay },
+        {
+          arenaId: run.arenaId,
+          checkpointId: checkpointId(run.arenaId, run.currentCheckpoint),
+          simulationTimestamp: covidCrisisDayToISO(cp?.crisisDay),
+        },
+      );
+      prevCheckpoint.current = run.currentCheckpoint;
+    }
+  }, [state.run]);
+
+  // decision.committed + score.checkpoint.computed — when a decision lands.
+  const prevDecisionCount = useRef(0);
+  useEffect(() => {
+    const run = state.run;
+    if (!run) { prevDecisionCount.current = 0; return; }
+    if (run.decisions.length > prevDecisionCount.current) {
+      const d = run.decisions[run.decisions.length - 1];
+      const cp = getCheckpoint(d.checkpointSequence);
+      const ctx = {
+        arenaId: run.arenaId,
+        checkpointId: checkpointId(run.arenaId, d.checkpointSequence),
+        simulationTimestamp: covidCrisisDayToISO(cp?.crisisDay),
+      };
+      emitEvent('decision.committed', {
+        actionCode: d.actionCode,
+        thesisCode: d.thesisCode ?? null,
+        confidence: d.confidence ?? null,
+        machineActionCode: d.machineActionCode,
+        modulesConsulted: d.modulesConsulted,
+        behavioralFlags: d.behavioralFlags,
+      }, ctx);
+      emitEvent('score.checkpoint.computed', {
+        scoreContribution: d.scoreContribution,
+        quality: d.quality,
+        playerScore: run.playerScore,
+        machineScore: run.machineScore,
+      }, ctx);
+    }
+    prevDecisionCount.current = run.decisions.length;
+  }, [state.run]);
+
+  // arena.passed / arena.failed / arena.machine_beaten + score.run.computed —
+  // once, when the run reaches a terminal result.
+  const prevResult = useRef<RunState['result'] | null>(null);
+  useEffect(() => {
+    const run = state.run;
+    const result = run?.result ?? null;
+    if (run && result && result !== 'ACTIVE' && result !== prevResult.current) {
+      const evt =
+        result === 'MACHINE_BEATEN' ? 'arena.machine_beaten' :
+        result === 'PASSED' ? 'arena.passed' :
+        'arena.failed';
+      const ctx = { arenaId: run.arenaId };
+      emitEvent(evt, {
+        result,
+        playerScore: run.playerScore,
+        machineScore: run.machineScore,
+        criticalFailure: run.criticalFailure,
+      }, ctx);
+      emitEvent('score.run.computed', {
+        result,
+        playerScore: run.playerScore,
+        machineScore: run.machineScore,
+        checkpointsCompleted: run.decisions.length,
+      }, ctx);
+      endRunTelemetry();
+    }
+    prevResult.current = result;
+  }, [state.run]);
+
+  const startRun = useCallback(() => {
+    // New run → new correlation chain. beginRunTelemetry stamps a run id
+    // that every event in this run shares (§56 run_id / correlation_id).
+    beginRunTelemetry();
+    dispatch({ type: 'START_RUN' });
+    const arenaId = 'covid_black_swan';
+    emitEvent('arena.started', { arenaId, machineId: 'refi_rules' }, { arenaId });
+  }, []);
   const setPhase = useCallback((phase: RunState['phase']) => dispatch({ type: 'SET_RUN_PHASE', phase }), []);
   const investigateModule = useCallback((module: ModuleCode) => dispatch({ type: 'INVESTIGATE_MODULE', module }), []);
   const setPendingAction = useCallback((action: ActionCode) => dispatch({ type: 'SET_PENDING_ACTION', action }), []);

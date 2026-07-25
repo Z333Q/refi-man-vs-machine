@@ -102,6 +102,10 @@ export interface BranchEffect {
   alphaImpact: Partial<Record<DimensionCode, number>>;
   futurePrompts?: string[];
   teachingMessage?: string;
+  // Per USA Build Integration Spec §3.3 this arrives as a string today
+  // and migrates to a typed BenchmarkSnapshotRef alongside the §69
+  // "benchmark snapshot attached to every machine comparison" rollout.
+  machineComparison?: string;
 }
 
 export interface ActionBranch {
@@ -109,7 +113,9 @@ export interface ActionBranch {
   label: string;
   shortLabel: string;
   branchEffect: BranchEffect;
-  machineComparison: string;
+  // Kept optional at the outer level for content authored before
+  // `machineComparison` moved into BranchEffect (see BranchEffect note).
+  machineComparison?: string;
 }
 
 export interface CheckpointData {

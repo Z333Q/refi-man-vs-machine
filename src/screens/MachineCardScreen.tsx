@@ -1,5 +1,7 @@
 import { BENCHMARK_SNAPSHOTS } from '../lib/progressionEngine';
 import type { BenchmarkSnapshot } from '../lib/gameTypes';
+import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
+import type { ResultCategory } from '../lib/resultCategories';
 
 interface Props {
   onReturn: () => void;
@@ -14,11 +16,14 @@ function StatRow({ label, value, highlight }: { label: string; value: string; hi
   );
 }
 
-function BenchmarkCard({ snapshot, title }: { snapshot: BenchmarkSnapshot; title: string }) {
+function BenchmarkCard({ snapshot, title, category }: { snapshot: BenchmarkSnapshot; title: string; category: ResultCategory }) {
   const s = snapshot.stats;
   return (
     <div className="terminal-panel p-4">
       <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-2 mb-3">{title}</div>
+      {/* Each card is one result category; the label makes the category
+          explicit per §62 / §3.4 gate 1. */}
+      <ResultCategoryLabel category={category} className="mb-3" />
       <div className="font-mono text-xs text-phosphor-mid tracking-widest mb-2" style={{ fontSize: '10px' }}>
         {snapshot.universe.symbolCount} SYMBOLS · {snapshot.period.firstTradingDay} → {snapshot.period.lastTradingDay}
       </div>
@@ -95,9 +100,9 @@ export default function MachineCardScreen({ onReturn }: Props) {
               by the versioned /analyze snapshot.
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <BenchmarkCard snapshot={primary} title="RF/RL BENCHMARK SNAPSHOT" />
-              <BenchmarkCard snapshot={goodFit} title="GOOD-FIT PORTFOLIO (PAPER)" />
-              <BenchmarkCard snapshot={fullBasket} title="FULL BASKET (PAPER)" />
+              <BenchmarkCard snapshot={primary} title="RF/RL BENCHMARK SNAPSHOT" category="HISTORICAL_MODEL_SIMULATION" />
+              <BenchmarkCard snapshot={goodFit} title="GOOD-FIT PORTFOLIO (PAPER)" category="PAPER_TRADING_RESULT" />
+              <BenchmarkCard snapshot={fullBasket} title="FULL BASKET (PAPER)" category="PAPER_TRADING_RESULT" />
             </div>
           </div>
 
@@ -105,11 +110,13 @@ export default function MachineCardScreen({ onReturn }: Props) {
           <div>
             <div className="text-xs text-phosphor-dim tracking-widest mb-3">PASSIVE BASELINE</div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <BenchmarkCard snapshot={spy} title="S&P 500 INDEX (SPY)" />
+              <BenchmarkCard snapshot={spy} title="S&P 500 INDEX (SPY)" category="HISTORICAL_MARKET_DATA" />
               <div className="terminal-panel p-4">
                 <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-2 mb-3">
                   SIGNAL-LAG SENSITIVITY (GOOD-FIT)
                 </div>
+                {/* Good-Fit paper process, sensitivity view (§62 / §3.4 gate 1). */}
+                <ResultCategoryLabel category="PAPER_TRADING_RESULT" className="mb-3" />
                 <div className="space-y-1">
                   {[
                     { lag: '0H', cagr: 22.47, sharpe: 4.38 },

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { GameProvider } from './context/GameContext';
-import { TipProvider, useTips } from './context/TipContext';
+import { TipProvider } from './context/TipContext';
 import TipOverlay from './components/TipOverlay';
 import { VisualEventProvider } from './components/game/VisualEventLayer';
 import BootScreen from './screens/BootScreen';
-import LandingScreen from './screens/LandingScreen';
+import TitleScreen from './screens/TitleScreen';
+import { OnboardingBridge } from './components/onboarding/OnboardingBridge';
 import ArenaMapScreen from './screens/ArenaMapScreen';
 import ArenaBriefingScreen from './screens/ArenaBriefingScreen';
 import MachineCardScreen from './screens/MachineCardScreen';
@@ -93,7 +94,6 @@ function AppInner() {
     return localStorage.getItem('refi_tutorial_complete') === '1';
   });
   const [showHelp, setShowHelp] = useState(false);
-  const { triggerEvent } = useTips();
 
   const go = useCallback((s: Screen) => setScreen(s), []);
 
@@ -145,8 +145,13 @@ function AppInner() {
   if (!bootDone) {
     return <BootScreen onComplete={() => {
       setBootDone(true);
-      // Trigger first-entry tip after boot — only fires if tip hasn't been seen
-      triggerEvent('game.first_entry');
+      // Boot only flips the gate; advance the screen state machine to the
+      // landing screen too, otherwise `screen` stays 'boot' — which has no
+      // render case, leaving the content area blank below the nav bar.
+      go('landing');
+      // The TitleScreen now serves as the welcome/orientation surface, so we
+      // no longer fire the FIRST_RUN_01_OBJECTIVE tip here — it duplicated the
+      // title card as a blocking modal on top of it.
     }} />;
   }
 
@@ -159,6 +164,11 @@ function AppInner() {
 
       {/* Help overlay */}
       {showHelp && <HelpScreen onClose={() => setShowHelp(false)} />}
+
+      {/* Never-trap onboarding bridge (§4.1): save-progress + optional exits
+          into formal ReFi onboarding. Hidden on the attract screen and during
+          fullscreen decision views. */}
+      {!isFullscreen && screen !== 'landing' && !showHelp && <OnboardingBridge />}
 
       {/* Dev nav bar */}
       {!isFullscreen && (
@@ -192,7 +202,7 @@ function AppInner() {
 
       <div className={!isFullscreen ? 'pt-8' : ''}>
         {screen === 'landing' && (
-          <LandingScreen
+          <TitleScreen
             onEnter={() => {
               if (!tutorialComplete) {
                 go('tutorial');
