@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
+import { Spotlight } from '../components/onboarding/Spotlight';
+import { FiveQuestionSpine } from '../components/onboarding/FiveQuestionSpine';
 
 interface Props {
   onComplete: () => void;
 }
+
+type Panel = 'SIGNAL' | 'PORTFOLIO' | 'RISK' | 'DRAFT';
 
 type TutorialStep =
   | 'WELCOME'
@@ -14,8 +18,7 @@ type TutorialStep =
   | 'REVIEW_RISK'
   | 'COMMIT'
   | 'MACHINE'
-  | 'HOLD'
-  | 'COMPLETE';
+  | 'HOLD';
 
 interface Step {
   id: TutorialStep;
@@ -23,8 +26,11 @@ interface Step {
   instruction: string;
   detail: string;
   action: string;
-  highlight?: string;
   keyHint?: string;
+  /** Panel auto-opened when this step begins, so the spotlight target is visible. */
+  panel: Panel;
+  /** CSS selector for the element the spotlight highlights; null = centered callout. */
+  spotlight: string | null;
 }
 
 const STEPS: Step[] = [
@@ -32,79 +38,89 @@ const STEPS: Step[] = [
     id: 'WELCOME',
     title: 'WELCOME TO REFI ALPHA',
     instruction: 'You manage a U.S. equity portfolio through crisis.',
-    detail: 'Each checkpoint presents a real market signal. You decide how to respond. The machine responds too. One of you is right.',
+    detail: 'Each checkpoint shows a real market signal. You decide how to respond; the machine responds too. First, learn the controls — this walkthrough highlights each one as we go.',
     action: 'BEGIN TUTORIAL',
+    panel: 'SIGNAL',
+    spotlight: null,
   },
   {
     id: 'READ',
     title: 'LESSON 1 · READ THE SIGNAL',
-    instruction: 'A market signal arrives. Read it carefully before acting.',
-    detail: 'The signal panel on the left tells you what is happening in the market. Take 30 seconds to read it. The date, the catalyst, the key numbers. This is your information advantage.',
+    instruction: 'A market signal arrives. Read it before acting.',
+    detail: 'The signal tells you what changed — the date, the catalyst, the key numbers. It does not tell you what to do. This is your information advantage.',
     action: 'I HAVE READ THE SIGNAL',
-    highlight: 'SIGNAL PANEL',
     keyHint: 'PRESS ENTER WHEN READY',
+    panel: 'SIGNAL',
+    spotlight: '[data-spotlight="signal"]',
   },
   {
     id: 'INSPECT',
     title: 'LESSON 2 · INSPECT YOUR PORTFOLIO',
-    instruction: 'Open the portfolio panel to see your current positions.',
-    detail: 'Press P or click PORTFOLIO. You hold 10 U.S. stocks. Each has a weight, a P&L, and a risk contribution. Know what you own before you trade.',
+    instruction: 'See what you own before you trade.',
+    detail: 'You hold 10 U.S. stocks. Each has a weight, a profit/loss, and a sector. Know your exposures before the market moves against them.',
     action: 'I CAN SEE MY POSITIONS',
-    highlight: 'PORTFOLIO PANEL [P]',
-    keyHint: 'PRESS P OR CLICK PORTFOLIO',
+    keyHint: 'THESE ARE YOUR POSITIONS',
+    panel: 'PORTFOLIO',
+    spotlight: '[data-spotlight="portfolio"]',
   },
   {
     id: 'REDUCE',
     title: 'LESSON 3 · REDUCE A POSITION',
-    instruction: 'Click a position to open the order ticket. Reduce DAL by $2,000.',
-    detail: 'REDUCE means you sell part of a position — not all of it. You are not panicking. You are managing size when the risk has changed. Click DAL → select REDUCE → enter $2,000 → ADD TO DRAFT.',
+    instruction: 'Click DAL, choose REDUCE, then ADD TO DRAFT.',
+    detail: 'REDUCE sells part of a position — not all of it. You are not panicking; you are managing size when the risk has changed.',
     action: 'I HAVE DRAFTED A REDUCE ORDER',
-    highlight: 'ORDER TICKET',
-    keyHint: 'CLICK ANY POSITION TO OPEN ORDER TICKET',
+    keyHint: 'CLICK DAL → REDUCE → ADD TO DRAFT',
+    panel: 'PORTFOLIO',
+    spotlight: '[data-spotlight="portfolio"]',
   },
   {
     id: 'BUY',
-    title: 'LESSON 4 · BUY A POSITION',
-    instruction: 'Open the order ticket and ADD to an existing position.',
-    detail: 'ADD means you increase a position you already hold. When your conviction is high and the price is right, you size up — not just hold. Click any position → select ADD → enter an amount → ADD TO DRAFT.',
+    title: 'LESSON 4 · ADD TO A POSITION',
+    instruction: 'Click a position, choose ADD, then ADD TO DRAFT.',
+    detail: 'ADD increases a position you already hold. When conviction is high and the price is right, you size up — not just hold.',
     action: 'I HAVE DRAFTED AN ADD ORDER',
-    highlight: 'ORDER TICKET',
-    keyHint: 'CLICK A POSITION → SELECT ADD',
+    keyHint: 'CLICK A POSITION → ADD → ADD TO DRAFT',
+    panel: 'PORTFOLIO',
+    spotlight: '[data-spotlight="portfolio"]',
   },
   {
     id: 'REVIEW_RISK',
     title: 'LESSON 5 · REVIEW YOUR RISK',
-    instruction: 'Open the risk panel before committing any decision.',
-    detail: 'Press R or click RISK. You will see sector concentration, portfolio drawdown, and turnover used. Never commit a decision without checking if you are breaching your limits. The machine always checks risk first.',
+    instruction: 'Check risk before committing anything.',
+    detail: 'Sector concentration, drawdown, and turnover live here. Never commit without checking your limits — the machine always checks risk first.',
     action: 'I HAVE REVIEWED MY RISK',
-    highlight: 'RISK PANEL [R]',
-    keyHint: 'PRESS R OR CLICK RISK',
+    keyHint: 'THIS IS YOUR RISK PANEL',
+    panel: 'RISK',
+    spotlight: '[data-spotlight="risk"]',
   },
   {
     id: 'COMMIT',
     title: 'LESSON 6 · COMMIT YOUR DECISION',
-    instruction: 'Review your draft, then press COMMIT.',
-    detail: 'Your decision draft shows all pending orders. Once you commit, the checkpoint resolves and the market moves. You cannot undo a commit. Read the draft carefully, then press COMMIT or ENTER.',
+    instruction: 'Your draft holds every pending order.',
+    detail: 'Once you commit, the checkpoint resolves and the market moves. A commit cannot be undone — read the draft carefully first.',
     action: 'I UNDERSTAND HOW TO COMMIT',
-    highlight: 'DECISION DRAFT',
     keyHint: 'ENTER TO COMMIT · ESC TO CANCEL',
+    panel: 'DRAFT',
+    spotlight: '[data-spotlight="draft"]',
   },
   {
     id: 'MACHINE',
     title: 'LESSON 7 · COMPARE TO THE MACHINE',
-    instruction: 'After committing, you see what the machine did.',
-    detail: 'The machine discloses its action and its reasoning. This is the audit. You can agree with it, disagree with it, or learn from it. The score is calculated from process quality — not whether you matched the machine.',
+    instruction: 'After you commit, the machine reveals its move.',
+    detail: 'It discloses its action and reasoning — the audit. Your score comes from process quality, not from matching the machine. The machine never sees the future; neither do you.',
     action: 'I UNDERSTAND MACHINE COMPARISON',
-    highlight: 'MACHINE DECISION',
+    panel: 'DRAFT',
+    spotlight: '[data-spotlight="machine"]',
   },
   {
     id: 'HOLD',
     title: 'LESSON 8 · HOLD IS A DECISION',
     instruction: 'Sometimes the right answer is to do nothing.',
-    detail: 'HOLD is not inaction. It is a decision that your thesis is unchanged and the signal does not warrant a trade. You must select a reason: THESIS UNCHANGED, INSUFFICIENT INFORMATION, AWAIT CONFIRMATION, VALUATION SUPPORT, or POLICY FLOOR. HOLD earns full process credit when it is correct.',
+    detail: 'HOLD is not inaction — it is a scored decision that your thesis is unchanged. Pick a reason. A good HOLD beats a bad trade, and trading more is never rewarded.',
     action: 'I UNDERSTAND HOW TO HOLD',
-    highlight: 'HOLD DECISION',
-    keyHint: 'PRESS H OR CLICK HOLD',
+    keyHint: 'SELECT A HOLD REASON',
+    panel: 'DRAFT',
+    spotlight: '[data-spotlight="hold"]',
   },
 ];
 
@@ -142,17 +158,40 @@ const MOCK_SIGNAL = {
   ],
 };
 
+const SPINE_ANSWERS = {
+  happening: 'WHO PHEIC · JAN 30, 2020',
+  info: 'TRAVEL DEMAND SIGNALS · PORTFOLIO',
+  canDo: 'REDUCE · ADD · EXIT · HOLD',
+  onCommit: 'MARKET RESOLVES · MACHINE COMPARES',
+  vsMachine: 'SCORE SHOWN AFTER COMMIT',
+};
+
 export default function TutorialScreen({ onComplete }: Props) {
   const { earnXp } = useGame();
   const [stepIdx, setStepIdx] = useState(0);
-  const [activePanel, setActivePanel] = useState<'SIGNAL' | 'PORTFOLIO' | 'RISK' | 'DRAFT'>('SIGNAL');
+  const [activePanel, setActivePanel] = useState<Panel>('SIGNAL');
   const [selectedPosition, setSelectedPosition] = useState<string | null>(null);
   const [orderAction, setOrderAction] = useState<'ADD' | 'REDUCE' | 'EXIT' | null>(null);
   const [draftOrders, setDraftOrders] = useState<{ symbol: string; action: string; amount: number }[]>([]);
   const [holdReason, setHoldReason] = useState<string | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
   const step = STEPS[stepIdx];
   const progress = stepIdx / (STEPS.length - 1);
+
+  // Reduced-motion preference for the spotlight ring (§62).
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  // Each step auto-opens the panel it teaches, so the spotlight has a target.
+  useEffect(() => {
+    setActivePanel(STEPS[stepIdx].panel);
+  }, [stepIdx]);
 
   const advance = () => {
     if (stepIdx < STEPS.length - 1) {
@@ -170,22 +209,18 @@ export default function TutorialScreen({ onComplete }: Props) {
     setOrderAction(null);
   };
 
-  const isCompleteStep = step.id === 'COMPLETE';
-
   return (
     <div className="min-h-screen bg-terminal-black font-mono flex flex-col">
 
       {/* Top bar */}
       <div className="border-b border-phosphor/15 bg-terminal-black px-6 py-3 flex items-center justify-between">
-        <div>
-          <span className="text-phosphor-dim text-xs tracking-widest">TUTORIAL</span>
-          <span className="text-phosphor-dim text-xs ml-3">·</span>
-          <span className="text-phosphor text-xs ml-3 tracking-widest">{step.title}</span>
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="text-phosphor-dim text-xs tracking-widest flex-shrink-0">TUTORIAL</span>
+          <span className="text-phosphor-dim text-xs flex-shrink-0">·</span>
+          <span className="text-phosphor text-xs tracking-widest truncate">{step.title}</span>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-phosphor-dim text-xs">
-            STEP {stepIdx + 1} / {STEPS.length}
-          </div>
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="text-phosphor-dim text-xs">STEP {stepIdx + 1} / {STEPS.length}</div>
           <button
             onClick={() => { earnXp(0); onComplete(); }}
             className="text-phosphor-dim text-xs hover:text-phosphor transition-colors tracking-widest"
@@ -197,49 +232,33 @@ export default function TutorialScreen({ onComplete }: Props) {
 
       {/* Progress bar */}
       <div className="h-0.5 bg-phosphor/10">
-        <div
-          className="h-full bg-phosphor transition-all duration-500"
-          style={{ width: `${progress * 100}%` }}
-        />
+        <div className="h-full bg-phosphor transition-all duration-500" style={{ width: `${progress * 100}%` }} />
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      {/* Full-width mock terminal (the spotlight directs attention; no side rail) */}
+      <div className="flex-1 flex flex-col overflow-hidden">
 
-        {/* Left: mock terminal */}
-        <div className="flex-1 border-r border-phosphor/15 flex flex-col">
+        {/* Panel tabs */}
+        <div className="flex border-b border-phosphor/15">
+          {(['SIGNAL', 'PORTFOLIO', 'RISK', 'DRAFT'] as const).map(p => (
+            <button
+              key={p}
+              onClick={() => setActivePanel(p)}
+              className={`px-4 py-2 text-xs tracking-widest border-r border-phosphor/10 transition-colors ${
+                activePanel === p ? 'text-phosphor bg-phosphor/8' : 'text-phosphor-dim hover:text-phosphor-mid'
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
 
-          {/* Panel tabs */}
-          <div className="flex border-b border-phosphor/15">
-            {(['SIGNAL', 'PORTFOLIO', 'RISK', 'DRAFT'] as const).map(p => (
-              <button
-                key={p}
-                onClick={() => setActivePanel(p)}
-                className={`px-4 py-2 text-xs tracking-widest border-r border-phosphor/10 transition-colors ${
-                  activePanel === p
-                    ? 'text-phosphor bg-phosphor/8'
-                    : 'text-phosphor-dim hover:text-phosphor-mid'
-                } ${
-                  (step.highlight === 'PORTFOLIO PANEL [P]' && p === 'PORTFOLIO') ||
-                  (step.highlight === 'RISK PANEL [R]' && p === 'RISK') ||
-                  (step.highlight === 'DECISION DRAFT' && p === 'DRAFT') ||
-                  (step.highlight === 'SIGNAL PANEL' && p === 'SIGNAL')
-                    ? 'border border-phosphor/40 bg-phosphor/5'
-                    : ''
-                }`}
-              >
-                {p}
-                {step.highlight?.includes(p) && (
-                  <span className="ml-1 text-alert-amber text-xs">←</span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Panel content */}
-          <div className="flex-1 overflow-y-auto p-5">
+        {/* Panel content */}
+        <div className="flex-1 overflow-y-auto p-5">
+          <div className="max-w-3xl mx-auto">
 
             {activePanel === 'SIGNAL' && (
-              <div>
+              <div data-spotlight="signal">
                 <div className="text-phosphor-dim text-xs tracking-widest mb-1">{MOCK_SIGNAL.date}</div>
                 <div className="text-phosphor text-lg font-bold mb-3 leading-snug">{MOCK_SIGNAL.title}</div>
                 <div className="text-phosphor-mid text-xs leading-relaxed mb-5">{MOCK_SIGNAL.body}</div>
@@ -257,7 +276,7 @@ export default function TutorialScreen({ onComplete }: Props) {
             )}
 
             {activePanel === 'PORTFOLIO' && (
-              <div>
+              <div data-spotlight="portfolio">
                 <div className="flex justify-between text-xs text-phosphor-dim mb-3 tracking-widest">
                   <span>POSITION</span>
                   <span>WEIGHT · PNL</span>
@@ -267,9 +286,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                     <button
                       key={pos.symbol}
                       onClick={() => {
-                        if (step.id === 'REDUCE' || step.id === 'BUY') {
-                          setSelectedPosition(pos.symbol);
-                        }
+                        if (step.id === 'REDUCE' || step.id === 'BUY') setSelectedPosition(pos.symbol);
                       }}
                       className={`w-full flex items-center justify-between text-xs p-2.5 border transition-all ${
                         selectedPosition === pos.symbol
@@ -296,9 +313,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                 {/* Order ticket */}
                 {selectedPosition && (
                   <div className="mt-4 border border-phosphor/30 bg-phosphor/5 p-4">
-                    <div className="text-phosphor-dim text-xs tracking-widest mb-3">
-                      ORDER TICKET · {selectedPosition}
-                    </div>
+                    <div className="text-phosphor-dim text-xs tracking-widest mb-3">ORDER TICKET · {selectedPosition}</div>
                     <div className="grid grid-cols-3 gap-2 mb-3">
                       {(['ADD', 'REDUCE', 'EXIT'] as const).map(ac => (
                         <button
@@ -336,19 +351,19 @@ export default function TutorialScreen({ onComplete }: Props) {
             )}
 
             {activePanel === 'RISK' && (
-              <div className="space-y-4">
+              <div data-spotlight="risk" className="space-y-4">
                 <div className="terminal-panel p-4">
                   <div className="text-phosphor-dim text-xs tracking-widest mb-3">RISK METRICS</div>
                   <div className="space-y-3">
                     {[
-                      { label: 'DRAWDOWN', value: '-2.3%', warn: false },
-                      { label: 'VOLATILITY', value: '16.0%', warn: false },
-                      { label: 'TURNOVER USED', value: '4%', warn: false },
-                      { label: 'CASH WEIGHT', value: '15%', warn: false },
+                      { label: 'DRAWDOWN', value: '-2.3%' },
+                      { label: 'VOLATILITY', value: '16.0%' },
+                      { label: 'TURNOVER USED', value: '4%' },
+                      { label: 'CASH WEIGHT', value: '15%' },
                     ].map(m => (
                       <div key={m.label} className="flex justify-between text-xs">
                         <span className="text-phosphor-dim">{m.label}</span>
-                        <span className={m.warn ? 'text-alert-amber' : 'text-phosphor'}>{m.value}</span>
+                        <span className="text-phosphor">{m.value}</span>
                       </div>
                     ))}
                   </div>
@@ -357,22 +372,17 @@ export default function TutorialScreen({ onComplete }: Props) {
                   <div className="text-phosphor-dim text-xs tracking-widest mb-3">SECTOR LIMITS</div>
                   <div className="space-y-2 text-xs">
                     {[
-                      { sector: 'TECHNOLOGY', pct: 20, limit: 30, over: false },
-                      { sector: 'AIRLINES', pct: 8, limit: 10, over: false },
-                      { sector: 'HOTELS', pct: 8, limit: 10, over: false },
+                      { sector: 'TECHNOLOGY', pct: 20, limit: 30 },
+                      { sector: 'AIRLINES', pct: 8, limit: 10 },
+                      { sector: 'HOTELS', pct: 8, limit: 10 },
                     ].map(s => (
                       <div key={s.sector}>
                         <div className="flex justify-between mb-0.5">
                           <span className="text-phosphor-dim">{s.sector}</span>
-                          <span className={s.over ? 'text-alert-amber' : 'text-phosphor'}>
-                            {s.pct}% / {s.limit}%
-                          </span>
+                          <span className="text-phosphor">{s.pct}% / {s.limit}%</span>
                         </div>
                         <div className="h-1 bg-phosphor/10">
-                          <div
-                            className={`h-full ${s.over ? 'bg-alert-amber' : 'bg-phosphor/40'}`}
-                            style={{ width: `${(s.pct / s.limit) * 100}%` }}
-                          />
+                          <div className="h-full bg-phosphor/40" style={{ width: `${(s.pct / s.limit) * 100}%` }} />
                         </div>
                       </div>
                     ))}
@@ -382,7 +392,7 @@ export default function TutorialScreen({ onComplete }: Props) {
             )}
 
             {activePanel === 'DRAFT' && (
-              <div>
+              <div data-spotlight="draft">
                 <div className="text-phosphor-dim text-xs tracking-widest mb-3">DECISION DRAFT</div>
                 {draftOrders.length === 0 ? (
                   <div className="text-phosphor-dim text-xs border border-phosphor/10 p-4 text-center">
@@ -405,7 +415,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                 )}
 
                 {/* Hold decision */}
-                <div className="mt-4 border-t border-phosphor/15 pt-4">
+                <div data-spotlight="hold" className="mt-4 border-t border-phosphor/15 pt-4">
                   <div className="text-phosphor-dim text-xs tracking-widest mb-3">OR HOLD — SELECT REASON</div>
                   <div className="space-y-1.5">
                     {HOLD_REASONS.map(r => (
@@ -432,122 +442,42 @@ export default function TutorialScreen({ onComplete }: Props) {
               </div>
             )}
           </div>
+        </div>
 
-          {/* Machine comparison (shown in MACHINE step) */}
-          {step.id === 'MACHINE' && (
-            <div className="border-t border-phosphor/15 p-4 bg-phosphor/3">
+        {/* Machine comparison (shown in MACHINE step) */}
+        {step.id === 'MACHINE' && (
+          <div data-spotlight="machine" className="border-t border-phosphor/15 p-4 bg-phosphor/3">
+            <div className="max-w-3xl mx-auto">
               <div className="text-phosphor-dim text-xs tracking-widest mb-2">MACHINE DECISION · REFI RULES</div>
               <div className="flex gap-6 text-xs mb-2">
-                <div>
-                  <span className="text-phosphor-dim">ACTION: </span>
-                  <span className="text-phosphor font-bold">REDUCE</span>
-                </div>
-                <div>
-                  <span className="text-phosphor-dim">TARGET: </span>
-                  <span className="text-phosphor">DAL, MAR</span>
-                </div>
+                <div><span className="text-phosphor-dim">ACTION: </span><span className="text-phosphor font-bold">REDUCE</span></div>
+                <div><span className="text-phosphor-dim">TARGET: </span><span className="text-phosphor">DAL, MAR</span></div>
               </div>
               <div className="text-phosphor-dim text-xs leading-snug border-l border-phosphor/20 pl-2">
                 "Revenue impact is confirmed for travel sector. WHO emergency = confirmed demand destruction.
                 Policy: reduce any position with confirmed revenue impairment &gt;3% at WHO alert level."
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Right: tutorial instruction panel */}
-        <div className="w-80 flex flex-col border-l border-phosphor/15">
-
-          {/* Instruction */}
-          <div className="flex-1 p-6 overflow-y-auto">
-
-            {/* Step number */}
-            <div className="flex items-center gap-2 mb-4">
-              {STEPS.map((s, i) => (
-                <div
-                  key={s.id}
-                  className={`w-2 h-2 transition-colors ${
-                    i < stepIdx ? 'bg-paper-green' :
-                    i === stepIdx ? 'bg-phosphor' :
-                    'bg-phosphor/15'
-                  }`}
-                />
-              ))}
-            </div>
-
-            <div className="text-phosphor-dim text-xs tracking-widest mb-1">
-              LESSON {stepIdx + 1} OF {STEPS.length}
-            </div>
-            <div className="text-phosphor text-sm font-bold mb-4 leading-snug">
-              {step.instruction}
-            </div>
-            <div className="text-phosphor-mid text-xs leading-relaxed mb-5">
-              {step.detail}
-            </div>
-
-            {step.keyHint && (
-              <div className="border border-phosphor/20 px-3 py-2 text-phosphor-dim text-xs tracking-widest mb-4 text-center">
-                {step.keyHint}
-              </div>
-            )}
-
-            {step.highlight && (
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-1.5 h-1.5 bg-alert-amber" />
-                <span className="text-alert-amber text-xs tracking-widest">{step.highlight} HIGHLIGHTED</span>
-              </div>
-            )}
-
-            {/* Hold step: show reason selection */}
-            {step.id === 'HOLD' && (
-              <div className="mb-4 space-y-1.5">
-                <div className="text-phosphor-dim text-xs tracking-widest mb-2">5 HOLD REASONS</div>
-                {HOLD_REASONS.map(r => (
-                  <div key={r} className="flex items-center gap-2 text-xs text-phosphor-dim">
-                    <div className="w-1 h-1 bg-phosphor/40" />
-                    {r}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-
-          {/* CTA */}
-          <div className="p-4 border-t border-phosphor/15">
-            <button
-              onClick={advance}
-              className="cmd-button-primary w-full py-3 text-xs tracking-widest"
-            >
-              {stepIdx === STEPS.length - 1 ? 'ENTER THE ARENA ▶' : step.action + ' →'}
-            </button>
-
-            {stepIdx > 0 && (
-              <button
-                onClick={() => setStepIdx(s => Math.max(0, s - 1))}
-                className="w-full text-center text-phosphor-dim text-xs mt-2 hover:text-phosphor transition-colors tracking-widest"
-              >
-                ← BACK
-              </button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Bottom: 5 questions bar */}
-      <div className="border-t border-phosphor/10 px-6 py-2.5 flex gap-8 text-xs overflow-x-auto scrollbar-hide">
-        {[
-          { q: 'WHAT IS HAPPENING?', a: 'WHO PHEIC · JAN 30, 2020' },
-          { q: 'WHAT INFO DO I HAVE?', a: 'TRAVEL DEMAND SIGNALS · PORTFOLIO PANEL' },
-          { q: 'WHAT CAN I DO?', a: 'REDUCE · ADD · EXIT · HOLD' },
-          { q: 'WHAT HAPPENS WHEN I COMMIT?', a: 'MARKET RESOLVES · MACHINE COMPARES' },
-          { q: 'HOW AM I DOING VS MACHINE?', a: 'SCORE SHOWN AFTER COMMIT' },
-        ].map(({ q, a }) => (
-          <div key={q} className="flex-shrink-0">
-            <div className="text-phosphor-dim tracking-widest">{q}</div>
-            <div className="text-phosphor mt-0.5">{a}</div>
-          </div>
-        ))}
-      </div>
+      {/* §56 five-question spine — always answers "why am I here / what do I do" */}
+      <FiveQuestionSpine answers={SPINE_ANSWERS} />
+
+      {/* Spotlight overlay: dims everything but the element this step teaches. */}
+      <Spotlight
+        targetSelector={step.spotlight}
+        watch={[stepIdx, activePanel, selectedPosition, draftOrders.length]}
+        title={step.instruction}
+        body={step.detail}
+        hint={step.keyHint}
+        step={{ current: stepIdx + 1, total: STEPS.length }}
+        nextLabel={stepIdx === STEPS.length - 1 ? 'ENTER THE ARENA ▶' : `${step.action} →`}
+        onNext={advance}
+        onBack={stepIdx > 0 ? () => setStepIdx(s => Math.max(0, s - 1)) : undefined}
+        reducedMotion={reducedMotion}
+      />
     </div>
   );
 }

@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+# Actions are pinned to commit SHAs (§3.4 / §3.3 repo-hygiene floor). Tag
+# comments record the intended version; a version bump is a reviewed diff,
+# not a silent tag shift. SHAs are kept in lockstep with the investor
+# shell's CI (refi-us-sec-ia .github/workflows/ci.yml).
+
+jobs:
+  ci:
+    name: Typecheck / Lint / Build / Gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Result-category label gate (§3.4 gate 1)
+        run: npm run label-gate
+      - name: Benchmark provenance gate (§3.4 gate 2)
+        run: npm run provenance-gate
+      - name: Build
+        run: npm run build
+
+  security:
+    name: Security scans (§3.3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      # gitleaks scans history for committed secrets (the Bolt-era .env
+      # is git-ignored; this fails the build if one was ever committed).
+      - name: gitleaks (secret scan)
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # osv-scanner walks package-lock.json for known vulnerabilities in
+      # production dependencies.
+      - name: osv-scanner (dependency audit)
+        uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --lockfile=package-lock.json
+            --recursive
+            ./

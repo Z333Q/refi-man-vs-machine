@@ -1,6 +1,7 @@
 import { useGame } from '../context/GameContext';
 import { MACHINE_LADDER } from '../lib/progressionEngine';
 import type { BenchmarkSnapshot } from '../lib/gameTypes';
+import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
 
 interface Props {
   onChallenge: (machineId: string) => void;
@@ -87,6 +88,9 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
               FAIR MATCH machines use the same constraints as you.
               EXHIBITION machines have different capability models — flagged explicitly.
             </div>
+            {/* Benchmark stats below are point-in-time model simulation, not
+                live client results (§62 / §3.4 gate 1). */}
+            <ResultCategoryLabel category="HISTORICAL_MODEL_SIMULATION" className="mt-3" />
           </div>
           <button
             onClick={onBack}

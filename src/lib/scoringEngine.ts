@@ -209,7 +209,10 @@ export function computeXpAward(score: CheckpointScore, isRegimeChange: boolean):
 // ─── Alpha profile dimension updates from flags ───────────────────────────────
 
 export function getDimensionUpdates(
-  flags: BehavioralFlag[],
+  // Flag-weighted dimension updates are Phase-1-plus per CLAUDE.md scoring;
+  // for now this passes branchImpact through untouched so the pipeline is
+  // wired end-to-end and can be enriched without changing callers.
+  _flags: BehavioralFlag[],
   branchImpact: Partial<Record<DimensionCode, number>>
 ): Partial<Record<DimensionCode, number>> {
   const updates: Partial<Record<DimensionCode, number>> = { ...branchImpact };
