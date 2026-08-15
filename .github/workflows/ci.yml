@@ -79,11 +79,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # osv-scanner walks package-lock.json for known vulnerabilities in
-  # production dependencies. It ships as a reusable workflow, so it has to be
-  # called at the job level: a reusable workflow used inside `steps:` is
-  # rejected when the workflow file is parsed, which produced a run with zero
-  # jobs and no usable error on the run page.
+  # osv-scanner walks the lockfiles for known vulnerabilities. It ships as a
+  # reusable workflow, so it has to be called at the job level: a reusable
+  # workflow used inside `steps:` is rejected when the workflow file is parsed,
+  # which produced runs with zero jobs and no usable error on the run page.
+  #
+  # The gate is scoped to production dependencies via osv-scanner.toml. That is
+  # a scope decision, not a suppression: no advisory is ignored by id, and a
+  # runtime vulnerability still fails the build.
   security-osv:
     name: OSV dependency scan
     permissions:
@@ -93,6 +96,7 @@ jobs:
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
     with:
       scan-args: |-
+        --config=./osv-scanner.toml
         --lockfile=package-lock.json
         --recursive
         ./
