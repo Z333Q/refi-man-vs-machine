@@ -20,7 +20,7 @@ env:
 
 jobs:
   ci:
-    name: Typecheck / Lint / Build / Gates
+    name: Typecheck / Lint / Test / Build / Gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -34,12 +34,36 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
+      - name: Tests
+        run: npm test
       - name: Result-category label gate (§3.4 gate 1)
         run: npm run label-gate
       - name: Benchmark provenance gate (§3.4 gate 2)
         run: npm run provenance-gate
+      - name: Em-dash gate
+        run: npm run em-dash-gate
       - name: Build
         run: npm run build
+
+  handoff:
+    name: Handoff / Typecheck / Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/handoff
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: services/handoff/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests
+        run: npm test
 
   security:
     name: Security scans (§3.3)
@@ -54,12 +78,21 @@ jobs:
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # osv-scanner walks package-lock.json for known vulnerabilities in
-      # production dependencies.
-      - name: osv-scanner (dependency audit)
-        uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
-        with:
-          scan-args: |-
-            --lockfile=package-lock.json
-            --recursive
-            ./
+
+  # osv-scanner walks package-lock.json for known vulnerabilities in
+  # production dependencies. It ships as a reusable workflow, so it has to be
+  # called at the job level: a reusable workflow used inside `steps:` is
+  # rejected when the workflow file is parsed, which produced a run with zero
+  # jobs and no usable error on the run page.
+  security-osv:
+    name: OSV dependency scan
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    with:
+      scan-args: |-
+        --lockfile=package-lock.json
+        --recursive
+        ./
