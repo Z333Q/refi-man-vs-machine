@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { useTips } from '../context/TipContext';
-import type { ActionBranch } from '../lib/gameTypes';
+import type { ActionBranch, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
 import {
   canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
   STARTING_CAPITAL,
 } from '../lib/runEngine';
 import {
-  THESIS_OPTIONS, thesisLabel, stanceLine, stanceTitle,
-  convictionRange, isConvictionClamped, clampConviction,
-  convictionToConfidence, confidenceToConviction,
-  CONVICTION_STEP, PANEL_MODULE,
+  thesisLabel, thesisOptionsFor, stanceLine, stanceTitle,
+  convictionSpan, convictionGovernor, isGovernorActive, clampConviction,
+  convictionToConfidence, confidenceToConviction, isDetent, isLandmark,
+  CONVICTION_KEY_STEP, CONVICTION_KEY_STEP_COARSE,
+  GOVERNOR_CAPTION, PANEL_MODULE, THESIS_TIMEOUT_MS, THESIS_TIMEOUT_CODE,
 } from '../lib/decisionContract';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
@@ -51,7 +52,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     startRun,
     investigateModule,
     setPendingAction,
-    setPendingThesis,
+    attachThesis,
     setPendingConfidence,
     commitDecision,
     advanceCheckpoint,
@@ -80,6 +81,9 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   const [activePanel, setActivePanel] = useState<ActivePanel>('SIGNAL');
   const [commitConfirm, setCommitConfirm] = useState(false);
   const [revealDelay, setRevealDelay] = useState(0);
+  // The post-commit thesis prompt. Shown between the release and the reveal so
+  // the player explains an instinct already exposed (Addendum B B2, C C.5).
+  const [thesisPrompt, setThesisPrompt] = useState(false);
 
   // ─── First-run coaching (P0 IA: a guided, spotlit first checkpoint) ───────────
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -261,8 +265,20 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   // Reset the decision surface when the checkpoint advances
   useEffect(() => {
     setCommitConfirm(false);
+    setThesisPrompt(false);
     setActivePanel('SIGNAL');
   }, [run?.currentCheckpoint]);
+
+  // The thesis prompt never blocks the reveal. On timeout the decision records
+  // THESIS_UNSTATED, which is a real behavioral signal rather than a gap.
+  useEffect(() => {
+    if (!thesisPrompt) return;
+    const t = setTimeout(() => {
+      attachThesis(THESIS_TIMEOUT_CODE);
+      setThesisPrompt(false);
+    }, THESIS_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [thesisPrompt, attachThesis]);
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
@@ -297,16 +313,22 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   }, [run, setPendingConfidence]);
 
   const handleReview = useCallback(() => {
-    if (!run?.pendingAction || !run.pendingThesis) return;
+    if (!run?.pendingAction) return;
     setCommitConfirm(true);
     setActivePanel('DECIDE');
     tipOnce('draft_ready', () => triggerEvent('tutorial.draft_ready'));
-  }, [run?.pendingAction, run?.pendingThesis, tipOnce, triggerEvent]);
+  }, [run?.pendingAction, tipOnce, triggerEvent]);
 
   const handleFinalCommit = useCallback(() => {
     commitDecision();
     setCommitConfirm(false);
+    setThesisPrompt(true);
   }, [commitDecision]);
+
+  const pickThesis = useCallback((code: ThesisCode) => {
+    attachThesis(code);
+    setThesisPrompt(false);
+  }, [attachThesis]);
 
   const handleLearnNext = useCallback(() => {
     if (!run) return;
@@ -354,17 +376,33 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         return;
       }
 
-      // Arrows adjust conviction once a stance is chosen
+      // Conviction, once a stance is chosen. Integer resolution would make a
+      // plain arrow traverse 45 keystrokes wide, so the keyboard gets the same
+      // three speeds the hand gets from detents: fine, detent, and end stop.
       if (run.pendingAction) {
-        const conviction = confidenceToConviction(run.pendingConfidence);
+        const current = confidenceToConviction(run.pendingConfidence);
+        const bounds = convictionGovernor(run.currentCheckpoint);
+        const coarse = e.shiftKey;
+        const step = coarse ? CONVICTION_KEY_STEP_COARSE : CONVICTION_KEY_STEP;
+
         if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
           e.preventDefault();
-          adjustConviction(conviction + CONVICTION_STEP);
+          adjustConviction(current + step);
         }
         if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
           e.preventDefault();
-          adjustConviction(conviction - CONVICTION_STEP);
+          adjustConviction(current - step);
         }
+        if (e.key === 'PageUp') {
+          e.preventDefault();
+          adjustConviction(current + CONVICTION_KEY_STEP_COARSE);
+        }
+        if (e.key === 'PageDown') {
+          e.preventDefault();
+          adjustConviction(current - CONVICTION_KEY_STEP_COARSE);
+        }
+        if (e.key === 'Home') { e.preventDefault(); adjustConviction(bounds.min); }
+        if (e.key === 'End') { e.preventDefault(); adjustConviction(bounds.max); }
       }
     };
     window.addEventListener('keydown', handler);
@@ -373,6 +411,24 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     decisionPhase, run, branches, currentCheckpointData, commitConfirm,
     handleFinalCommit, handleReview, openPanel, selectStance, adjustConviction,
   ]);
+
+  // Thesis prompt keyboard: same 1..n grammar as the stance cards.
+  useEffect(() => {
+    if (!thesisPrompt || !run) return;
+    const decision = run.decisions[run.decisions.length - 1];
+    const branch = decision
+      ? (currentCheckpointData?.availableActions ?? []).find(b => b.actionCode === decision.actionCode)
+      : undefined;
+    if (!branch) return;
+    const options = thesisOptionsFor(branch);
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { pickThesis(THESIS_TIMEOUT_CODE); return; }
+      const n = Number(e.key);
+      if (Number.isInteger(n) && n >= 1 && n <= options.length) pickThesis(options[n - 1].code);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [thesisPrompt, run, currentCheckpointData, pickThesis]);
 
   // ─── Guard ───────────────────────────────────────────────────────────────────
 
@@ -395,11 +451,12 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   // ─── Decision state ──────────────────────────────────────────────────────────
 
   const stance = run.pendingAction;
-  const thesis = run.pendingThesis;
   const conviction = confidenceToConviction(run.pendingConfidence);
-  const range = convictionRange(run.currentCheckpoint);
-  const convictionClamped = isConvictionClamped(run.currentCheckpoint);
-  const decisionReady = Boolean(stance && thesis);
+  // The control always spans the permanent range; the governor caps the value.
+  const span = convictionSpan();
+  const governor = convictionGovernor(run.currentCheckpoint);
+  const governed = isGovernorActive(run.currentCheckpoint);
+  const decisionReady = Boolean(stance);
   const selectedBranch = branches.find(b => b.actionCode === stance) ?? null;
 
   // ─── Turnover ────────────────────────────────────────────────────────────────
@@ -423,6 +480,10 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     resolveRunResult(run, run.playerScore > run.machineScore ? 'MACHINE_BEATEN' : 'PASSED') === 'MACHINE_BEATEN';
 
   const lastDecision = run.decisions[run.decisions.length - 1];
+  // The branch that was actually committed, for the post-commit thesis prompt.
+  const selectedCommittedBranch = lastDecision
+    ? branches.find(b => b.actionCode === lastDecision.actionCode) ?? null
+    : null;
   const earnedProcessCredit = Boolean(lastDecision?.behavioralFlags.includes('GOOD_PROCESS')) && cp.isRegimeChange;
 
   const PANEL_TABS: { id: ActivePanel; label: string; key: string }[] = [
@@ -793,71 +854,89 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                       })}
                     </div>
 
-                    {/* ── 2. Thesis ── */}
-                    <div className={stance ? '' : 'opacity-40 pointer-events-none'}>
-                      <div className="text-phosphor-dim text-xs tracking-widest mb-2">
-                        2 · THESIS · WHY THIS STANCE
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5 mb-6">
-                        {THESIS_OPTIONS.map(t => (
-                          <button
-                            key={t.code}
-                            onClick={() => { setPendingThesis(t.code); setCommitConfirm(false); }}
-                            aria-pressed={thesis === t.code}
-                            className={`text-left text-xs py-2 px-3 border transition-colors ${
-                              thesis === t.code
-                                ? 'border-phosphor bg-phosphor/10 text-phosphor'
-                                : 'border-phosphor/15 text-phosphor-dim hover:border-phosphor/35 hover:text-phosphor-mid'
-                            }`}
-                          >
-                            {t.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* ── 3. Conviction ── */}
+                    {/* ── 2. Conviction ── */}
+                    {/* The control spans 50 to 95 at every checkpoint. During
+                        CP1 to CP4 a governor caps the value at 75; the span
+                        itself never moves, so the scale the player learns here
+                        is the scale they keep. */}
                     <div className={stance ? '' : 'opacity-40 pointer-events-none'}>
                       <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-phosphor-dim text-xs tracking-widest">3 · CONVICTION</span>
+                        <span className="text-phosphor-dim text-xs tracking-widest">2 · CONVICTION</span>
                         <span className="text-phosphor text-lg font-bold tabular-nums">{conviction}</span>
                       </div>
-                      <div className="flex items-center gap-3 mb-1">
+
+                      <div className="flex items-center gap-3">
                         <button
-                          onClick={() => adjustConviction(conviction - CONVICTION_STEP)}
-                          aria-label="LOWER CONVICTION"
+                          onClick={() => adjustConviction(conviction - CONVICTION_KEY_STEP_COARSE)}
+                          aria-label="LOWER CONVICTION BY FIVE"
                           className="w-8 h-8 border border-phosphor/25 text-phosphor-dim hover:text-phosphor hover:border-phosphor/50 transition-colors"
                         >
                           −
                         </button>
-                        <input
-                          type="range"
-                          min={range.min}
-                          max={range.max}
-                          step={CONVICTION_STEP}
-                          value={conviction}
-                          onChange={e => adjustConviction(Number(e.target.value))}
-                          aria-label="CONVICTION"
-                          className="flex-1 accent-phosphor"
-                        />
+
+                        <div className="flex-1 relative">
+                          <input
+                            type="range"
+                            min={span.min}
+                            max={span.max}
+                            step={CONVICTION_KEY_STEP}
+                            value={conviction}
+                            onChange={e => adjustConviction(Number(e.target.value))}
+                            aria-label="CONVICTION"
+                            aria-valuemin={governor.min}
+                            aria-valuemax={governor.max}
+                            aria-valuenow={conviction}
+                            className="w-full accent-phosphor relative z-10"
+                          />
+                          {/* Detent ticks. Landmarks at 70, 85 and 95 are heavier:
+                              the same three the hand learns from the pull. */}
+                          <div className="flex justify-between px-0.5 mt-0.5" aria-hidden="true">
+                            {Array.from(
+                              { length: (span.max - span.min) / CONVICTION_KEY_STEP_COARSE + 1 },
+                              (_, i) => span.min + i * CONVICTION_KEY_STEP_COARSE,
+                            ).map(v => (
+                              <span
+                                key={v}
+                                className={`w-px ${
+                                  isLandmark(v) ? 'h-2 bg-phosphor/70'
+                                    : isDetent(v) ? 'h-1 bg-phosphor/25'
+                                    : 'h-1 bg-transparent'
+                                } ${governed && v > governor.max ? 'opacity-25' : ''}`}
+                              />
+                            ))}
+                          </div>
+                          {/* The governor: a visible limiter over the part of the
+                              span this checkpoint cannot reach. */}
+                          {governed && (
+                            <div
+                              className="absolute top-0 h-1.5 bg-risk-red/20 border-l border-risk-red/50 pointer-events-none"
+                              style={{
+                                left: `${((governor.max - span.min) / (span.max - span.min)) * 100}%`,
+                                right: 0,
+                              }}
+                              aria-hidden="true"
+                            />
+                          )}
+                        </div>
+
                         <button
-                          onClick={() => adjustConviction(conviction + CONVICTION_STEP)}
-                          aria-label="RAISE CONVICTION"
+                          onClick={() => adjustConviction(conviction + CONVICTION_KEY_STEP_COARSE)}
+                          aria-label="RAISE CONVICTION BY FIVE"
                           className="w-8 h-8 border border-phosphor/25 text-phosphor-dim hover:text-phosphor hover:border-phosphor/50 transition-colors"
                         >
                           +
                         </button>
                       </div>
-                      <div className="flex justify-between text-phosphor-dim text-xs mb-1">
-                        <span>{range.min}</span>
-                        <span>{range.max}</span>
+
+                      <div className="flex justify-between text-phosphor-dim text-xs mt-1">
+                        <span>{span.min}</span>
+                        <span>{span.max}</span>
                       </div>
-                      {convictionClamped && (
-                        <div className="text-phosphor-dim text-xs tracking-widest mb-6">
-                          CONVICTION RANGE OPENS AT CP5
-                        </div>
-                      )}
-                      {!convictionClamped && <div className="mb-6" />}
+
+                      <div className="text-phosphor-dim text-xs tracking-widest mt-1 mb-1">
+                        {governed ? GOVERNOR_CAPTION : 'ARROWS ADJUST BY 1 · SHIFT OR PAGE KEYS BY 5'}
+                      </div>
+                      <div className="mb-6" />
                     </div>
 
                     {/* ── Commit ── */}
@@ -868,7 +947,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                           {selectedBranch ? stanceTitle(selectedBranch) : stance}
                         </div>
                         <div className="text-phosphor-mid text-xs mb-1">
-                          {thesisLabel(thesis)} · CONVICTION {conviction}
+                          CONVICTION {conviction}
                         </div>
                         <div className="text-phosphor-dim text-xs mb-4">
                           TURNOVER COST {stance ? (turnoverCostFor(stance, cp) * 100).toFixed(0) : 0}%. THIS CANNOT BE UNDONE. THE MARKET WILL RESOLVE.
@@ -898,9 +977,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                             : 'border-phosphor/10 text-phosphor-dim cursor-not-allowed'
                         }`}
                       >
-                        {stance
-                          ? thesis ? 'REVIEW & COMMIT ▶ [ENTER]' : 'SELECT A THESIS TO CONTINUE'
-                          : 'SELECT A STANCE TO CONTINUE'}
+                        {stance ? 'REVIEW & COMMIT ▶ [ENTER]' : 'SELECT A STANCE TO CONTINUE'}
                       </button>
                     )}
                   </div>
@@ -909,8 +986,42 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
             </>
           )}
 
+          {/* ── Thesis quick-pick: after the commit, before the reveal ── */}
+          {thesisPrompt && lastDecision && selectedCommittedBranch && (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 animate-boot-fade">
+              <div className="text-phosphor text-xs tracking-widest mb-1">
+                {stanceTitle(selectedCommittedBranch)} · CONVICTION {confidenceToConviction(lastDecision.confidence ?? 0)}
+              </div>
+              <div className="text-phosphor-dim text-xs tracking-widest mb-5">
+                COMMITTED. THIS CANNOT BE CHANGED.
+              </div>
+
+              <div className="text-phosphor text-2xl font-bold tracking-widest mb-5">WHY?</div>
+
+              <div className="flex flex-wrap justify-center gap-2 max-w-xl">
+                {thesisOptionsFor(selectedCommittedBranch).map((t, i) => (
+                  <button
+                    key={t.code}
+                    onClick={() => pickThesis(t.code)}
+                    className="px-4 py-2.5 text-xs tracking-widest border border-phosphor/30 text-phosphor-mid hover:border-phosphor hover:text-phosphor hover:bg-phosphor/10 transition-colors"
+                  >
+                    <span className="text-phosphor-dim/60 mr-2">[{i + 1}]</span>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => pickThesis(THESIS_TIMEOUT_CODE)}
+                className="mt-5 text-phosphor-dim text-xs tracking-widest hover:text-phosphor-mid transition-colors"
+              >
+                SKIP →
+              </button>
+            </div>
+          )}
+
           {/* ── Resolve / Compare / Learn ── */}
-          {(phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING') && lastCheckpointScore && (
+          {!thesisPrompt && (phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING') && lastCheckpointScore && (
             <div className="flex-1 overflow-y-auto p-6">
               {/* Machine pipeline: processing animation */}
               {phase === 'RESOLVING' && revealDelay === 0 && (

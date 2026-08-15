@@ -2,12 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ActionBranch, ThesisCode } from './gameTypes';
 import { COVID_CHECKPOINTS } from './covidArena';
-import { createInitialRun, commitPendingDecision, advanceRunCheckpoint } from './runEngine';
+import { createInitialRun, commitPendingDecision, advanceRunCheckpoint, attachThesis, awaitingThesis } from './runEngine';
 import {
-  THESIS_OPTIONS, thesisLabel, stanceLine, stanceTitle,
-  convictionRange, isConvictionClamped, clampConviction,
+  THESIS_OPTIONS, thesisLabel, thesisOptionsFor, stanceLine, stanceTitle,
+  convictionSpan, convictionGovernor, isGovernorActive, clampConviction,
   convictionToConfidence, confidenceToConviction, consultedRisk,
-  CONVICTION_DEFAULT, CONVICTION_UNLOCK_CHECKPOINT, PANEL_MODULE,
+  isDetent, isLandmark,
+  CONVICTION_MIN, CONVICTION_MAX, CONVICTION_STEP, CONVICTION_DETENT,
+  CONVICTION_DEFAULT, GOVERNOR_BOUNDS, GOVERNOR_LIFTS_AT_CHECKPOINT,
+  THESIS_TIMEOUT_CODE, PANEL_MODULE,
 } from './decisionContract';
 
 // ─── Thesis ───────────────────────────────────────────────────────────────────
@@ -27,6 +30,8 @@ test('every thesis code is offered exactly once', () => {
     assert.ok(codes.includes(c), `thesis ${c} is not offered`);
   }
   assert.equal(codes.length, declared.length);
+  // THESIS_UNSTATED is recorded on timeout and is deliberately not selectable.
+  assert.equal(codes.includes('THESIS_UNSTATED'), false);
 });
 
 test('thesis labels match their code semantics', () => {
@@ -49,48 +54,88 @@ test('thesis labels carry no em dashes', () => {
 
 // ─── Conviction ───────────────────────────────────────────────────────────────
 
-test('conviction is clamped before CP5 and open from CP5', () => {
-  for (let cp = 1; cp < CONVICTION_UNLOCK_CHECKPOINT; cp++) {
-    assert.equal(isConvictionClamped(cp), true, `CP${cp} should be clamped`);
-    assert.deepEqual(convictionRange(cp), { min: 60, max: 75 });
+test('the control span is permanent at every checkpoint', () => {
+  // Addendum C section 4: the mapping never changes. The span the player sees
+  // and calibrates against is identical at CP1 and CP14.
+  for (let cp = 1; cp <= 14; cp++) {
+    assert.deepEqual(convictionSpan(), { min: CONVICTION_MIN, max: CONVICTION_MAX });
   }
-  for (let cp = CONVICTION_UNLOCK_CHECKPOINT; cp <= 14; cp++) {
-    assert.equal(isConvictionClamped(cp), false, `CP${cp} should be open`);
-    assert.deepEqual(convictionRange(cp), { min: 50, max: 95 });
+  assert.deepEqual(convictionSpan(), { min: 50, max: 95 });
+});
+
+test('the governor caps the value without moving the span', () => {
+  for (let cp = 1; cp < GOVERNOR_LIFTS_AT_CHECKPOINT; cp++) {
+    assert.equal(isGovernorActive(cp), true, `CP${cp} should be governed`);
+    assert.deepEqual(convictionGovernor(cp), { min: 60, max: 75 });
+    // The span is untouched while the governor is on. This is the whole point:
+    // a governed checkpoint is the same road with a limiter, not a new road.
+    assert.deepEqual(convictionSpan(), { min: 50, max: 95 });
+  }
+  for (let cp = GOVERNOR_LIFTS_AT_CHECKPOINT; cp <= 14; cp++) {
+    assert.equal(isGovernorActive(cp), false, `CP${cp} should be open`);
+    assert.deepEqual(convictionGovernor(cp), { min: 50, max: 95 });
   }
 });
 
-test('the default conviction sits inside every checkpoint range', () => {
+test('the governor raises the floor as well as capping the ceiling', () => {
+  assert.equal(GOVERNOR_BOUNDS.min, 60);
+  assert.equal(GOVERNOR_BOUNDS.max, 75);
+  assert.equal(clampConviction(50, 1), 60);
+  assert.equal(clampConviction(95, 1), 75);
+});
+
+test('lifting the governor does not change what a given value means', () => {
+  // The regression this guards: if the clamp were a remap, the same position
+  // on the control would mean 75 at CP4 and 95 at CP5. It must not.
+  const governedMidpoint = clampConviction(70, 4);
+  const openMidpoint = clampConviction(70, 5);
+  assert.equal(governedMidpoint, openMidpoint, '70 must mean 70 on both sides of CP5');
+  assert.equal(governedMidpoint, 70);
+});
+
+test('conviction is integer-resolution and is never snapped to detents', () => {
+  assert.equal(CONVICTION_STEP, 1);
+  // Every value in the open range survives the clamp untouched.
+  for (let v = CONVICTION_MIN; v <= CONVICTION_MAX; v++) {
+    assert.equal(clampConviction(v, 9), v, `${v} should be committable`);
+  }
+  // Specifically the ones between detents, which is what gives calibration
+  // its resolution.
+  for (const v of [72, 73, 74, 81, 87, 91]) {
+    assert.equal(clampConviction(v, 9), v);
+    assert.equal(isDetent(v), false);
+  }
+});
+
+test('detents and landmarks are labels on the scale, not values of it', () => {
+  assert.equal(CONVICTION_DETENT, 5);
+  assert.equal(isDetent(70), true);
+  assert.equal(isDetent(72), false);
+  assert.equal(isLandmark(70), true);
+  assert.equal(isLandmark(85), true);
+  assert.equal(isLandmark(95), true);
+  assert.equal(isLandmark(75), false);
+});
+
+test('the default conviction sits inside every checkpoint governor', () => {
   for (let cp = 1; cp <= 14; cp++) {
-    const { min, max } = convictionRange(cp);
+    const { min, max } = convictionGovernor(cp);
     assert.ok(CONVICTION_DEFAULT >= min && CONVICTION_DEFAULT <= max, `CP${cp}`);
     assert.equal(clampConviction(CONVICTION_DEFAULT, cp), CONVICTION_DEFAULT);
   }
 });
 
-test('clamping pins out-of-range conviction to the exposed bounds', () => {
-  assert.equal(clampConviction(95, 1), 75);  // clamped early
-  assert.equal(clampConviction(50, 1), 60);
-  assert.equal(clampConviction(95, 9), 95);  // open later
-  assert.equal(clampConviction(20, 9), 50);
-});
-
 test('conviction and confidence round-trip', () => {
-  for (const v of [50, 60, 70, 75, 85, 95]) {
+  for (const v of [50, 60, 70, 72, 75, 85, 95]) {
     assert.equal(confidenceToConviction(convictionToConfidence(v)), v);
   }
   assert.equal(convictionToConfidence(70), 0.7);
 });
 
-test('a committed decision records the clamped conviction, not the raw one', () => {
+test('a committed decision records the governed conviction, not the raw one', () => {
   let run = createInitialRun();
   // CP1 caps at 75; try to smuggle a 95 straight into run state.
-  run = {
-    ...run,
-    pendingAction: 'HOLD',
-    pendingThesis: 'THESIS_UNCHANGED',
-    pendingConfidence: convictionToConfidence(95),
-  };
+  run = { ...run, pendingAction: 'HOLD', pendingConfidence: convictionToConfidence(95) };
   const outcome = commitPendingDecision(run);
   assert.ok(outcome);
   assert.equal(confidenceToConviction(outcome.run.decisions[0].confidence ?? 0), 75);
@@ -98,16 +143,90 @@ test('a committed decision records the clamped conviction, not the raw one', () 
 
 test('conviction resets to the default at each new checkpoint', () => {
   let run = createInitialRun();
-  run = {
-    ...run,
-    pendingAction: 'HOLD',
-    pendingThesis: 'THESIS_UNCHANGED',
-    pendingConfidence: convictionToConfidence(75),
-  };
+  run = { ...run, pendingAction: 'HOLD', pendingConfidence: convictionToConfidence(75) };
   const outcome = commitPendingDecision(run);
   assert.ok(outcome);
   const next = advanceRunCheckpoint(outcome.run);
   assert.equal(confidenceToConviction(next.pendingConfidence), CONVICTION_DEFAULT);
+});
+
+// ─── Thesis after the commit ──────────────────────────────────────────────────
+
+function committedRun() {
+  const run = { ...createInitialRun(), pendingAction: 'HOLD' as const, pendingConfidence: convictionToConfidence(70) };
+  const outcome = commitPendingDecision(run);
+  assert.ok(outcome);
+  return outcome.run;
+}
+
+test('a decision commits without a thesis and then waits for one', () => {
+  const run = committedRun();
+  assert.equal(run.decisions.length, 1);
+  assert.equal(run.decisions[0].thesisCode, undefined);
+  assert.equal(awaitingThesis(run), true);
+});
+
+test('the thesis attaches to the committed decision', () => {
+  const run = attachThesis(committedRun(), 'THESIS_UNCHANGED');
+  assert.equal(run.decisions[0].thesisCode, 'THESIS_UNCHANGED');
+  assert.equal(awaitingThesis(run), false);
+});
+
+test('the thesis cannot revise the stance or the conviction', () => {
+  // Addendum C section C.5. This is the behavioral measurement model: the
+  // player explains an instinct already exposed, and explaining it cannot
+  // change what was exposed.
+  const before = committedRun();
+  const after = attachThesis(before, 'PANIC_REDUCTION');
+  const b = before.decisions[0];
+  const a = after.decisions[0];
+  assert.equal(a.actionCode, b.actionCode);
+  assert.equal(a.confidence, b.confidence);
+  assert.equal(a.scoreContribution, b.scoreContribution);
+  assert.equal(a.turnoverCost, b.turnoverCost);
+  assert.deepEqual(a.behavioralFlags, b.behavioralFlags);
+  assert.equal(a.quality, b.quality);
+  // And the run around it is otherwise identical.
+  assert.deepEqual({ ...after, decisions: [] }, { ...before, decisions: [] });
+});
+
+test('the first thesis wins, so a late tap cannot overwrite a timeout', () => {
+  const timedOut = attachThesis(committedRun(), THESIS_TIMEOUT_CODE);
+  const late = attachThesis(timedOut, 'VALUATION');
+  assert.equal(late.decisions[0].thesisCode, THESIS_TIMEOUT_CODE);
+  assert.equal(late, timedOut, 'a no-op should not even allocate a new run');
+});
+
+test('an unstated thesis is a recorded value, not a gap', () => {
+  const run = attachThesis(committedRun(), THESIS_TIMEOUT_CODE);
+  assert.equal(run.decisions[0].thesisCode, 'THESIS_UNSTATED');
+  assert.equal(awaitingThesis(run), false);
+});
+
+test('THESIS_UNSTATED is never offered as a chip', () => {
+  assert.equal(THESIS_OPTIONS.some(t => t.code === 'THESIS_UNSTATED'), false);
+  for (const cp of COVID_CHECKPOINTS) {
+    for (const branch of cp.availableActions) {
+      const codes = thesisOptionsFor(branch).map(t => t.code);
+      assert.equal(codes.includes('THESIS_UNSTATED'), false, `CP${cp.sequence} ${branch.actionCode}`);
+    }
+  }
+});
+
+test('every stance offers two to three theses, all labelled', () => {
+  for (const cp of COVID_CHECKPOINTS) {
+    for (const branch of cp.availableActions) {
+      const options = thesisOptionsFor(branch);
+      assert.ok(options.length >= 2 && options.length <= 3, `CP${cp.sequence} ${branch.actionCode}`);
+      assert.equal(new Set(options.map(o => o.code)).size, options.length, 'duplicate chip');
+      for (const o of options) {
+        assert.ok(o.label.length > 0, `${o.code} has no label`);
+        // Codes that are already plain English (MOMENTUM, CONTRARIAN) label
+        // as themselves; the rest must not fall through to the raw code.
+        assert.ok(!o.label.includes('_'), `${o.code} label leaked a raw code`);
+      }
+    }
+  }
 });
 
 // ─── Stance cards ─────────────────────────────────────────────────────────────
@@ -222,7 +341,6 @@ test('consulting risk before a regime call earns GOOD_PROCESS', () => {
     currentCheckpoint: regimeCp.sequence,
     investigatedModules: [PANEL_MODULE.RISK],
     pendingAction: stance,
-    pendingThesis: 'REGIME_CHANGE',
   });
   assert.ok(withRisk);
   assert.ok(withRisk.run.decisions[0].behavioralFlags.includes('GOOD_PROCESS'));
@@ -232,7 +350,6 @@ test('consulting risk before a regime call earns GOOD_PROCESS', () => {
     currentCheckpoint: regimeCp.sequence,
     investigatedModules: [],
     pendingAction: stance,
-    pendingThesis: 'REGIME_CHANGE',
   });
   assert.ok(withoutRisk);
   const authored = regimeCp.availableActions[0].branchEffect.flagsAdd.includes('GOOD_PROCESS');
@@ -253,7 +370,6 @@ test('consulting risk on a non-regime checkpoint adds no unearned flag', () => {
     currentCheckpoint: quietCp.sequence,
     investigatedModules: [PANEL_MODULE.RISK],
     pendingAction: branch.actionCode,
-    pendingThesis: 'THESIS_UNCHANGED',
   });
   assert.ok(outcome);
   assert.deepEqual(
@@ -276,20 +392,24 @@ test('a decision cannot commit without a stance', () => {
   assert.equal(commitPendingDecision({ ...run, pendingAction: null }), null);
 });
 
-test('a committed decision is exactly stance, thesis and conviction', () => {
+test('a committed decision is exactly stance, conviction, then thesis', () => {
   let run = createInitialRun();
-  run = {
-    ...run,
-    pendingAction: 'REDUCE',
-    pendingThesis: 'DETERIORATING_FUNDAMENTALS',
-    pendingConfidence: convictionToConfidence(70),
-  };
+  run = { ...run, pendingAction: 'REDUCE', pendingConfidence: convictionToConfidence(70) };
   const outcome = commitPendingDecision(run);
   assert.ok(outcome);
-  const d = outcome.run.decisions[0];
+
+  // Stance and conviction are set by the commit itself.
+  let d = outcome.run.decisions[0];
   assert.equal(d.actionCode, 'REDUCE');
-  assert.equal(d.thesisCode, 'DETERIORATING_FUNDAMENTALS');
   assert.equal(confidenceToConviction(d.confidence ?? 0), 70);
+  assert.equal(d.thesisCode, undefined, 'thesis must not be an input to the commit');
+
+  // Thesis arrives afterwards and completes the record.
+  d = attachThesis(outcome.run, 'DETERIORATING_FUNDAMENTALS').decisions[0];
+  assert.equal(d.thesisCode, 'DETERIORATING_FUNDAMENTALS');
+  assert.equal(d.actionCode, 'REDUCE');
+  assert.equal(confidenceToConviction(d.confidence ?? 0), 70);
+
   // No symbol-level orders survive anywhere in the record.
   assert.equal('orders' in d, false);
   assert.equal('symbol' in d, false);

@@ -21,7 +21,11 @@ export type ThesisCode =
   | 'THESIS_UNCHANGED'
   | 'DIVERSIFICATION'
   | 'MOMENTUM'
-  | 'CONTRARIAN';
+  | 'CONTRARIAN'
+  // Recorded when the player commits and lets the thesis prompt time out.
+  // Decisiveness without articulated reasoning is its own behavioral signal,
+  // so it is a real value rather than a missing one. Never offered as a chip.
+  | 'THESIS_UNSTATED';
 
 export type DecisionQuality = 'EXCELLENT' | 'GOOD' | 'NEUTRAL' | 'POOR' | 'CRITICAL_ERROR';
 
@@ -112,6 +116,10 @@ export interface ActionBranch {
   actionCode: ActionCode;
   label: string;
   shortLabel: string;
+  // The 2 to 3 theses offered for this stance after commit. Absent, a default
+  // set is derived per action code. Authoring these per branch is a copy-pass
+  // item (Addendum B section B3).
+  thesisOptions?: ThesisCode[];
   // Fixed, authored turnover price of taking this stance. The run's turnover
   // budget is a finite, deterministic resource: no estimate, no noise term.
   // HOLD is always 0.
@@ -225,7 +233,9 @@ export interface RunState {
   activeModules: ModuleCode[];
   investigatedModules: ModuleCode[];
   pendingAction: ActionCode | null;
-  pendingThesis: ThesisCode | null;
+  // No pendingThesis: thesis is not an input to the commit. It is attached to
+  // the committed decision afterwards and can never revise it (Addendum C
+  // section C.5).
   pendingConfidence: number;
   result: 'ACTIVE' | 'PASSED' | 'FAILED' | 'MACHINE_BEATEN' | 'ABANDONED';
 }
