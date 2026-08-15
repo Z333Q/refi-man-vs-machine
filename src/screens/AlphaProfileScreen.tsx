@@ -163,7 +163,7 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
             </div>
             <div className="font-mono text-xs text-phosphor-mid leading-6">
               Carry your progress into ReFi and continue to eligibility. Your
-              in-game behavioral scores stay in the game — only your arena and
+              in-game behavioral scores stay in the game: only your arena and
               machine milestones travel.
             </div>
             <ClaimHandoffButton destination="ELIGIBILITY" />

@@ -116,7 +116,7 @@ export default function BasketWriterScreen({ onBack, onComplete }: Props) {
             <div className="font-mono text-xs text-phosphor-dim tracking-widest">YOUR BASKET</div>
             <div className={`font-mono text-xs ${Math.abs(totalWeight - 100) < 0.5 ? 'text-phosphor' : 'warning-value'}`}>
               TOTAL {totalWeight.toFixed(1)}%
-              {Math.abs(totalWeight - 100) >= 0.5 && ' — UNBALANCED'}
+              {Math.abs(totalWeight - 100) >= 0.5 && ': UNBALANCED'}
             </div>
           </div>
 

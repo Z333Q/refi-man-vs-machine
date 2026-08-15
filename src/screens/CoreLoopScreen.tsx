@@ -88,13 +88,13 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     {
       sel: '[data-spotlight="cp-signal"]',
       title: 'READ WHAT CHANGED',
-      body: 'This is the market signal at this moment in history. It tells you what changed — it does not tell you what to do. That call is yours.',
+      body: 'This is the market signal at this moment in history. It tells you what changed: it does not tell you what to do. That call is yours.',
       hint: 'THE SIGNAL IS YOUR INFORMATION EDGE',
     },
     {
       sel: '[data-spotlight="cp-actions"]',
       title: 'CHOOSE YOUR STANCE',
-      body: 'Choose the stance that matches your read. HOLD is a real, scored decision. Set how strongly you believe it — trading more is never rewarded.',
+      body: 'Choose the stance that matches your read. HOLD is a real, scored decision. Set how strongly you believe it. Trading more is never rewarded.',
       hint: 'STANCE · CONVICTION · COMMIT',
     },
   ];
@@ -630,7 +630,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                   </div>
                 )}
 
-                {/* PORTFOLIO panel — read-only investigation */}
+                {/* PORTFOLIO panel: read-only investigation */}
                 {activePanel === 'PORTFOLIO' && (
                   <div className="p-5">
                     <div className="text-phosphor-dim text-xs tracking-widest mb-3">
@@ -675,7 +675,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                   </div>
                 )}
 
-                {/* RISK panel — read-only investigation */}
+                {/* RISK panel: read-only investigation */}
                 {activePanel === 'RISK' && (
                   <div className="p-5 space-y-4">
                     <div className="grid grid-cols-2 gap-3">
@@ -732,7 +732,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                   </div>
                 )}
 
-                {/* DECIDE panel — stance, thesis, conviction */}
+                {/* DECIDE panel: stance, thesis, conviction */}
                 {activePanel === 'DECIDE' && (
                   <div className="p-5">
 
@@ -903,7 +903,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
           {/* ── Resolve / Compare / Learn ── */}
           {(phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING') && lastCheckpointScore && (
             <div className="flex-1 overflow-y-auto p-6">
-              {/* Machine pipeline — processing animation */}
+              {/* Machine pipeline: processing animation */}
               {phase === 'RESOLVING' && revealDelay === 0 && (
                 <div className="mb-5 border border-phosphor/10 bg-terminal-deep/40 p-4">
                   <MachinePipeline
@@ -1161,7 +1161,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
             body={cs.body}
             hint={cs.hint}
             step={{ current: coachStep + 1, total: COACH_STEPS.length }}
-            nextLabel={coachStep === COACH_STEPS.length - 1 ? 'GOT IT — LET ME PLAY ▶' : 'NEXT →'}
+            nextLabel={coachStep === COACH_STEPS.length - 1 ? 'GOT IT: LET ME PLAY ▶' : 'NEXT →'}
             onNext={() => { if (coachStep < COACH_STEPS.length - 1) setCoachStep(s => s + 1); else finishCoach(); }}
             onBack={coachStep > 0 ? () => setCoachStep(s => Math.max(0, s - 1)) : undefined}
             onSkip={finishCoach}

@@ -63,9 +63,9 @@ function ShockRound({ onNext }: { onNext: () => void }) {
           {[
             'REDUCE RISK BROADLY',
             'SELL CYCLICALS, HOLD DEFENSIVES',
-            'BUY WEAKNESS — EXPECT REVERSAL',
+            'BUY WEAKNESS: EXPECT REVERSAL',
             'INCREASE CASH TO 30%+',
-            'HOLD — WAIT FOR CLARITY',
+            'HOLD: WAIT FOR CLARITY',
           ].map((opt, i) => (
             <button
               key={opt}
@@ -120,7 +120,7 @@ function PatternRound({ onNext }: { onNext: () => void }) {
       </div>
 
       <div className="space-y-2">
-        {['TRADE THE POLICY — NEW EVIDENCE ONLY', 'TRADE THE PATTERN — IT WORKED BEFORE', 'REDUCE SIZE — UNCERTAIN'].map((opt, i) => (
+        {['TRADE THE POLICY: NEW EVIDENCE ONLY', 'TRADE THE PATTERN: IT WORKED BEFORE', 'REDUCE SIZE: UNCERTAIN'].map((opt, i) => (
           <button
             key={opt}
             onClick={onNext}
@@ -160,9 +160,9 @@ function ReflexivityRound({ onComplete }: { onComplete: () => void }) {
       <div className="space-y-2">
         {[
           { id: 'keep', label: 'KEEP RULE' },
-          { id: 'modify', label: 'MODIFY RULE — SIZE DOWN 50%' },
-          { id: 'suspend', label: 'SUSPEND RULE — ENVIRONMENT CHANGED' },
-          { id: 'reduce', label: 'REDUCE POSITION SIZE — CROWD RISK HIGH' },
+          { id: 'modify', label: 'MODIFY RULE: SIZE DOWN 50%' },
+          { id: 'suspend', label: 'SUSPEND RULE: ENVIRONMENT CHANGED' },
+          { id: 'reduce', label: 'REDUCE POSITION SIZE: CROWD RISK HIGH' },
         ].map(opt => (
           <button
             key={opt.id}

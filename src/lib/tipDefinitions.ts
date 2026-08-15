@@ -124,9 +124,9 @@ export const TIP_LIBRARY: TipDef[] = [
     type: 'DECISION',
     title: 'POSITION CONTROLS',
     body: [
-      'ADD — INCREASE THIS POSITION.',
-      'REDUCE — SELL PART OF THIS POSITION.',
-      'EXIT — SELL THE FULL POSITION.',
+      'ADD: INCREASE THIS POSITION.',
+      'REDUCE: SELL PART OF THIS POSITION.',
+      'EXIT: SELL THE FULL POSITION.',
     ],
     trigger: 'tutorial.position_selected',
     priority: 90,

@@ -124,8 +124,9 @@ test('every authored branch produces a title and a description line', () => {
 });
 
 test('stance card copy carries no em dashes', () => {
-  // Content authors branch labels as "SHORT NAME — description". Splitting on
-  // that dash is what keeps it out of the player-facing card.
+  // Addendum A Section G: em dashes are barred from player-facing copy, and
+  // scripts/em-dash-gate.mjs enforces it across the content files. This is the
+  // unit-level guard on what the card itself renders.
   for (const cp of COVID_CHECKPOINTS) {
     for (const branch of cp.availableActions) {
       assert.ok(!stanceTitle(branch).includes('—'), `CP${cp.sequence} title`);
@@ -134,19 +135,51 @@ test('stance card copy carries no em dashes', () => {
   }
 });
 
-test('an authored stanceLabel wins over the derived line', () => {
+test('the card title is the authored shortLabel, verbatim', () => {
+  for (const cp of COVID_CHECKPOINTS) {
+    for (const branch of cp.availableActions) {
+      assert.equal(stanceTitle(branch), branch.shortLabel, `CP${cp.sequence}`);
+    }
+  }
+});
+
+test('the card sublabel is the label text after the first colon separator', () => {
+  for (const cp of COVID_CHECKPOINTS) {
+    for (const branch of cp.availableActions) {
+      const at = branch.label.indexOf(': ');
+      if (at === -1) continue; // falls back by action code, covered below
+      assert.equal(stanceLine(branch), branch.label.slice(at + 2).trim(), `CP${cp.sequence}`);
+      // The title half never leaks into the sublabel.
+      assert.ok(!stanceLine(branch).startsWith(branch.label.slice(0, at)), `CP${cp.sequence}`);
+    }
+  }
+});
+
+test('every authored branch label uses the colon separator', () => {
+  // The card derivation depends on the convention, so the convention is tested
+  // rather than assumed.
+  for (const cp of COVID_CHECKPOINTS) {
+    for (const branch of cp.availableActions) {
+      assert.ok(
+        branch.label.includes(': '),
+        `CP${cp.sequence} ${branch.actionCode} label has no ": " separator: ${branch.label}`,
+      );
+    }
+  }
+});
+
+test('only the first colon separates the title from the description', () => {
   const branch: ActionBranch = {
     actionCode: 'HOLD',
-    label: 'HOLD — derived description',
+    label: 'HOLD: wait: the thesis is intact',
     shortLabel: 'HOLD',
-    stanceLabel: 'authored description',
     turnoverCost: 0,
     branchEffect: { flagsAdd: [], alphaImpact: {} },
   };
-  assert.equal(stanceLine(branch), 'authored description');
+  assert.equal(stanceLine(branch), 'wait: the thesis is intact');
 });
 
-test('a branch with no dash and no stanceLabel falls back by action code', () => {
+test('a branch label with no separator falls back by action code', () => {
   const branch: ActionBranch = {
     actionCode: 'RAISE_CASH',
     label: 'RAISE CASH',
