@@ -59,6 +59,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — single report, no confirmed outbreak pattern',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE'],
           alphaImpact: { TURNOVER_DISCIPLINE: 3, RULE_ADHERENCE: 2 },
@@ -70,6 +71,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'REDUCE DAL/MAR — travel exposure is obvious vulnerability',
         shortLabel: 'REDUCE TRAVEL',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['EARLY_REGIME_SENSITIVITY'],
           alphaImpact: { REGIME_ADAPTATION: 4, TURNOVER_DISCIPLINE: -3 },
@@ -81,6 +83,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'RAISE_CASH',
         label: 'RAISE CASH — headline risk is real',
         shortLabel: 'RAISE CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['ACTION_BIAS'],
           alphaImpact: { TURNOVER_DISCIPLINE: -5, POSITION_SIZING: -3 },
@@ -92,6 +95,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ROTATE_DEFENSIVE',
         label: 'ROTATE — cyclicals to healthcare/staples',
         shortLabel: 'ROTATE DEFENSIVE',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['ACTION_BIAS', 'RECENCY_BIAS'],
           alphaImpact: { TURNOVER_DISCIPLINE: -4, REGIME_ADAPTATION: -2 },
@@ -147,6 +151,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'REDUCE DAL/MAR — WHO emergency is the real trigger',
         shortLabel: 'REDUCE TRAVEL',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { LOSS_CONTROL: 5, REGIME_ADAPTATION: 4, TURNOVER_DISCIPLINE: 2 },
@@ -158,6 +163,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — outbreak may still be contained quickly',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['ANCHORING'],
           alphaImpact: { LOSS_CONTROL: -3, REGIME_ADAPTATION: -2 },
@@ -169,6 +175,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ROTATE_DEFENSIVE',
         label: 'ROTATE — sell travel, add JNJ/PG',
         shortLabel: 'ROTATE DEFENSIVE',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { REGIME_ADAPTATION: 3, LOSS_CONTROL: 3, TURNOVER_DISCIPLINE: -1 },
@@ -180,6 +187,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'RAISE_CASH',
         label: 'RAISE CASH — convert travel exposure to dry powder',
         shortLabel: 'RAISE CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['CASH_DRAG'],
           alphaImpact: { LOSS_CONTROL: 2, POSITION_SIZING: -2 },
@@ -232,6 +240,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — market at ATH, travel already reduced',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE'],
           alphaImpact: { TURNOVER_DISCIPLINE: 3, RULE_ADHERENCE: 2 },
@@ -243,6 +252,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'REDUCE AAPL — supply chain risk visible',
         shortLabel: 'REDUCE AAPL',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { STOCK_SELECTION: 3, REGIME_ADAPTATION: 2, TURNOVER_DISCIPLINE: -2 },
@@ -254,6 +264,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ADD_RISK',
         label: 'ADD EQUITIES — market confirming no systemic risk',
         shortLabel: 'ADD EQUITIES',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['CHASING', 'OVERCONFIDENCE'],
           alphaImpact: { TURNOVER_DISCIPLINE: -3, POSITION_SIZING: -4 },
@@ -265,6 +276,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'RAISE_CASH',
         label: 'RAISE CASH — data divergence from price is a warning',
         shortLabel: 'RAISE CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['EARLY_REGIME_SENSITIVITY', 'CONTRARIAN_EARLY'],
           alphaImpact: { REGIME_ADAPTATION: 3, TURNOVER_DISCIPLINE: -2 },
@@ -322,6 +334,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'REDUCE cyclicals/financials — regime has shifted',
         shortLabel: 'REDUCE CYCLICALS',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { REGIME_ADAPTATION: 6, LOSS_CONTROL: 5, TURNOVER_DISCIPLINE: 2 },
@@ -333,6 +346,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ROTATE_DEFENSIVE',
         label: 'ROTATE — sell cyclicals, add JNJ/PG',
         shortLabel: 'ROTATE DEFENSIVE',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { REGIME_ADAPTATION: 5, LOSS_CONTROL: 4 },
@@ -344,6 +358,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'RAISE_CASH',
         label: 'RAISE CASH — build liquidity for what comes next',
         shortLabel: 'RAISE CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { LOSS_CONTROL: 4, REGIME_ADAPTATION: 3 },
@@ -355,6 +370,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — one bad day does not make a regime',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['ANCHORING', 'RECENCY_BIAS'],
           alphaImpact: { REGIME_ADAPTATION: -6, LOSS_CONTROL: -4 },
@@ -408,6 +424,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — already reduced; selling into VIX 40 is panic',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { LOSS_CONTROL: 4, TURNOVER_DISCIPLINE: 5, RULE_ADHERENCE: 3 },
@@ -419,6 +436,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'REDUCE further — momentum is clearly down',
         shortLabel: 'REDUCE MORE',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE', 'RECENCY_BIAS'],
           alphaImpact: { LOSS_CONTROL: -4, TURNOVER_DISCIPLINE: -5, REGIME_ADAPTATION: -3 },
@@ -430,6 +448,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ADD_RISK',
         label: 'ADD EQUITIES — VIX 40 is a historical buy signal',
         shortLabel: 'BUY VIX 40',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['CONTRARIAN_EARLY', 'OVERCONFIDENCE'],
           alphaImpact: { REENTRY_DISCIPLINE: -4, POSITION_SIZING: -5 },
@@ -441,6 +460,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'RAISE_CASH',
         label: 'RAISE CASH — protect what remains',
         shortLabel: 'RAISE CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE'],
           alphaImpact: { LOSS_CONTROL: -3, TURNOVER_DISCIPLINE: -4 },
@@ -493,6 +513,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — faded rally is a warning, not a buying signal',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { DECISION_CONSISTENCY: 4, TURNOVER_DISCIPLINE: 3 },
@@ -504,6 +525,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ADD_RISK',
         label: 'ADD EQUITIES — Fed put confirmed',
         shortLabel: 'ADD ON FED',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['RECENCY_BIAS', 'CHASING'],
           alphaImpact: { REENTRY_DISCIPLINE: -5, REGIME_ADAPTATION: -3 },
@@ -515,6 +537,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'REDUCE JPM — rate cuts structurally hurt bank margins',
         shortLabel: 'REDUCE JPM',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { REGIME_ADAPTATION: 3, STOCK_SELECTION: 3, TURNOVER_DISCIPLINE: -1 },
@@ -526,6 +549,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ROTATE_DEFENSIVE',
         label: 'ROTATE into JNJ/PG — rate cut benefits defensives',
         shortLabel: 'ROTATE DEFENSIVE',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { REGIME_ADAPTATION: 2, TURNOVER_DISCIPLINE: -2 },
@@ -579,6 +603,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — no price discovery; circuit breaker policy',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { RULE_ADHERENCE: 6, LOSS_CONTROL: 4, TURNOVER_DISCIPLINE: 4 },
@@ -590,6 +615,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'QUEUE SELLS at reopen — execute regardless',
         shortLabel: 'SELL AT REOPEN',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE', 'ACTION_BIAS'],
           alphaImpact: { LOSS_CONTROL: -6, RULE_ADHERENCE: -5, TURNOVER_DISCIPLINE: -5 },
@@ -601,6 +627,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ADD_RISK',
         label: 'BUY EQUITIES — VIX 54 is an extreme buying signal',
         shortLabel: 'BUY PANIC',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['CONTRARIAN_EARLY', 'OVERCONFIDENCE'],
           alphaImpact: { REENTRY_DISCIPLINE: -5, POSITION_SIZING: -6 },
@@ -612,6 +639,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'RAISE_CASH',
         label: 'RAISE CASH — maximum protection',
         shortLabel: 'MAX CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE'],
           alphaImpact: { LOSS_CONTROL: -4, TURNOVER_DISCIPLINE: -4 },
@@ -668,6 +696,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'REDUCE DAL/MAR — travel ban = zero revenue, not reduced revenue',
         shortLabel: 'REDUCE TRAVEL',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { LOSS_CONTROL: 5, REGIME_ADAPTATION: 4, STOCK_SELECTION: 4 },
@@ -679,6 +708,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — -11% means the damage is priced in',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['ANCHORING', 'RECENCY_BIAS'],
           alphaImpact: { LOSS_CONTROL: -4, REGIME_ADAPTATION: -3 },
@@ -690,6 +720,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ROTATE_DEFENSIVE',
         label: 'ROTATE — sell travel, add healthcare',
         shortLabel: 'ROTATE TO JNJ',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { REGIME_ADAPTATION: 3, LOSS_CONTROL: 3 },
@@ -701,6 +732,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'RAISE_CASH',
         label: 'RAISE CASH — maximum liquidity',
         shortLabel: 'MAX CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['CASH_DRAG'],
           alphaImpact: { LOSS_CONTROL: 2, POSITION_SIZING: -2 },
@@ -754,6 +786,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — VIX 82 means selling at maximum destruction cost',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { RULE_ADHERENCE: 6, LOSS_CONTROL: 5, DECISION_CONSISTENCY: 4 },
@@ -765,6 +798,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'REDUCE — get flat before things get worse',
         shortLabel: 'SELL ALL',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE', 'ACTION_BIAS'],
           alphaImpact: { LOSS_CONTROL: -8, RULE_ADHERENCE: -7, TURNOVER_DISCIPLINE: -7 },
@@ -776,6 +810,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ADD_RISK',
         label: 'BUY — VIX 82 has never lasted',
         shortLabel: 'BUY PANIC',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['CONTRARIAN_EARLY'],
           alphaImpact: { REENTRY_DISCIPLINE: -4, POSITION_SIZING: -5 },
@@ -787,6 +822,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'RAISE_CASH',
         label: 'RAISE CASH — maximum defense',
         shortLabel: 'MAX CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE'],
           alphaImpact: { LOSS_CONTROL: -5, TURNOVER_DISCIPLINE: -5 },
@@ -843,6 +879,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'STAGED_BUY',
         label: 'STAGED BUY — begin re-entry, policy floor confirmed',
         shortLabel: 'STAGED BUY',
+        turnoverCost: 0.03,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { REENTRY_DISCIPLINE: 6, REGIME_ADAPTATION: 5, POSITION_SIZING: 4 },
@@ -854,6 +891,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — market still falling, wait for confirmation',
         shortLabel: 'WAIT FOR BOTTOM',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['REENTRY_DELAY', 'ANCHORING'],
           alphaImpact: { REENTRY_DISCIPLINE: -3, REGIME_ADAPTATION: -2 },
@@ -865,6 +903,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ADD_RISK',
         label: 'ALL IN — unlimited QE guarantees the recovery',
         shortLabel: 'ALL IN',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['OVERCONFIDENCE', 'HIGH_CONVICTION_ACTION'],
           alphaImpact: { REENTRY_DISCIPLINE: -4, POSITION_SIZING: -5 },
@@ -876,6 +915,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'RAISE_CASH',
         label: 'STAY DEFENSIVE — market may fall further',
         shortLabel: 'STAY CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['ANCHORING', 'REENTRY_DELAY'],
           alphaImpact: { REENTRY_DISCIPLINE: -5, REGIME_ADAPTATION: -3 },
@@ -929,6 +969,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — staged plan in motion; do not chase the surge',
         shortLabel: 'HOLD PLAN',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { REENTRY_DISCIPLINE: 5, TURNOVER_DISCIPLINE: 4, DECISION_CONSISTENCY: 3 },
@@ -940,6 +981,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ADD_RISK',
         label: 'ADD — CARES Act signed; recovery confirmed',
         shortLabel: 'ADD MORE',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['CHASING', 'RECENCY_BIAS'],
           alphaImpact: { REENTRY_DISCIPLINE: -4, TURNOVER_DISCIPLINE: -3 },
@@ -951,6 +993,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'TAKE PROFITS — sell into the surge',
         shortLabel: 'TAKE PROFITS',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['RECENCY_BIAS', 'THESIS_CONTRADICTION'],
           alphaImpact: { REENTRY_DISCIPLINE: -5, REGIME_ADAPTATION: -4 },
@@ -962,6 +1005,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ROTATE_DEFENSIVE',
         label: 'ROTATE cyclicals — biggest winners in the crash should recover most',
         shortLabel: 'BUY CYCLICALS',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['RECENCY_BIAS', 'CHASING'],
           alphaImpact: { TURNOVER_DISCIPLINE: -3, DECISION_CONSISTENCY: -3 },
@@ -1019,6 +1063,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ROTATE_RISK',
         label: 'ROTATE — MSFT/JNJ over DAL; structural over speculative',
         shortLabel: 'ROTATE QUALITY',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { STOCK_SELECTION: 6, REGIME_ADAPTATION: 5, REENTRY_DISCIPLINE: 3 },
@@ -1030,6 +1075,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ADD_RISK',
         label: 'ADD DAL/CAT — biggest bounces still ahead',
         shortLabel: 'ADD CYCLICALS',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['RECENCY_BIAS', 'CHASING'],
           alphaImpact: { STOCK_SELECTION: -5, REENTRY_DISCIPLINE: -4 },
@@ -1041,6 +1087,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — do not trade the recovery noise',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE'],
           alphaImpact: { TURNOVER_DISCIPLINE: 2, STOCK_SELECTION: -1 },
@@ -1052,6 +1099,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'RAISE_CASH',
         label: 'RAISE CASH — +25% bounce is a selling opportunity',
         shortLabel: 'TAKE PROFITS',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['THESIS_CONTRADICTION', 'REENTRY_DELAY'],
           alphaImpact: { REENTRY_DISCIPLINE: -5, REGIME_ADAPTATION: -4 },
@@ -1108,6 +1156,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'TRIM tech — concentration rule, not a market call',
         shortLabel: 'TRIM TECH',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { CONCENTRATION_CONTROL: 7, RULE_ADHERENCE: 5, POSITION_SIZING: 4 },
@@ -1119,6 +1168,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — both positions working; do not sell winners',
         shortLabel: 'HOLD WINNERS',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['OVERCONFIDENCE', 'ANCHORING'],
           alphaImpact: { CONCENTRATION_CONTROL: -6, RULE_ADHERENCE: -4 },
@@ -1130,6 +1180,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ADD_RISK',
         label: 'ADD MSFT/AAPL — momentum plus quality',
         shortLabel: 'ADD TECH',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['OVERCONFIDENCE', 'CHASING'],
           alphaImpact: { CONCENTRATION_CONTROL: -8, POSITION_SIZING: -7 },
@@ -1141,6 +1192,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ROTATE_DEFENSIVE',
         label: 'ROTATE tech profits into defensive equities',
         shortLabel: 'ROTATE OUT',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { CONCENTRATION_CONTROL: 4, REGIME_ADAPTATION: 3, TURNOVER_DISCIPLINE: -2 },
@@ -1194,6 +1246,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'HOLD',
         label: 'HOLD — structural winners thesis intact; no new trigger',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { DECISION_CONSISTENCY: 5, TURNOVER_DISCIPLINE: 4, RULE_ADHERENCE: 3 },
@@ -1205,6 +1258,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ROTATE_DEFENSIVE',
         label: 'ADD energy/airlines — the damage is now in the price',
         shortLabel: 'BUY DAMAGED',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['RECENCY_BIAS'],
           alphaImpact: { STOCK_SELECTION: -4, DECISION_CONSISTENCY: -3 },
@@ -1216,6 +1270,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'REDUCE',
         label: 'REDUCE tech — take profits after a strong run',
         shortLabel: 'TAKE PROFITS',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['THESIS_CONTRADICTION'],
           alphaImpact: { DECISION_CONSISTENCY: -4, REGIME_ADAPTATION: -2 },
@@ -1227,6 +1282,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         actionCode: 'ADD_RISK',
         label: 'ADD quality growth — extend the winning thesis',
         shortLabel: 'ADD GROWTH',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { STOCK_SELECTION: 2, CONCENTRATION_CONTROL: -2 },
