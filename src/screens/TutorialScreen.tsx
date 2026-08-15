@@ -57,7 +57,7 @@ const STEPS: Step[] = [
     id: 'REDUCE',
     title: 'LESSON 3 · REDUCE A POSITION',
     instruction: 'Click a position to open the order ticket. Reduce DAL by $2,000.',
-    detail: 'REDUCE means you sell part of a position — not all of it. You are not panicking. You are managing size when the risk has changed. Click DAL → select REDUCE → enter $2,000 → ADD TO DRAFT.',
+    detail: 'REDUCE means you sell part of a position: not all of it. You are not panicking. You are managing size when the risk has changed. Click DAL → select REDUCE → enter $2,000 → ADD TO DRAFT.',
     action: 'I HAVE DRAFTED A REDUCE ORDER',
     highlight: 'ORDER TICKET',
     keyHint: 'CLICK ANY POSITION TO OPEN ORDER TICKET',
@@ -66,7 +66,7 @@ const STEPS: Step[] = [
     id: 'BUY',
     title: 'LESSON 4 · BUY A POSITION',
     instruction: 'Open the order ticket and ADD to an existing position.',
-    detail: 'ADD means you increase a position you already hold. When your conviction is high and the price is right, you size up — not just hold. Click any position → select ADD → enter an amount → ADD TO DRAFT.',
+    detail: 'ADD means you increase a position you already hold. When your conviction is high and the price is right, you size up: not just hold. Click any position → select ADD → enter an amount → ADD TO DRAFT.',
     action: 'I HAVE DRAFTED AN ADD ORDER',
     highlight: 'ORDER TICKET',
     keyHint: 'CLICK A POSITION → SELECT ADD',
@@ -93,7 +93,7 @@ const STEPS: Step[] = [
     id: 'MACHINE',
     title: 'LESSON 7 · COMPARE TO THE MACHINE',
     instruction: 'After committing, you see what the machine did.',
-    detail: 'The machine discloses its action and its reasoning. This is the audit. You can agree with it, disagree with it, or learn from it. The score is calculated from process quality — not whether you matched the machine.',
+    detail: 'The machine discloses its action and its reasoning. This is the audit. You can agree with it, disagree with it, or learn from it. The score is calculated from process quality: not whether you matched the machine.',
     action: 'I UNDERSTAND MACHINE COMPARISON',
     highlight: 'MACHINE DECISION',
   },
@@ -133,7 +133,7 @@ const HOLD_REASONS = [
 const MOCK_SIGNAL = {
   title: 'WHO DECLARES PUBLIC HEALTH EMERGENCY OF INTERNATIONAL CONCERN',
   date: 'JAN 30, 2020',
-  body: 'The World Health Organization has declared the Wuhan coronavirus outbreak a Public Health Emergency of International Concern — the highest alert level. International travel restrictions are beginning. Airlines and hotels are pricing in a demand shock.',
+  body: 'The World Health Organization has declared the Wuhan coronavirus outbreak a Public Health Emergency of International Concern: the highest alert level. International travel restrictions are beginning. Airlines and hotels are pricing in a demand shock.',
   signals: [
     { label: 'VIX', value: '18.8', direction: 'up' as const },
     { label: 'S&P 500', value: '-1.8%', direction: 'down' as const },
@@ -404,7 +404,7 @@ export default function TutorialScreen({ onComplete }: Props) {
 
                 {/* Hold decision */}
                 <div className="mt-4 border-t border-phosphor/15 pt-4">
-                  <div className="text-phosphor-dim text-xs tracking-widest mb-3">OR HOLD — SELECT REASON</div>
+                  <div className="text-phosphor-dim text-xs tracking-widest mb-3">OR HOLD: SELECT REASON</div>
                   <div className="space-y-1.5">
                     {HOLD_REASONS.map(r => (
                       <button

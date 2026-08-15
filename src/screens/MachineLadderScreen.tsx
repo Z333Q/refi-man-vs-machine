@@ -86,7 +86,7 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
             <div className="text-phosphor-mid text-xs mt-1 leading-relaxed max-w-lg">
               Each machine has a known training cutoff and a disclosed risk policy.
               FAIR MATCH machines use the same constraints as you.
-              EXHIBITION machines have different capability models — flagged explicitly.
+              EXHIBITION machines have different capability models: flagged explicitly.
             </div>
             {/* Benchmark stats below are point-in-time model simulation, not
                 live client results (§62 / §3.4 gate 1). */}
@@ -119,7 +119,7 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
         <div className="border border-alert-amber/20 bg-alert-amber/5 px-4 py-2.5 text-alert-amber text-xs leading-relaxed mb-6 tracking-wide">
           <span className="font-bold">OOS INTEGRITY NOTE:</span> The ReFi RF/RL benchmark OOS period begins 2023-04-18.
           COVID, Recovery, Inflation, and Banking Stress arenas pre-date this window.
-          Those arenas use game rules engine benchmarks — not the production OOS data.
+          Those arenas use game rules engine benchmarks: not the production OOS data.
           This distinction is deliberate and documented.
         </div>
 
@@ -262,10 +262,10 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
         <div className="mt-6 border border-phosphor/10 p-4 text-xs text-phosphor-dim leading-relaxed space-y-2">
           <div className="text-phosphor tracking-widest mb-2">CONTEST TYPE DEFINITIONS</div>
           <div>
-            <span className="text-phosphor-mid">FAIR MATCH</span> — Same universe. Long-only rule. Same capital. Same transaction costs. Same decision windows. Same risk limits. Arena advancement is determined by fair match results.
+            <span className="text-phosphor-mid">FAIR MATCH</span>: Same universe. Long-only rule. Same capital. Same transaction costs. Same decision windows. Same risk limits. Arena advancement is determined by fair match results.
           </div>
           <div>
-            <span className="text-alert-amber">EXHIBITION</span> — The ReFi RF/RL benchmarks use directional regime exposure (+1 long / -1 short). This is a fundamentally different capability model. Exhibition results are for learning, not arena advancement. The screen explicitly states the capability difference.
+            <span className="text-alert-amber">EXHIBITION</span>: The ReFi RF/RL benchmarks use directional regime exposure (+1 long / -1 short). This is a fundamentally different capability model. Exhibition results are for learning, not arena advancement. The screen explicitly states the capability difference.
           </div>
           <div className="pt-1 text-phosphor-dim/60">
             ALL TRAINING CUTOFFS ARE DOCUMENTED. AUDIT IDs ARE YOUR PROOF. NO BLACK BOX.

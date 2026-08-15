@@ -76,8 +76,8 @@ export function confidenceToConviction(confidence: number): number {
 
 // ─── Stance cards ─────────────────────────────────────────────────────────────
 
-// Fallback description per action code, used only when the branch authors
-// neither a stanceLabel nor a description in its label.
+// Fallback description per action code, used only when a branch label carries
+// no ": " separated description.
 const STANCE_FALLBACK: Record<ActionCode, string> = {
   HOLD:             'make no portfolio change at this checkpoint',
   REDUCE:           'cut exposure where the risk has changed',
@@ -91,14 +91,17 @@ const STANCE_FALLBACK: Record<ActionCode, string> = {
 
 /**
  * The one line of checkpoint-specific language a stance card shows under its
- * name. Authored `stanceLabel` wins; otherwise take the descriptive half of
- * the branch label, which content writes as "SHORT NAME — description". That
- * split is also what keeps em dashes out of player-facing copy.
+ * name: the descriptive half of the branch label, which content writes as
+ * "SHORT NAME: description".
+ *
+ * There is deliberately no per-branch override field. Card copy comes from the
+ * authored label so there is exactly one place to edit it, and the separator is
+ * a colon because em dashes are barred from player-facing copy (Addendum A
+ * Section G, enforced by scripts/em-dash-gate.mjs).
  */
 export function stanceLine(branch: ActionBranch): string {
-  if (branch.stanceLabel) return branch.stanceLabel;
-  const parts = branch.label.split(/\s[—–-]\s/);
-  const described = parts.length > 1 ? parts.slice(1).join(', ').trim() : '';
+  const at = branch.label.indexOf(': ');
+  const described = at === -1 ? '' : branch.label.slice(at + 2).trim();
   return described || STANCE_FALLBACK[branch.actionCode];
 }
 
@@ -112,6 +115,11 @@ export function stanceTitle(branch: ActionBranch): string {
 // Which module each investigation panel records against. Both are
 // always-unlocked modules and both name what the panel actually renders, so
 // the decision record stays readable in the autopsy.
+//
+// TODO(addendum-b): these panels become real gated modules under the earned
+// terminal (RISK CONSOLE is already in the B4 unlock table), so the module
+// taxonomy decision belongs to that PR, not here. See
+// docs/g1-rework-spec-addendum-b.md section B4.
 export const PANEL_MODULE: Record<'PORTFOLIO' | 'RISK', ModuleCode> = {
   PORTFOLIO: 'PORTFOLIO_SUMMARY',
   RISK: 'SECTOR_EXPOSURE',

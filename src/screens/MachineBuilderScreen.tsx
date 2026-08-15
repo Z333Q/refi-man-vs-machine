@@ -80,7 +80,7 @@ const MODULES: ModuleDef[] = [
 // ─── Option sets ──────────────────────────────────────────────────────────────
 
 const UNIVERSE_OPTIONS: MachineOption<UniverseChoice>[] = [
-  { value: 'US_ALL', label: 'ALL U.S. LISTED EQUITIES', detail: 'Maximum universe — ~7,000 names. Broader opportunity but more noise.' },
+  { value: 'US_ALL', label: 'ALL U.S. LISTED EQUITIES', detail: 'Maximum universe: ~7,000 names. Broader opportunity but more noise.' },
   { value: 'US_LIQUID', label: 'U.S. LIQUID EQUITIES', detail: 'Liquidity-filtered universe. ReFi starting point after exchange + volume screens.' },
   { value: 'SP500', label: 'S&P 500 ONLY', detail: '503 names. Simple, well-understood. Sacrifices long-tail alpha.' },
 ];
@@ -88,8 +88,8 @@ const UNIVERSE_OPTIONS: MachineOption<UniverseChoice>[] = [
 const ELIGIBILITY_OPTIONS: MachineOption<EligibilityChoice>[] = [
   { value: 'NONE', label: 'NO FILTER', detail: 'Use the raw universe. High noise exposure.' },
   { value: 'FUNDAMENTAL', label: 'FUNDAMENTAL SCREEN', detail: 'Quality and earnings filters. Removes deteriorating names.' },
-  { value: 'FUNDAMENTAL_LIQUIDITY', label: 'FUNDAMENTAL + LIQUIDITY', detail: 'ReFi Full Basket approach — 355 names after both screens.' },
-  { value: 'ROBUSTNESS', label: 'ROBUSTNESS FILTER', detail: 'Add bootstrapped-Sharpe and recent profitability criteria. ReFi Good-Fit approach — 292 names.' },
+  { value: 'FUNDAMENTAL_LIQUIDITY', label: 'FUNDAMENTAL + LIQUIDITY', detail: 'ReFi Full Basket approach: 355 names after both screens.' },
+  { value: 'ROBUSTNESS', label: 'ROBUSTNESS FILTER', detail: 'Add bootstrapped-Sharpe and recent profitability criteria. ReFi Good-Fit approach: 292 names.' },
 ];
 
 const SIGNAL_OPTIONS: MachineOption<SignalChoice>[] = [
@@ -109,12 +109,12 @@ const CONSTRUCTION_OPTIONS: MachineOption<ConstructionChoice>[] = [
 const EXECUTION_OPTIONS: MachineOption<ExecutionChoice>[] = [
   { value: 'WEEKLY', label: 'WEEKLY REBALANCE', detail: 'Act once per week. Reduces turnover. Sacrifices signal freshness.' },
   { value: 'DAILY_CLOSE', label: 'DAILY EOD CLOSE', detail: 'Act on end-of-day close price. Standard systematic approach.' },
-  { value: 'STAGED_3TRANCHE', label: 'STAGED — 3 TRANCHES', detail: 'Deploy in three equal tranches over 3 days. Reduces entry timing risk.' },
+  { value: 'STAGED_3TRANCHE', label: 'STAGED: 3 TRANCHES', detail: 'Deploy in three equal tranches over 3 days. Reduces entry timing risk.' },
   { value: 'INTRADAY_1H', label: 'INTRADAY 1H', detail: 'Act within 1 hour of signal. Captures most of the edge. Requires robust execution.' },
 ];
 
 const MONITORING_OPTIONS: MachineOption<MonitoringChoice>[] = [
-  { value: 'PASSIVE', label: 'PASSIVE — NO MONITORING', detail: 'Set and forget. No risk alerts. Drift control only.' },
+  { value: 'PASSIVE', label: 'PASSIVE: NO MONITORING', detail: 'Set and forget. No risk alerts. Drift control only.' },
   { value: 'CORRELATION_ALERT', label: 'CORRELATION ALERT', detail: 'Alert when cross-asset correlation exceeds threshold. Primary COVID/banking-stress signal.' },
   { value: 'REGIME_SCANNER', label: 'REGIME SCANNER', detail: 'Monitor regime state changes across the portfolio. Faster regime recognition.' },
   { value: 'FULL_RISK_MONITOR', label: 'FULL RISK MONITOR', detail: 'Correlation + regime + drawdown + concentration. Real-time portfolio risk dashboard.' },
@@ -553,10 +553,10 @@ function GuardrailEditor({
         max {Math.round(guardrails.maxSectorPct * 100)}% sector,
         pause trading at {Math.round(guardrails.drawdownGatePct * 100)}% drawdown.
         {guardrails.maxPositionPct > 0.15 && (
-          <span className="text-alert-amber"> MAX POSITION IS HIGH — concentration risk.</span>
+          <span className="text-alert-amber"> MAX POSITION IS HIGH: concentration risk.</span>
         )}
         {guardrails.maxSectorPct > 0.35 && (
-          <span className="text-alert-amber"> SECTOR LIMIT IS HIGH — systemic risk.</span>
+          <span className="text-alert-amber"> SECTOR LIMIT IS HIGH: systemic risk.</span>
         )}
       </div>
     </div>
@@ -641,13 +641,13 @@ function MachineSchematic({
   installedModules: Set<MachineModuleId>;
 }) {
   const rows: { id: MachineModuleId; label: string; value: string }[] = [
-    { id: 'UNIVERSE', label: 'UNIVERSE', value: UNIVERSE_OPTIONS.find(o => o.value === config.universe)?.label ?? '—' },
-    { id: 'ELIGIBILITY', label: 'ELIGIBILITY FILTER', value: ELIGIBILITY_OPTIONS.find(o => o.value === config.eligibility)?.label ?? '—' },
-    { id: 'SIGNAL', label: 'SIGNAL / REGIME LOGIC', value: SIGNAL_OPTIONS.find(o => o.value === config.signal)?.label ?? '—' },
-    { id: 'CONSTRUCTION', label: 'PORTFOLIO CONSTRUCTION', value: CONSTRUCTION_OPTIONS.find(o => o.value === config.construction)?.label ?? '—' },
+    { id: 'UNIVERSE', label: 'UNIVERSE', value: UNIVERSE_OPTIONS.find(o => o.value === config.universe)?.label ?? ':' },
+    { id: 'ELIGIBILITY', label: 'ELIGIBILITY FILTER', value: ELIGIBILITY_OPTIONS.find(o => o.value === config.eligibility)?.label ?? ':' },
+    { id: 'SIGNAL', label: 'SIGNAL / REGIME LOGIC', value: SIGNAL_OPTIONS.find(o => o.value === config.signal)?.label ?? ':' },
+    { id: 'CONSTRUCTION', label: 'PORTFOLIO CONSTRUCTION', value: CONSTRUCTION_OPTIONS.find(o => o.value === config.construction)?.label ?? ':' },
     { id: 'GUARDRAILS', label: 'RISK GUARDRAILS', value: `${Math.round(config.guardrails.maxPositionPct * 100)}% / ${Math.round(config.guardrails.maxSectorPct * 100)}% / DD${Math.round(config.guardrails.drawdownGatePct * 100)}%` },
-    { id: 'EXECUTION', label: 'EXECUTION', value: EXECUTION_OPTIONS.find(o => o.value === config.execution)?.label ?? '—' },
-    { id: 'MONITORING', label: 'MONITORING', value: MONITORING_OPTIONS.find(o => o.value === config.monitoring)?.label ?? '—' },
+    { id: 'EXECUTION', label: 'EXECUTION', value: EXECUTION_OPTIONS.find(o => o.value === config.execution)?.label ?? ':' },
+    { id: 'MONITORING', label: 'MONITORING', value: MONITORING_OPTIONS.find(o => o.value === config.monitoring)?.label ?? ':' },
   ];
 
   return (
@@ -759,12 +759,12 @@ function UniverseFunnel({
         </div>
         {config.eligibility === 'ROBUSTNESS' && (
           <div className="text-paper-green mt-1">
-            MATCHES REFI GOOD-FIT LAYER — 292 SYMBOLS
+            MATCHES REFI GOOD-FIT LAYER: 292 SYMBOLS
           </div>
         )}
         {config.eligibility === 'FUNDAMENTAL_LIQUIDITY' && (
           <div className="text-phosphor-mid mt-1">
-            MATCHES REFI FULL BASKET APPROACH — 355 SYMBOLS
+            MATCHES REFI FULL BASKET APPROACH: 355 SYMBOLS
           </div>
         )}
       </div>
