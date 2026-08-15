@@ -1,8 +1,19 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { useTips } from '../context/TipContext';
-import type { ActionCode, ThesisCode } from '../lib/gameTypes';
+import type { ActionBranch, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
+import {
+  canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
+  STARTING_CAPITAL,
+} from '../lib/runEngine';
+import {
+  thesisLabel, thesisOptionsFor, stanceLine, stanceTitle,
+  convictionSpan, convictionGovernor, isGovernorActive, clampConviction,
+  convictionToConfidence, confidenceToConviction, isDetent, isLandmark,
+  CONVICTION_KEY_STEP, CONVICTION_KEY_STEP_COARSE,
+  GOVERNOR_CAPTION, PANEL_MODULE, THESIS_TIMEOUT_MS, THESIS_TIMEOUT_CODE,
+} from '../lib/decisionContract';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
 import MachinePipeline from '../components/game/MachinePipeline';
@@ -14,23 +25,7 @@ import { ArcRail } from '../components/onboarding/ArcRail';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ActivePanel = 'SIGNAL' | 'PORTFOLIO' | 'RISK' | 'DRAFT';
-
-type PositionAction = 'ADD' | 'REDUCE' | 'EXIT' | 'HOLD';
-
-interface DraftOrder {
-  symbol: string;
-  action: PositionAction;
-  amount: number;
-}
-
-const HOLD_REASONS: { code: ThesisCode; label: string }[] = [
-  { code: 'THESIS_UNCHANGED', label: 'THESIS UNCHANGED' },
-  { code: 'LIQUIDITY_PRESERVATION', label: 'INSUFFICIENT INFORMATION' },
-  { code: 'VALUATION', label: 'AWAIT CONFIRMATION' },
-  { code: 'CONTRARIAN', label: 'VALUATION SUPPORT' },
-  { code: 'POLICY_RESPONSE', label: 'POLICY FLOOR' },
-];
+type ActivePanel = 'SIGNAL' | 'PORTFOLIO' | 'RISK' | 'DECIDE';
 
 const DIRECTION_COLORS = {
   up: 'text-paper-green',
@@ -45,16 +40,6 @@ const MAGNITUDE_CLASSES = {
   extreme: 'opacity-100 animate-pulse',
 };
 
-// Maps position action to game ActionCode
-function positionActionsToGameAction(orders: DraftOrder[]): ActionCode {
-  const hasReduce = orders.some(o => o.action === 'REDUCE' || o.action === 'EXIT');
-  const hasAdd = orders.some(o => o.action === 'ADD');
-  if (hasReduce && hasAdd) return 'ROTATE_DEFENSIVE';
-  if (hasReduce) return 'REDUCE';
-  if (hasAdd) return 'ADD_RISK';
-  return 'HOLD';
-}
-
 interface Props {
   onComplete: () => void;
   onBack: () => void;
@@ -65,8 +50,9 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   const {
     state,
     startRun,
+    investigateModule,
     setPendingAction,
-    setPendingThesis,
+    attachThesis,
     setPendingConfidence,
     commitDecision,
     advanceCheckpoint,
@@ -89,18 +75,15 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   }, []);
 
   // ─── Local UI state ─────────────────────────────────────────────────────────
+  // The decision itself (stance, thesis, conviction) lives in run state. Local
+  // state is only which panel is open and whether the confirm step is showing.
 
   const [activePanel, setActivePanel] = useState<ActivePanel>('SIGNAL');
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
-  const [orderAction, setOrderAction] = useState<PositionAction | null>(null);
-  const [orderAmount, setOrderAmount] = useState<number>(2000);
-  const [draftOrders, setDraftOrders] = useState<DraftOrder[]>([]);
-  const [holdReason, setHoldReason] = useState<ThesisCode | null>(null);
-  const [holdConfirmed, setHoldConfirmed] = useState(false);
-  const [countdownActive, setCountdownActive] = useState(false);
-  const [countdown, setCountdown] = useState(3);
-  const [revealDelay, setRevealDelay] = useState(0);
   const [commitConfirm, setCommitConfirm] = useState(false);
+  const [revealDelay, setRevealDelay] = useState(0);
+  // The post-commit thesis prompt. Shown between the release and the reveal so
+  // the player explains an instinct already exposed (Addendum B B2, C C.5).
+  const [thesisPrompt, setThesisPrompt] = useState(false);
 
   // ─── First-run coaching (P0 IA: a guided, spotlit first checkpoint) ───────────
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -112,14 +95,14 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     {
       sel: '[data-spotlight="cp-signal"]',
       title: 'READ WHAT CHANGED',
-      body: 'This is the market signal at this moment in history. It tells you what changed — it does not tell you what to do. That call is yours.',
+      body: 'This is the market signal at this moment in history. It tells you what changed: it does not tell you what to do. That call is yours.',
       hint: 'THE SIGNAL IS YOUR INFORMATION EDGE',
     },
     {
       sel: '[data-spotlight="cp-actions"]',
-      title: 'CHOOSE ONE MOVE',
-      body: 'Order a change, or HOLD. HOLD is a real, scored decision — you never have to trade, and trading more is not rewarded.',
-      hint: 'ORDER · HOLD · REVIEW · COMMIT',
+      title: 'CHOOSE YOUR STANCE',
+      body: 'Choose the stance that matches your read. HOLD is a real, scored decision. Set how strongly you believe it. Trading more is never rewarded.',
+      hint: 'STANCE · CONVICTION · COMMIT',
     },
   ];
   const finishCoach = () => {
@@ -279,114 +262,173 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     }
   }, [run?.phase]);
 
-  // Reset draft when checkpoint advances
+  // Reset the decision surface when the checkpoint advances
   useEffect(() => {
-    setDraftOrders([]);
-    setHoldReason(null);
-    setHoldConfirmed(false);
     setCommitConfirm(false);
-    setSelectedSymbol(null);
-    setOrderAction(null);
+    setThesisPrompt(false);
     setActivePanel('SIGNAL');
   }, [run?.currentCheckpoint]);
 
-  // Keyboard: P/R/S/C/H/ESC
+  // The thesis prompt never blocks the reveal. On timeout the decision records
+  // THESIS_UNSTATED, which is a real behavioral signal rather than a gap.
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (run?.phase !== 'SIGNAL' && run?.phase !== 'INVESTIGATING') return;
-      if (e.key === 'p' || e.key === 'P') setActivePanel('PORTFOLIO');
-      if (e.key === 'r' || e.key === 'R') setActivePanel('RISK');
-      if (e.key === 's' || e.key === 'S') setActivePanel('SIGNAL');
-      if (e.key === 'd' || e.key === 'D') setActivePanel('DRAFT');
-      if (e.key === 'Escape') {
-        setSelectedSymbol(null);
-        setOrderAction(null);
-        setCommitConfirm(false);
-      }
-      if (e.key === 'Enter' && commitConfirm) handleFinalCommit();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run?.phase, commitConfirm]);
-
-  const triggerCountdown = useCallback(() => {
-    setCountdownActive(true);
-    setCountdown(3);
-  }, []);
-
-  useEffect(() => {
-    if (!countdownActive) return;
-    if (countdown <= 0) {
-      setCountdownActive(false);
-      advanceCheckpoint();
-      return;
-    }
-    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    if (!thesisPrompt) return;
+    const t = setTimeout(() => {
+      attachThesis(THESIS_TIMEOUT_CODE);
+      setThesisPrompt(false);
+    }, THESIS_TIMEOUT_MS);
     return () => clearTimeout(t);
-  }, [countdownActive, countdown, advanceCheckpoint]);
+  }, [thesisPrompt, attachThesis]);
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
-  const addToDraft = () => {
-    if (!selectedSymbol || !orderAction) return;
-    setDraftOrders(d => {
-      const existing = d.findIndex(o => o.symbol === selectedSymbol);
-      if (existing >= 0) {
-        const updated = [...d];
-        updated[existing] = { symbol: selectedSymbol, action: orderAction, amount: orderAmount };
-        return updated;
-      }
-      return [...d, { symbol: selectedSymbol, action: orderAction, amount: orderAmount }];
-    });
-    setSelectedSymbol(null);
-    setOrderAction(null);
-    setOrderAmount(2000);
-    setActivePanel('DRAFT');
-    tipOnce('first_order', () => triggerEvent('tutorial.first_order_added'));
-  };
-
-  const removeFromDraft = (symbol: string) => {
-    setDraftOrders(d => d.filter(o => o.symbol !== symbol));
-  };
-
-  const handleHoldCommit = () => {
-    if (!holdReason) return;
-    setPendingAction('HOLD');
-    setPendingThesis(holdReason);
-    setPendingConfidence(0.7);
-    setHoldConfirmed(true);
-    setCommitConfirm(true);
-    setActivePanel('DRAFT');
-  };
-
-  const handleDraftCommit = () => {
-    if (draftOrders.length === 0 && !holdConfirmed) return;
-    if (!holdConfirmed) {
-      const gameAction = positionActionsToGameAction(draftOrders);
-      setPendingAction(gameAction);
-      setPendingConfidence(0.7);
+  const openPanel = useCallback((panel: ActivePanel) => {
+    setActivePanel(panel);
+    if (panel === 'PORTFOLIO') {
+      investigateModule(PANEL_MODULE.PORTFOLIO);
+      tipOnce('portfolio_open', () => triggerEvent('tutorial.portfolio_open'));
     }
-    setCommitConfirm(true);
-    setActivePanel('DRAFT');
-    tipOnce('draft_ready', () => triggerEvent('tutorial.draft_ready'));
-  };
+    if (panel === 'RISK') {
+      investigateModule(PANEL_MODULE.RISK);
+      tipOnce('risk_view', () => triggerEvent('risk.first_risk_contribution_view'));
+    }
+  }, [investigateModule, tipOnce, triggerEvent]);
 
-  const handleFinalCommit = () => {
+  const selectStance = useCallback((branch: ActionBranch) => {
+    setPendingAction(branch.actionCode);
+    setCommitConfirm(false);
+    setActivePanel('DECIDE');
+    tipOnce('stance_selected', () => triggerEvent('tutorial.position_selected'));
+    if (branch.actionCode !== 'HOLD' && run && run.portfolio.drawdown < -0.10) {
+      tipOnce('large_reduction', () => triggerEvent('arena.large_reduction_proposed'));
+    }
+    if (branch.actionCode === 'HOLD') {
+      tipOnce('hold_available', () => triggerEvent('tutorial.hold_available'));
+    }
+  }, [setPendingAction, tipOnce, triggerEvent, run]);
+
+  const adjustConviction = useCallback((next: number) => {
+    if (!run) return;
+    setPendingConfidence(convictionToConfidence(clampConviction(next, run.currentCheckpoint)));
+  }, [run, setPendingConfidence]);
+
+  const handleReview = useCallback(() => {
+    if (!run?.pendingAction) return;
+    setCommitConfirm(true);
+    setActivePanel('DECIDE');
+    tipOnce('draft_ready', () => triggerEvent('tutorial.draft_ready'));
+  }, [run?.pendingAction, tipOnce, triggerEvent]);
+
+  const handleFinalCommit = useCallback(() => {
     commitDecision();
     setCommitConfirm(false);
-  };
+    setThesisPrompt(true);
+  }, [commitDecision]);
 
-  const handleLearnNext = () => {
+  const pickThesis = useCallback((code: ThesisCode) => {
+    attachThesis(code);
+    setThesisPrompt(false);
+  }, [attachThesis]);
+
+  const handleLearnNext = useCallback(() => {
     if (!run) return;
     if (run.currentCheckpoint >= run.totalCheckpoints) {
       const won = run.playerScore > run.machineScore;
       completeRun(won ? 'MACHINE_BEATEN' : 'PASSED');
       onComplete();
     } else {
-      triggerCountdown();
+      // No countdown. The next signal arrives when the player asks for it.
+      advanceCheckpoint();
     }
-  };
+  }, [run, completeRun, onComplete, advanceCheckpoint]);
+
+  // ─── Keyboard ────────────────────────────────────────────────────────────────
+  // Every key here has a visible, clickable equivalent on screen.
+
+  const decisionPhase = run?.phase === 'SIGNAL' || run?.phase === 'INVESTIGATING' || run?.phase === 'COMMITTING';
+  const branches = useMemo(
+    () => currentCheckpointData?.availableActions ?? [],
+    [currentCheckpointData],
+  );
+
+  useEffect(() => {
+    if (!decisionPhase || !run) return;
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+
+      if (e.key === 'Enter') {
+        if (commitConfirm) handleFinalCommit();
+        else handleReview();
+        return;
+      }
+      if (e.key === 'Escape') { setCommitConfirm(false); return; }
+      if (e.key === 'p' || e.key === 'P') { openPanel('PORTFOLIO'); return; }
+      if (e.key === 'r' || e.key === 'R') { openPanel('RISK'); return; }
+      if (e.key === 's' || e.key === 'S') { openPanel('SIGNAL'); return; }
+      if (e.key === 'd' || e.key === 'D') { openPanel('DECIDE'); return; }
+
+      // 1..4 select a stance card
+      const n = Number(e.key);
+      if (Number.isInteger(n) && n >= 1 && n <= branches.length) {
+        const branch = branches[n - 1];
+        if (canAffordAction(run, branch.actionCode, currentCheckpointData)) selectStance(branch);
+        return;
+      }
+
+      // Conviction, once a stance is chosen. Integer resolution would make a
+      // plain arrow traverse 45 keystrokes wide, so the keyboard gets the same
+      // three speeds the hand gets from detents: fine, detent, and end stop.
+      if (run.pendingAction) {
+        const current = confidenceToConviction(run.pendingConfidence);
+        const bounds = convictionGovernor(run.currentCheckpoint);
+        const coarse = e.shiftKey;
+        const step = coarse ? CONVICTION_KEY_STEP_COARSE : CONVICTION_KEY_STEP;
+
+        if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          adjustConviction(current + step);
+        }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          adjustConviction(current - step);
+        }
+        if (e.key === 'PageUp') {
+          e.preventDefault();
+          adjustConviction(current + CONVICTION_KEY_STEP_COARSE);
+        }
+        if (e.key === 'PageDown') {
+          e.preventDefault();
+          adjustConviction(current - CONVICTION_KEY_STEP_COARSE);
+        }
+        if (e.key === 'Home') { e.preventDefault(); adjustConviction(bounds.min); }
+        if (e.key === 'End') { e.preventDefault(); adjustConviction(bounds.max); }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [
+    decisionPhase, run, branches, currentCheckpointData, commitConfirm,
+    handleFinalCommit, handleReview, openPanel, selectStance, adjustConviction,
+  ]);
+
+  // Thesis prompt keyboard: same 1..n grammar as the stance cards.
+  useEffect(() => {
+    if (!thesisPrompt || !run) return;
+    const decision = run.decisions[run.decisions.length - 1];
+    const branch = decision
+      ? (currentCheckpointData?.availableActions ?? []).find(b => b.actionCode === decision.actionCode)
+      : undefined;
+    if (!branch) return;
+    const options = thesisOptionsFor(branch);
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { pickThesis(THESIS_TIMEOUT_CODE); return; }
+      const n = Number(e.key);
+      if (Number.isInteger(n) && n >= 1 && n <= options.length) pickThesis(options[n - 1].code);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [thesisPrompt, run, currentCheckpointData, pickThesis]);
 
   // ─── Guard ───────────────────────────────────────────────────────────────────
 
@@ -403,15 +445,52 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   const cp = currentCheckpointData;
   const phase = run.phase;
   const portfolio = run.portfolio;
-  const portfolioGain = ((portfolio.value - 100000) / 100000) * 100;
-  const isObservation = portfolio.drawdown <= -0.20;
-  const hasDraft = draftOrders.length > 0 || holdConfirmed;
+  const portfolioGain = ((portfolio.value - STARTING_CAPITAL) / STARTING_CAPITAL) * 100;
+  const isObservation = run.criticalFailure;
+
+  // ─── Decision state ──────────────────────────────────────────────────────────
+
+  const stance = run.pendingAction;
+  const conviction = confidenceToConviction(run.pendingConfidence);
+  // The control always spans the permanent range; the governor caps the value.
+  const span = convictionSpan();
+  const governor = convictionGovernor(run.currentCheckpoint);
+  const governed = isGovernorActive(run.currentCheckpoint);
+  const decisionReady = Boolean(stance);
+  const selectedBranch = branches.find(b => b.actionCode === stance) ?? null;
+
+  // ─── Turnover ────────────────────────────────────────────────────────────────
+
+  const turnoverBudget = run.turnoverBudget;
+  const turnoverSpentPct = turnoverBudget > 0 ? portfolio.turnoverUsed / turnoverBudget : 1;
+  const turnoverExhausted = isHoldOnly(run, cp);
+  const turnoverColor =
+    turnoverSpentPct > 0.85 ? 'text-risk-red' :
+    turnoverSpentPct > 0.60 ? 'text-alert-amber' :
+    'text-phosphor';
+  const turnoverBarColor =
+    turnoverSpentPct > 0.85 ? 'bg-risk-red' :
+    turnoverSpentPct > 0.60 ? 'bg-alert-amber' :
+    'bg-phosphor';
+
+  // A run in observation mode cannot report MACHINE_BEATEN, whatever the
+  // average score says. The engine resolves it; the screen only reports it.
+  const observationReason = observationModeReason(run);
+  const beatTheMachine =
+    resolveRunResult(run, run.playerScore > run.machineScore ? 'MACHINE_BEATEN' : 'PASSED') === 'MACHINE_BEATEN';
+
+  const lastDecision = run.decisions[run.decisions.length - 1];
+  // The branch that was actually committed, for the post-commit thesis prompt.
+  const selectedCommittedBranch = lastDecision
+    ? branches.find(b => b.actionCode === lastDecision.actionCode) ?? null
+    : null;
+  const earnedProcessCredit = Boolean(lastDecision?.behavioralFlags.includes('GOOD_PROCESS')) && cp.isRegimeChange;
 
   const PANEL_TABS: { id: ActivePanel; label: string; key: string }[] = [
     { id: 'SIGNAL', label: 'SIGNAL', key: 'S' },
     { id: 'PORTFOLIO', label: 'PORTFOLIO', key: 'P' },
     { id: 'RISK', label: 'RISK', key: 'R' },
-    { id: 'DRAFT', label: `DRAFT${draftOrders.length > 0 ? ` (${draftOrders.length})` : ''}`, key: 'D' },
+    { id: 'DECIDE', label: decisionReady ? 'DECIDE ✓' : 'DECIDE', key: 'D' },
   ];
 
   return (
@@ -529,11 +608,31 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                 {(portfolio.drawdown * 100).toFixed(1)}%
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-phosphor-dim">TURNOVER</span>
-              <span className={portfolio.turnoverUsed > 0.3 ? 'text-alert-amber' : 'text-phosphor'}>
-                {(portfolio.turnoverUsed * 100).toFixed(0)}%
-              </span>
+            <div>
+              <div className="flex justify-between">
+                <span className="text-phosphor-dim">TURNOVER BUDGET</span>
+                <span className={turnoverColor}>
+                  {(portfolio.turnoverUsed * 100).toFixed(0)}% / {(turnoverBudget * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div
+                className="mt-1 h-1.5 bg-phosphor/10"
+                role="meter"
+                aria-label="TURNOVER BUDGET SPENT"
+                aria-valuenow={Math.round(turnoverSpentPct * 100)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div
+                  className={`h-full ${turnoverBarColor}`}
+                  style={{ width: `${Math.min(100, turnoverSpentPct * 100)}%` }}
+                />
+              </div>
+              {turnoverExhausted && (
+                <div className="text-risk-red text-xs tracking-widest mt-1">
+                  TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -541,19 +640,14 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         {/* ── Center: decision workspace ── */}
         <div className="flex-1 flex flex-col overflow-hidden">
 
-          {/* Decision-phase workspace */}
-          {(phase === 'SIGNAL' || phase === 'INVESTIGATING') && (
+          {decisionPhase && (
             <>
               {/* Panel tabs */}
               <div className="flex border-b border-phosphor/15 flex-shrink-0">
                 {PANEL_TABS.map(tab => (
                   <button
                     key={tab.id}
-                    onClick={() => {
-                      setActivePanel(tab.id);
-                      if (tab.id === 'PORTFOLIO') tipOnce('portfolio_open', () => triggerEvent('tutorial.portfolio_open'));
-                      if (tab.id === 'RISK') tipOnce('risk_view', () => triggerEvent('risk.first_risk_contribution_view'));
-                    }}
+                    onClick={() => openPanel(tab.id)}
                     className={`px-4 py-2.5 text-xs tracking-widest border-r border-phosphor/10 transition-colors flex-shrink-0 ${
                       activePanel === tab.id
                         ? 'text-phosphor bg-phosphor/8 border-b border-phosphor'
@@ -586,57 +680,50 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                     </div>
 
                     {cp.isRegimeChange && (
-                      <div className="border border-alert-amber/40 bg-alert-amber/5 px-4 py-2.5 text-alert-amber text-xs tracking-widest">
+                      <div className="border border-alert-amber/40 bg-alert-amber/5 px-4 py-2.5 text-alert-amber text-xs tracking-widest mb-3">
                         ▲ REGIME CHANGE SIGNAL
                       </div>
                     )}
 
                     {isObservation && (
-                      <div className="border border-alert-amber/60 bg-alert-amber/8 px-4 py-3 mt-3 text-alert-amber text-xs leading-relaxed">
+                      <div className="border border-alert-amber/60 bg-alert-amber/8 px-4 py-3 mb-3 text-alert-amber text-xs leading-relaxed">
                         OBSERVATION MODE: DRAWDOWN EXCEEDS -20%. RUN CONTINUES BUT CANNOT PASS. USE THIS TIME TO STUDY MACHINE DECISIONS.
                       </div>
                     )}
+
+                    <button
+                      onClick={() => openPanel('DECIDE')}
+                      className="cmd-button-primary w-full py-3 text-xs tracking-widest"
+                    >
+                      DECIDE ▶ [D]
+                    </button>
                   </div>
                 )}
 
-                {/* PORTFOLIO panel */}
+                {/* PORTFOLIO panel: read-only investigation */}
                 {activePanel === 'PORTFOLIO' && (
                   <div className="p-5">
-                    <div className="text-phosphor-dim text-xs tracking-widest mb-3">YOUR POSITIONS · CLICK TO ORDER</div>
+                    <div className="text-phosphor-dim text-xs tracking-widest mb-3">
+                      YOUR POSITIONS · READ ONLY
+                    </div>
 
-                    {/* Constellation visualization */}
                     {portfolio.positions.length > 0 && (
                       <div className="flex justify-center mb-4 border border-phosphor/10 bg-terminal-deep/40 py-2">
                         <PortfolioConstellation
                           positions={portfolio.positions}
                           correlationIndex={portfolio.correlationIndex}
                           drawdown={portfolio.drawdown}
-                          highlightSymbol={selectedSymbol}
-                          onSelectSymbol={sym => {
-                            setSelectedSymbol(sym);
-                            setOrderAction(null);
-                            tipOnce('position_selected', () => triggerEvent('tutorial.position_selected'));
-                          }}
                           width={340}
                           height={200}
                         />
                       </div>
                     )}
 
-                    <div className="space-y-1.5 mb-4">
+                    <div className="space-y-1.5">
                       {portfolio.positions.map(pos => (
-                        <button
+                        <div
                           key={pos.symbol}
-                          onClick={() => {
-                            setSelectedSymbol(pos.symbol);
-                            setOrderAction(null);
-                            tipOnce('position_selected', () => triggerEvent('tutorial.position_selected'));
-                          }}
-                          className={`w-full flex items-center justify-between text-xs p-2.5 border transition-all ${
-                            selectedSymbol === pos.symbol
-                              ? 'border-phosphor bg-phosphor/10 text-phosphor'
-                              : 'border-phosphor/15 text-phosphor-mid hover:border-phosphor/35 hover:text-phosphor hover:bg-phosphor/5 cursor-pointer'
-                          }`}
+                          className="w-full flex items-center justify-between text-xs p-2.5 border border-phosphor/15 text-phosphor-mid"
                         >
                           <div className="flex items-center gap-3">
                             <span className="font-bold text-phosphor w-10">{pos.symbol}</span>
@@ -647,90 +734,18 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                             <span className={pos.pnl >= 0 ? 'text-paper-green' : 'text-risk-red'}>
                               {pos.pnl >= 0 ? '+' : ''}{(pos.pnl * 100).toFixed(1)}%
                             </span>
-                            <span className="text-phosphor-dim text-xs">
-                              {draftOrders.find(o => o.symbol === pos.symbol)
-                                ? `[${draftOrders.find(o => o.symbol === pos.symbol)?.action}]`
-                                : ''}
-                            </span>
                           </div>
-                        </button>
+                        </div>
                       ))}
                     </div>
 
-                    {/* Order ticket */}
-                    {selectedSymbol && (
-                      <div className="border border-phosphor/30 bg-phosphor/5 p-4 animate-boot-fade">
-                        <div className="text-phosphor-dim text-xs tracking-widest mb-3">
-                          ORDER TICKET · {selectedSymbol}
-                        </div>
-
-                        <div className="grid grid-cols-4 gap-2 mb-3">
-                          {(['ADD', 'REDUCE', 'EXIT'] as PositionAction[]).map(ac => (
-                            <button
-                              key={ac}
-                              onClick={() => {
-                                setOrderAction(ac);
-                                if ((ac === 'EXIT' || ac === 'REDUCE') && portfolio.drawdown < -0.10) {
-                                  tipOnce('large_reduction', () => triggerEvent('arena.large_reduction_proposed'));
-                                }
-                              }}
-                              className={`py-2 text-xs tracking-wide border transition-colors ${
-                                orderAction === ac
-                                  ? 'border-phosphor bg-phosphor/15 text-phosphor'
-                                  : 'border-phosphor/20 text-phosphor-dim hover:border-phosphor/40 hover:text-phosphor'
-                              }`}
-                            >
-                              {ac}
-                            </button>
-                          ))}
-                          <button
-                            onClick={() => setSelectedSymbol(null)}
-                            className="py-2 text-xs tracking-wide border border-phosphor/10 text-phosphor-dim hover:border-phosphor/20 transition-colors"
-                          >
-                            CANCEL
-                          </button>
-                        </div>
-
-                        {orderAction && orderAction !== 'EXIT' && (
-                          <div className="mb-3">
-                            <div className="text-phosphor-dim text-xs mb-2">
-                              AMOUNT: <span className="text-phosphor">${orderAmount.toLocaleString()}</span>
-                            </div>
-                            <div className="flex gap-2">
-                              {[1000, 2000, 5000, 10000].map(amt => (
-                                <button
-                                  key={amt}
-                                  onClick={() => setOrderAmount(amt)}
-                                  className={`text-xs px-2 py-1 border transition-colors ${
-                                    orderAmount === amt
-                                      ? 'border-phosphor text-phosphor bg-phosphor/10'
-                                      : 'border-phosphor/15 text-phosphor-dim hover:border-phosphor/30'
-                                  }`}
-                                >
-                                  ${(amt / 1000).toFixed(0)}K
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <button
-                          onClick={addToDraft}
-                          disabled={!orderAction}
-                          className={`w-full py-2 text-xs tracking-widest border transition-colors ${
-                            orderAction
-                              ? 'border-phosphor text-phosphor hover:bg-phosphor/10'
-                              : 'border-phosphor/10 text-phosphor-dim cursor-not-allowed'
-                          }`}
-                        >
-                          ADD TO DRAFT →
-                        </button>
-                      </div>
-                    )}
+                    <div className="text-phosphor-dim text-xs leading-relaxed mt-4 border-t border-phosphor/10 pt-3">
+                      YOU DO NOT TRADE INDIVIDUAL POSITIONS. YOU SET A STANCE FOR THE WHOLE PORTFOLIO.
+                    </div>
                   </div>
                 )}
 
-                {/* RISK panel */}
+                {/* RISK panel: read-only investigation */}
                 {activePanel === 'RISK' && (
                   <div className="p-5 space-y-4">
                     <div className="grid grid-cols-2 gap-3">
@@ -773,116 +788,169 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                       </div>
                     </div>
 
+                    {cp.isRegimeChange && (
+                      <div className="border border-phosphor/25 bg-phosphor/5 px-4 py-2.5 text-phosphor text-xs tracking-widest">
+                        ✓ RISK CONSULTED BEFORE A REGIME CALL. THIS IS RECORDED.
+                      </div>
+                    )}
+
                     {isObservation && (
                       <div className="border border-risk-red/60 bg-risk-red/5 px-4 py-3 text-risk-red text-xs leading-relaxed">
-                        OBSERVATION MODE ACTIVE. DRAWDOWN {Math.abs(portfolio.drawdown * 100).toFixed(1)}% EXCEEDS -20% THRESHOLD. RUN CONTINUES — MACHINE COMPARISON ONLY.
+                        OBSERVATION MODE ACTIVE. DRAWDOWN {Math.abs(portfolio.drawdown * 100).toFixed(1)}% EXCEEDS -20% THRESHOLD. RUN CONTINUES, MACHINE COMPARISON ONLY.
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* DRAFT panel */}
-                {activePanel === 'DRAFT' && (
+                {/* DECIDE panel: stance, thesis, conviction */}
+                {activePanel === 'DECIDE' && (
                   <div className="p-5">
-                    <div className="text-phosphor-dim text-xs tracking-widest mb-3">DECISION DRAFT</div>
 
-                    {draftOrders.length === 0 && !holdConfirmed && (
-                      <div className="border border-phosphor/10 p-4 text-center text-phosphor-dim text-xs mb-4">
-                        NO ORDERS DRAFTED.
-                        <div className="mt-1 text-phosphor-dim/50">GO TO PORTFOLIO → CLICK A POSITION → ORDER</div>
-                      </div>
-                    )}
-
-                    {draftOrders.length > 0 && (
-                      <div className="space-y-2 mb-4">
-                        {draftOrders.map(o => (
-                          <div key={o.symbol} className="flex items-center justify-between text-xs border border-phosphor/20 p-3">
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-phosphor">{o.symbol}</span>
-                              <span className={`${o.action === 'ADD' ? 'text-paper-green' : 'text-risk-red'}`}>
-                                {o.action}
+                    {/* ── 1. Stance ── */}
+                    <div className="text-phosphor-dim text-xs tracking-widest mb-2">
+                      1 · STANCE
+                    </div>
+                    <div className="space-y-2 mb-6">
+                      {branches.map((branch, i) => {
+                        const affordable = canAffordAction(run, branch.actionCode, cp);
+                        const selected = stance === branch.actionCode;
+                        const cost = turnoverCostFor(branch.actionCode, cp);
+                        return (
+                          <button
+                            key={branch.actionCode}
+                            onClick={() => affordable && selectStance(branch)}
+                            disabled={!affordable}
+                            aria-pressed={selected}
+                            className={`w-full text-left p-3 border transition-colors ${
+                              selected
+                                ? 'border-phosphor bg-phosphor/10'
+                                : affordable
+                                  ? 'border-phosphor/20 hover:border-phosphor/45 hover:bg-phosphor/5'
+                                  : 'border-phosphor/10 opacity-40 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-phosphor-dim/60 text-xs">[{i + 1}]</span>
+                                <span className={`text-sm font-bold tracking-wide ${selected ? 'text-phosphor' : 'text-phosphor-mid'}`}>
+                                  {stanceTitle(branch)}
+                                </span>
+                                {selected && <span className="text-phosphor text-xs">✓</span>}
+                              </div>
+                              <span className={`text-xs tabular-nums ${affordable ? 'text-phosphor-dim' : 'text-risk-red'}`}>
+                                {cost === 0 ? 'FREE' : `${(cost * 100).toFixed(0)}% TURNOVER`}
                               </span>
-                              {o.action !== 'EXIT' && (
-                                <span className="text-phosphor-dim">${o.amount.toLocaleString()}</span>
-                              )}
                             </div>
-                            <button
-                              onClick={() => removeFromDraft(o.symbol)}
-                              className="text-phosphor-dim hover:text-risk-red transition-colors"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                        <button
-                          onClick={() => setActivePanel('PORTFOLIO')}
-                          className="text-phosphor-dim text-xs hover:text-phosphor transition-colors"
-                        >
-                          + ADD MORE ORDERS
-                        </button>
-                      </div>
-                    )}
+                            <div className="text-phosphor-dim text-xs leading-snug mt-1 pl-7">
+                              {stanceLine(branch)}
+                            </div>
+                            {!affordable && (
+                              <div className="text-risk-red text-xs tracking-widest mt-1 pl-7">
+                                NOT ENOUGH TURNOVER BUDGET REMAINING.
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                    {holdConfirmed && (
-                      <div className="border border-phosphor/30 bg-phosphor/5 p-3 mb-4 text-xs">
-                        <div className="text-phosphor-dim tracking-widest mb-1">HOLD DECISION</div>
-                        <div className="text-phosphor">
-                          {HOLD_REASONS.find(r => r.code === holdReason)?.label ?? holdReason}
-                        </div>
-                        <button
-                          onClick={() => { setHoldConfirmed(false); setHoldReason(null); }}
-                          className="text-phosphor-dim text-xs mt-1 hover:text-phosphor transition-colors"
-                        >
-                          ← CHANGE
-                        </button>
+                    {/* ── 2. Conviction ── */}
+                    {/* The control spans 50 to 95 at every checkpoint. During
+                        CP1 to CP4 a governor caps the value at 75; the span
+                        itself never moves, so the scale the player learns here
+                        is the scale they keep. */}
+                    <div className={stance ? '' : 'opacity-40 pointer-events-none'}>
+                      <div className="flex items-baseline justify-between mb-2">
+                        <span className="text-phosphor-dim text-xs tracking-widest">2 · CONVICTION</span>
+                        <span className="text-phosphor text-lg font-bold tabular-nums">{conviction}</span>
                       </div>
-                    )}
 
-                    {!holdConfirmed && (
-                      <>
-                        <div className="border-t border-phosphor/10 pt-4 mb-3">
-                          <div className="text-phosphor-dim text-xs tracking-widest mb-2" ref={el => { if (el && cp.isHoldValid) tipOnce('hold_available', () => triggerEvent('tutorial.hold_available')); }}>OR HOLD — SELECT REASON</div>
-                          <div className="space-y-1.5">
-                            {HOLD_REASONS.map(r => (
-                              <button
-                                key={r.code}
-                                onClick={() => setHoldReason(r.code)}
-                                className={`w-full text-left text-xs py-2 px-3 border transition-colors ${
-                                  holdReason === r.code
-                                    ? 'border-phosphor bg-phosphor/10 text-phosphor'
-                                    : 'border-phosphor/15 text-phosphor-dim hover:border-phosphor/30 hover:text-phosphor-mid'
-                                }`}
-                              >
-                                {r.label}
-                              </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => adjustConviction(conviction - CONVICTION_KEY_STEP_COARSE)}
+                          aria-label="LOWER CONVICTION BY FIVE"
+                          className="w-8 h-8 border border-phosphor/25 text-phosphor-dim hover:text-phosphor hover:border-phosphor/50 transition-colors"
+                        >
+                          −
+                        </button>
+
+                        <div className="flex-1 relative">
+                          <input
+                            type="range"
+                            min={span.min}
+                            max={span.max}
+                            step={CONVICTION_KEY_STEP}
+                            value={conviction}
+                            onChange={e => adjustConviction(Number(e.target.value))}
+                            aria-label="CONVICTION"
+                            aria-valuemin={governor.min}
+                            aria-valuemax={governor.max}
+                            aria-valuenow={conviction}
+                            className="w-full accent-phosphor relative z-10"
+                          />
+                          {/* Detent ticks. Landmarks at 70, 85 and 95 are heavier:
+                              the same three the hand learns from the pull. */}
+                          <div className="flex justify-between px-0.5 mt-0.5" aria-hidden="true">
+                            {Array.from(
+                              { length: (span.max - span.min) / CONVICTION_KEY_STEP_COARSE + 1 },
+                              (_, i) => span.min + i * CONVICTION_KEY_STEP_COARSE,
+                            ).map(v => (
+                              <span
+                                key={v}
+                                className={`w-px ${
+                                  isLandmark(v) ? 'h-2 bg-phosphor/70'
+                                    : isDetent(v) ? 'h-1 bg-phosphor/25'
+                                    : 'h-1 bg-transparent'
+                                } ${governed && v > governor.max ? 'opacity-25' : ''}`}
+                              />
                             ))}
                           </div>
-                          {holdReason && (
-                            <button
-                              onClick={handleHoldCommit}
-                              className="mt-3 w-full py-2 text-xs tracking-widest border border-phosphor/40 text-phosphor hover:bg-phosphor/10 transition-colors"
-                            >
-                              CONFIRM HOLD →
-                            </button>
+                          {/* The governor: a visible limiter over the part of the
+                              span this checkpoint cannot reach. */}
+                          {governed && (
+                            <div
+                              className="absolute top-0 h-1.5 bg-risk-red/20 border-l border-risk-red/50 pointer-events-none"
+                              style={{
+                                left: `${((governor.max - span.min) / (span.max - span.min)) * 100}%`,
+                                right: 0,
+                              }}
+                              aria-hidden="true"
+                            />
                           )}
                         </div>
-                      </>
-                    )}
 
-                    {/* Commit confirmation */}
+                        <button
+                          onClick={() => adjustConviction(conviction + CONVICTION_KEY_STEP_COARSE)}
+                          aria-label="RAISE CONVICTION BY FIVE"
+                          className="w-8 h-8 border border-phosphor/25 text-phosphor-dim hover:text-phosphor hover:border-phosphor/50 transition-colors"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <div className="flex justify-between text-phosphor-dim text-xs mt-1">
+                        <span>{span.min}</span>
+                        <span>{span.max}</span>
+                      </div>
+
+                      <div className="text-phosphor-dim text-xs tracking-widest mt-1 mb-1">
+                        {governed ? GOVERNOR_CAPTION : 'ARROWS ADJUST BY 1 · SHIFT OR PAGE KEYS BY 5'}
+                      </div>
+                      <div className="mb-6" />
+                    </div>
+
+                    {/* ── Commit ── */}
                     {commitConfirm ? (
                       <div className="border border-phosphor/40 bg-phosphor/5 p-4 animate-boot-fade">
-                        <div className="text-phosphor-dim text-xs tracking-widest mb-2">CONFIRM COMMIT</div>
+                        <div className="text-phosphor-dim text-xs tracking-widest mb-2">CONFIRM DECISION</div>
                         <div className="text-phosphor text-sm font-bold mb-1">
-                          {holdConfirmed ? 'HOLD' : positionActionsToGameAction(draftOrders)}
+                          {selectedBranch ? stanceTitle(selectedBranch) : stance}
                         </div>
-                        {!holdConfirmed && draftOrders.length > 0 && (
-                          <div className="text-phosphor-dim text-xs mb-3">
-                            {draftOrders.map(o => `${o.action} ${o.symbol}`).join(' · ')}
-                          </div>
-                        )}
+                        <div className="text-phosphor-mid text-xs mb-1">
+                          CONVICTION {conviction}
+                        </div>
                         <div className="text-phosphor-dim text-xs mb-4">
-                          THIS CANNOT BE UNDONE. THE MARKET WILL RESOLVE.
+                          TURNOVER COST {stance ? (turnoverCostFor(stance, cp) * 100).toFixed(0) : 0}%. THIS CANNOT BE UNDONE. THE MARKET WILL RESOLVE.
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -900,14 +968,17 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                         </div>
                       </div>
                     ) : (
-                      hasDraft && !commitConfirm && (
-                        <button
-                          onClick={handleDraftCommit}
-                          className="cmd-button-primary w-full py-3 text-xs tracking-widest"
-                        >
-                          REVIEW & COMMIT ▶
-                        </button>
-                      )
+                      <button
+                        onClick={handleReview}
+                        disabled={!decisionReady}
+                        className={`w-full py-3 text-xs tracking-widest border transition-colors ${
+                          decisionReady
+                            ? 'border-phosphor text-phosphor hover:bg-phosphor/10'
+                            : 'border-phosphor/10 text-phosphor-dim cursor-not-allowed'
+                        }`}
+                      >
+                        {stance ? 'REVIEW & COMMIT ▶ [ENTER]' : 'SELECT A STANCE TO CONTINUE'}
+                      </button>
                     )}
                   </div>
                 )}
@@ -915,10 +986,44 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
             </>
           )}
 
+          {/* ── Thesis quick-pick: after the commit, before the reveal ── */}
+          {thesisPrompt && lastDecision && selectedCommittedBranch && (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 animate-boot-fade">
+              <div className="text-phosphor text-xs tracking-widest mb-1">
+                {stanceTitle(selectedCommittedBranch)} · CONVICTION {confidenceToConviction(lastDecision.confidence ?? 0)}
+              </div>
+              <div className="text-phosphor-dim text-xs tracking-widest mb-5">
+                COMMITTED. THIS CANNOT BE CHANGED.
+              </div>
+
+              <div className="text-phosphor text-2xl font-bold tracking-widest mb-5">WHY?</div>
+
+              <div className="flex flex-wrap justify-center gap-2 max-w-xl">
+                {thesisOptionsFor(selectedCommittedBranch).map((t, i) => (
+                  <button
+                    key={t.code}
+                    onClick={() => pickThesis(t.code)}
+                    className="px-4 py-2.5 text-xs tracking-widest border border-phosphor/30 text-phosphor-mid hover:border-phosphor hover:text-phosphor hover:bg-phosphor/10 transition-colors"
+                  >
+                    <span className="text-phosphor-dim/60 mr-2">[{i + 1}]</span>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => pickThesis(THESIS_TIMEOUT_CODE)}
+                className="mt-5 text-phosphor-dim text-xs tracking-widest hover:text-phosphor-mid transition-colors"
+              >
+                SKIP →
+              </button>
+            </div>
+          )}
+
           {/* ── Resolve / Compare / Learn ── */}
-          {(phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING') && lastCheckpointScore && (
+          {!thesisPrompt && (phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING') && lastCheckpointScore && (
             <div className="flex-1 overflow-y-auto p-6">
-              {/* Machine pipeline — processing animation */}
+              {/* Machine pipeline: processing animation */}
               {phase === 'RESOLVING' && revealDelay === 0 && (
                 <div className="mb-5 border border-phosphor/10 bg-terminal-deep/40 p-4">
                   <MachinePipeline
@@ -937,7 +1042,10 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                 <div className="border border-phosphor/20 bg-terminal-deep/40 p-4">
                   <div className="text-phosphor-dim text-xs tracking-widest mb-2">YOUR CALL</div>
                   <div className="text-phosphor text-xl font-bold tracking-wide">
-                    {run.decisions[run.decisions.length - 1]?.actionCode}
+                    {lastDecision?.actionCode}
+                  </div>
+                  <div className="text-phosphor-dim text-xs mt-1">
+                    {thesisLabel(lastDecision?.thesisCode)} · CONVICTION {confidenceToConviction(lastDecision?.confidence ?? 0)}
                   </div>
                 </div>
                 <div className="border border-phosphor/15 bg-terminal-deep/30 p-4">
@@ -967,6 +1075,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                   <div className="text-right">
                     <div className="text-phosphor-dim text-xs tracking-widest">MACHINE</div>
                     <div className="text-2xl font-bold text-phosphor-mid mt-1">{lastCheckpointScore.machineScore}</div>
+                    <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">PAR {cp.machinePar}</div>
                   </div>
                 </div>
 
@@ -986,6 +1095,12 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                   ))}
                 </div>
 
+                {earnedProcessCredit && (
+                  <div className="text-paper-green text-xs tracking-wide mb-2">
+                    PROCESS: CONSULTED RISK BEFORE A REGIME CALL. +
+                  </div>
+                )}
+
                 {lastCheckpointScore.delta > 0 ? (
                   <div className="text-paper-green text-xs tracking-wide">▲ +{lastCheckpointScore.delta} VS MACHINE</div>
                 ) : lastCheckpointScore.delta < 0 ? (
@@ -1002,7 +1117,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
               >
                 <div className="text-phosphor-dim text-xs tracking-widest mb-1">PROCESS NOTE</div>
                 <div className="text-phosphor-mid text-xs leading-relaxed">{cp.teachingPoint}</div>
-                {cp.isHoldValid && run.decisions[run.decisions.length - 1]?.actionCode === 'HOLD' && cp.holdTeaching && (
+                {cp.isHoldValid && lastDecision?.actionCode === 'HOLD' && cp.holdTeaching && (
                   <div className="mt-2 text-paper-green text-xs">✓ {cp.holdTeaching}</div>
                 )}
               </div>
@@ -1024,12 +1139,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
               )}
 
               {/* Advance */}
-              {countdownActive ? (
-                <div className="text-center py-4">
-                  <div className="text-phosphor-dim text-xs tracking-widest mb-1">NEXT SIGNAL IN</div>
-                  <div className="text-phosphor text-5xl font-bold">{countdown}</div>
-                </div>
-              ) : run.currentCheckpoint >= run.totalCheckpoints ? (
+              {run.currentCheckpoint >= run.totalCheckpoints ? (
                 <button
                   onClick={() => {
                     const won = run.playerScore > run.machineScore;
@@ -1052,12 +1162,18 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
           {phase === 'COMPLETE' && (
             <div className="flex-1 flex flex-col items-center justify-center p-6">
               <div className="text-phosphor-dim text-xs tracking-widest mb-2">RUN COMPLETE</div>
-              <div className={`text-3xl font-bold mb-2 ${run.playerScore > run.machineScore ? 'text-paper-green' : 'text-risk-red'}`}>
-                {run.playerScore > run.machineScore ? 'MACHINE BEATEN' : 'MACHINE WINS'}
+              <div className={`text-3xl font-bold mb-2 ${beatTheMachine ? 'text-paper-green' : 'text-risk-red'}`}>
+                {beatTheMachine ? 'MACHINE BEATEN' : 'MACHINE WINS'}
               </div>
-              <div className="text-phosphor-mid text-sm mb-6">
+              <div className="text-phosphor-mid text-sm mb-2">
                 {run.playerScore} vs {run.machineScore}
               </div>
+              {observationReason && (
+                <div className="text-risk-red text-xs tracking-widest text-center max-w-md mb-4 leading-relaxed">
+                  {observationReason}
+                </div>
+              )}
+              <div className="mb-2" />
               <button onClick={onComplete} className="cmd-button-primary px-8 py-3 tracking-widest text-sm">
                 VIEW AUTOPSY ▶
               </button>
@@ -1106,22 +1222,22 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
       </div>
 
       {/* ── Contextual action bar ── */}
-      {(phase === 'SIGNAL' || phase === 'INVESTIGATING') && (
+      {decisionPhase && (
         <div data-spotlight="cp-actions" className="border-t border-phosphor/15 px-4 py-2.5 flex items-center gap-4 bg-terminal-deep/40 flex-shrink-0">
           <button
-            onClick={() => { setActivePanel('PORTFOLIO'); }}
+            onClick={() => openPanel('DECIDE')}
             className="text-xs tracking-widest text-phosphor-dim hover:text-phosphor transition-colors border border-phosphor/20 px-3 py-1.5 hover:border-phosphor/40"
           >
-            [P] ORDER
+            [D] DECIDE
           </button>
           <button
-            onClick={() => { setActivePanel('DRAFT'); setHoldReason(null); }}
+            onClick={() => openPanel('PORTFOLIO')}
             className="text-xs tracking-widest text-phosphor-dim hover:text-phosphor transition-colors border border-phosphor/20 px-3 py-1.5 hover:border-phosphor/40"
           >
-            [H] HOLD
+            [P] PORTFOLIO
           </button>
           <button
-            onClick={() => setActivePanel('RISK')}
+            onClick={() => openPanel('RISK')}
             className="text-xs tracking-widest text-phosphor-dim hover:text-phosphor transition-colors border border-phosphor/20 px-3 py-1.5 hover:border-phosphor/40"
           >
             [R] RISK
@@ -1135,12 +1251,12 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
             </button>
           )}
           <div className="flex-1" />
-          {hasDraft && !commitConfirm && (
+          {decisionReady && !commitConfirm && (
             <button
-              onClick={handleDraftCommit}
+              onClick={handleReview}
               className="text-xs tracking-widest text-phosphor border border-phosphor/60 px-4 py-1.5 hover:bg-phosphor/10 transition-colors"
             >
-              REVIEW DRAFT ({draftOrders.length > 0 ? draftOrders.length : 'HOLD'}) →
+              REVIEW DECISION →
             </button>
           )}
         </div>
@@ -1151,7 +1267,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         answers={{
           happening: `${cp.crisisDay} · ${cp.phase.replace(/_/g, ' ')}`,
           info: 'SIGNAL · PORTFOLIO · RISK',
-          canDo: 'REDUCE · ADD · EXIT · HOLD',
+          canDo: 'STANCE · THESIS · CONVICTION',
           onCommit: 'MARKET RESOLVES · MACHINE COMPARES',
           vsMachine: `YOU ${run.playerScore} · MCH ${run.machineScore}`,
         }}
@@ -1172,7 +1288,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
             body={cs.body}
             hint={cs.hint}
             step={{ current: coachStep + 1, total: COACH_STEPS.length }}
-            nextLabel={coachStep === COACH_STEPS.length - 1 ? 'GOT IT — LET ME PLAY ▶' : 'NEXT →'}
+            nextLabel={coachStep === COACH_STEPS.length - 1 ? 'GOT IT: LET ME PLAY ▶' : 'NEXT →'}
             onNext={() => { if (coachStep < COACH_STEPS.length - 1) setCoachStep(s => s + 1); else finishCoach(); }}
             onBack={coachStep > 0 ? () => setCoachStep(s => Math.max(0, s - 1)) : undefined}
             onSkip={finishCoach}

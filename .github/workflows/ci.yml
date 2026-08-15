@@ -20,7 +20,7 @@ env:
 
 jobs:
   ci:
-    name: Typecheck / Lint / Build / Gates
+    name: Typecheck / Lint / Test / Build / Gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -34,12 +34,36 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
+      - name: Tests
+        run: npm test
       - name: Result-category label gate (§3.4 gate 1)
         run: npm run label-gate
       - name: Benchmark provenance gate (§3.4 gate 2)
         run: npm run provenance-gate
+      - name: Em-dash gate
+        run: npm run em-dash-gate
       - name: Build
         run: npm run build
+
+  handoff:
+    name: Handoff / Typecheck / Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/handoff
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: services/handoff/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests
+        run: npm test
 
   security:
     name: Security scans (§3.3)

@@ -21,7 +21,11 @@ export type ThesisCode =
   | 'THESIS_UNCHANGED'
   | 'DIVERSIFICATION'
   | 'MOMENTUM'
-  | 'CONTRARIAN';
+  | 'CONTRARIAN'
+  // Recorded when the player commits and lets the thesis prompt time out.
+  // Decisiveness without articulated reasoning is its own behavioral signal,
+  // so it is a real value rather than a missing one. Never offered as a chip.
+  | 'THESIS_UNSTATED';
 
 export type DecisionQuality = 'EXCELLENT' | 'GOOD' | 'NEUTRAL' | 'POOR' | 'CRITICAL_ERROR';
 
@@ -112,6 +116,14 @@ export interface ActionBranch {
   actionCode: ActionCode;
   label: string;
   shortLabel: string;
+  // The 2 to 3 theses offered for this stance after commit. Absent, a default
+  // set is derived per action code. Authoring these per branch is a copy-pass
+  // item (Addendum B section B3).
+  thesisOptions?: ThesisCode[];
+  // Fixed, authored turnover price of taking this stance. The run's turnover
+  // budget is a finite, deterministic resource: no estimate, no noise term.
+  // HOLD is always 0.
+  turnoverCost: number;
   branchEffect: BranchEffect;
   // Kept optional at the outer level for content authored before
   // `machineComparison` moved into BranchEffect (see BranchEffect note).
@@ -120,6 +132,11 @@ export interface ActionBranch {
 
 export interface CheckpointData {
   sequence: number;
+  // The machine's score to beat at this checkpoint. Par is content, not engine
+  // logic, so the rules-machine export pipeline can later overwrite these rows
+  // without touching the scoring engine. It is published in the UI: difficulty
+  // is legible, never hidden.
+  machinePar: number;
   phase: CheckpointPhase;
   crisisDay: string;
   signalTitle: string;
@@ -130,6 +147,13 @@ export interface CheckpointData {
     returnBias: number;        // Expected return contribution this checkpoint
     volatilityDelta: number;   // Volatility change
     correlationLevel: number;  // Cross-asset correlation 0-1
+    // Optional authored per-symbol returns for this checkpoint. Where absent,
+    // every position moves by the checkpoint return exactly. No noise term:
+    // run state must be reproducible from the decision sequence alone.
+    positionReturns?: Record<string, number>;
+    // Optional authored machine drawdown at this checkpoint. Scoring uses it
+    // when present and never fabricates one when it is absent.
+    machineDrawdown?: number;
   };
   machineDecision: MachineDecision;
   availableActions: ActionBranch[];
@@ -153,6 +177,9 @@ export interface PortfolioState {
   value: number;
   cashWeight: number;
   positions: PortfolioPosition[];
+  // High-water mark. Ratchets up only; drawdown is measured against it so a
+  // recovered-then-fallen run reports the real decline, not decline-from-start.
+  peakValue: number;
   drawdown: number;
   volatility: number;
   sectorExposure: Record<string, number>;
@@ -177,6 +204,7 @@ export interface RunDecision {
   thesisCode?: ThesisCode;
   confidence?: number;
   modulesConsulted: ModuleCode[];
+  turnoverCost: number;
   scoreContribution: number;
   quality: DecisionQuality;
   behavioralFlags: BehavioralFlag[];
@@ -192,14 +220,22 @@ export interface RunState {
   totalCheckpoints: number;
   phase: RunPhase;
   portfolio: PortfolioState;
+  // Finite run-scoped turnover allowance. Non-HOLD stances are unavailable
+  // once turnoverUsed reaches it.
+  turnoverBudget: number;
   playerScore: number;
   machineScore: number;
   decisions: RunDecision[];
   criticalFailure: boolean;
+  // The checkpoint at which the critical drawdown was first crossed, so the
+  // run can say where it happened rather than only that it did.
+  criticalFailureCheckpoint: number | null;
   activeModules: ModuleCode[];
   investigatedModules: ModuleCode[];
   pendingAction: ActionCode | null;
-  pendingThesis: ThesisCode | null;
+  // No pendingThesis: thesis is not an input to the commit. It is attached to
+  // the committed decision afterwards and can never revise it (Addendum C
+  // section C.5).
   pendingConfidence: number;
   result: 'ACTIVE' | 'PASSED' | 'FAILED' | 'MACHINE_BEATEN' | 'ABANDONED';
 }

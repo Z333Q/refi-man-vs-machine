@@ -29,7 +29,7 @@ function BenchmarkCard({ snapshot, title, category }: { snapshot: BenchmarkSnaps
       </div>
       <StatRow label="CAGR" value={`${(s.cagr * 100).toFixed(2)}%`} highlight />
       <StatRow label="SHARPE" value={s.sharpe.toFixed(2)} highlight />
-      <StatRow label="SORTINO" value={s.sortino !== undefined ? s.sortino.toFixed(2) : '—'} />
+      <StatRow label="SORTINO" value={s.sortino !== undefined ? s.sortino.toFixed(2) : ':'} />
       <StatRow label="MAX DRAWDOWN" value={`${(s.maxDrawdown * 100).toFixed(2)}%`} />
       <StatRow label="VOLATILITY" value={`${(s.volatility * 100).toFixed(2)}%`} />
       {s.calmar !== undefined && <StatRow label="CALMAR" value={s.calmar.toFixed(2)} />}
@@ -79,8 +79,8 @@ export default function MachineCardScreen({ onReturn }: Props) {
           <div className="border border-alert-amber/30 bg-alert-amber/5 px-5 py-4 text-xs leading-relaxed">
             <div className="text-alert-amber font-bold tracking-widest mb-2">CAPABILITY DIFFERENCE</div>
             <div className="text-alert-amber/80 space-y-1">
-              <div>YOUR MACHINE — LONG / CASH (no short exposure)</div>
-              <div>REFI RF/RL — DIRECTIONAL REGIME EXPOSURE (+1 LONG / -1 SHORT PER ASSET)</div>
+              <div>YOUR MACHINE: LONG / CASH (no short exposure)</div>
+              <div>REFI RF/RL: DIRECTIONAL REGIME EXPOSURE (+1 LONG / -1 SHORT PER ASSET)</div>
             </div>
             <div className="text-alert-amber/60 mt-2">
               THIS IS AN EXHIBITION COMPARISON, NOT A CONSTRAINT-MATCHED CONTEST.
@@ -145,7 +145,7 @@ export default function MachineCardScreen({ onReturn }: Props) {
                 </div>
                 <div className="mt-2 text-phosphor-dim text-xs">
                   THE EDGE DECAYS WITH EXECUTION LATENCY.
-                  TIMING IS NOT DECORATION — IT IS THE EDGE.
+                  TIMING IS NOT DECORATION: IT IS THE EDGE.
                 </div>
               </div>
             </div>
@@ -187,10 +187,10 @@ export default function MachineCardScreen({ onReturn }: Props) {
                 <div>
                   <div className="text-phosphor-dim tracking-widest mb-1">THE MACHINE DOES NOT</div>
                   <div className="space-y-1 text-phosphor-dim">
-                    <div>— PREDICT SPECIFIC PRICES</div>
-                    <div>— USE FUTURE INFORMATION</div>
-                    <div>— CHANGE RULES MID-RUN</div>
-                    <div>— HAVE ACCESS TO YOUR DECISIONS</div>
+                    <div>: PREDICT SPECIFIC PRICES</div>
+                    <div>: USE FUTURE INFORMATION</div>
+                    <div>: CHANGE RULES MID-RUN</div>
+                    <div>: HAVE ACCESS TO YOUR DECISIONS</div>
                   </div>
                 </div>
                 <div className="border-t border-phosphor/10 pt-3">

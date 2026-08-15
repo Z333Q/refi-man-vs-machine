@@ -31,12 +31,19 @@ export type GameEventType =
   | 'arena.failed'
   | 'arena.machine_beaten'
   | 'score.run.computed'
-  // §4 onboarding funnel — lightweight Alpha identity + handoff (§52/§59)
+  // §4 onboarding funnel: lightweight Alpha identity + handoff (§52/§59)
   | 'player.created'
   | 'player.progress_saved'
   | 'conversion.paper_cta_viewed'
   | 'conversion.paper_started'
-  | 'conversion.refi_handoff_started';
+  | 'conversion.refi_handoff_started'
+  // Gesture telemetry (Addendum C section C.4).
+  | 'gesture.started'
+  | 'gesture.armed'
+  | 'gesture.cancelled'
+  | 'gesture.dead_zone_released'
+  | 'gesture.committed'
+  | 'gesture.focused_controls_opened';
 
 // ─── Marketing-funnel attribution (§1.1 one-way bridge, §7) ──────────────────
 // First-touch attribution from the ReFi marketing funnel: UTM params plus a

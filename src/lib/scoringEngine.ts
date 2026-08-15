@@ -20,9 +20,28 @@ function computeRAERScore(playerReturn: number, machineReturn: number): number {
   return Math.round(100 * sigmoid(ir * 2));
 }
 
-function computeDrawdownScore(playerDD: number, machineDD: number): number {
-  const advantage = (machineDD - playerDD) * 100;
-  return clamp(50 + 5 * advantage, 0, 100);
+// Default risk budget a run is scored against when content authors no machine
+// drawdown for the checkpoint. Matches the COVID arena's critical drawdown.
+export const DEFAULT_RISK_BUDGET_DRAWDOWN = -0.20;
+
+function computeDrawdownScore(
+  playerDD: number,
+  machineDD: number | undefined,
+  riskBudget: number,
+): number {
+  // Where content authors the machine's drawdown, score the real comparison.
+  // Drawdowns are negative, so the shallower one is the larger number: the
+  // player is ahead when playerDD > machineDD. The original subtraction ran
+  // the other way, which was invisible only because the caller fabricated
+  // machineDD as playerDD - 0.02 and pinned this to a constant 40.
+  if (machineDD !== undefined) {
+    const advantage = (playerDD - machineDD) * 100;
+    return clamp(50 + 5 * advantage, 0, 100);
+  }
+  // Otherwise score against the arena's risk budget rather than inventing a
+  // machine number. Flat is 100; at the critical line is 0.
+  const consumed = Math.min(1, Math.abs(playerDD) / Math.abs(riskBudget));
+  return clamp(100 * (1 - consumed), 0, 100);
 }
 
 function computeDownsideScore(playerCapture: number): number {
@@ -116,18 +135,13 @@ function computePositionSizingScore(
   return clamp(score, 0, 100);
 }
 
-// ─── Machine baseline score by action ────────────────────────────────────────
+// ─── Machine par ──────────────────────────────────────────────────────────────
 
-function getMachineBaseScore(checkpoint: CheckpointData): number {
-  const baseScores: Record<string, number> = {
-    BACKGROUND_NOISE: 72,
-    REGIME_RECOGNITION: 79,
-    PANIC: 75,
-    POLICY_INTERVENTION: 81,
-    BOTTOMING: 76,
-    RECOVERY_REENTRY: 78,
-  };
-  return baseScores[checkpoint.phase] ?? 75;
+// Par is authored per checkpoint, not derived from the phase. A phase-constant
+// table made every checkpoint in a phase equally hard and left the engine
+// owning a difficulty curve that belongs to content.
+function getMachinePar(checkpoint: CheckpointData): number {
+  return checkpoint.machinePar;
 }
 
 // ─── Main scoring function ────────────────────────────────────────────────────
@@ -139,9 +153,16 @@ export function scoreCheckpoint(params: {
   confidence: number;
   turnoverUsed: number;
   portfolioDD: number;
-  machineDD: number;
+  // Authored machine drawdown for this checkpoint, where content supplies one.
+  // Absent it, drawdown is scored against the arena risk budget instead of a
+  // fabricated machine number.
+  machineDD?: number;
+  riskBudgetDD?: number;
 }): CheckpointScore {
-  const { action, checkpoint, flags, confidence, turnoverUsed, portfolioDD, machineDD } = params;
+  const {
+    action, checkpoint, flags, confidence, turnoverUsed, portfolioDD, machineDD,
+    riskBudgetDD = DEFAULT_RISK_BUDGET_DRAWDOWN,
+  } = params;
 
   const { portfolioEffect } = checkpoint;
   const actionBias = action === checkpoint.machineDecision.actionCode ? 0.95 : -0.15;
@@ -150,7 +171,7 @@ export function scoreCheckpoint(params: {
   const playerCapture = returnBias < 0 ? Math.abs(returnBias / (machineReturn - 0.001)) : 1.0;
 
   const raerScore = computeRAERScore(returnBias, machineReturn);
-  const drawdownScore = computeDrawdownScore(portfolioDD, machineDD);
+  const drawdownScore = computeDrawdownScore(portfolioDD, machineDD, riskBudgetDD);
   const downsideScore = computeDownsideScore(playerCapture);
   const recoveryScore = 65;
   const regimeAdaptScore = computeRegimeAdaptScore(action, checkpoint, flags);
@@ -168,7 +189,7 @@ export function scoreCheckpoint(params: {
     0.10 * consistencyScore
   );
 
-  const machineScore = getMachineBaseScore(checkpoint);
+  const machineScore = getMachinePar(checkpoint);
   const delta = totalScore - machineScore;
 
   const quality: DecisionQuality =

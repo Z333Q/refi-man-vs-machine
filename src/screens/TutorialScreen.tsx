@@ -38,7 +38,7 @@ const STEPS: Step[] = [
     id: 'WELCOME',
     title: 'WELCOME TO REFI ALPHA',
     instruction: 'You manage a U.S. equity portfolio through crisis.',
-    detail: 'Each checkpoint shows a real market signal. You decide how to respond; the machine responds too. First, learn the controls — this walkthrough highlights each one as we go.',
+    detail: 'Each checkpoint shows a real market signal. You decide how to respond; the machine responds too. First, learn the controls: this walkthrough highlights each one as we go.',
     action: 'BEGIN TUTORIAL',
     panel: 'SIGNAL',
     spotlight: null,
@@ -47,7 +47,7 @@ const STEPS: Step[] = [
     id: 'READ',
     title: 'LESSON 1 · READ THE SIGNAL',
     instruction: 'A market signal arrives. Read it before acting.',
-    detail: 'The signal tells you what changed — the date, the catalyst, the key numbers. It does not tell you what to do. This is your information advantage.',
+    detail: 'The signal tells you what changed: the date, the catalyst, the key numbers. It does not tell you what to do. This is your information advantage.',
     action: 'I HAVE READ THE SIGNAL',
     keyHint: 'PRESS ENTER WHEN READY',
     panel: 'SIGNAL',
@@ -67,7 +67,7 @@ const STEPS: Step[] = [
     id: 'REDUCE',
     title: 'LESSON 3 · REDUCE A POSITION',
     instruction: 'Click DAL, choose REDUCE, then ADD TO DRAFT.',
-    detail: 'REDUCE sells part of a position — not all of it. You are not panicking; you are managing size when the risk has changed.',
+    detail: 'REDUCE sells part of a position: not all of it. You are not panicking; you are managing size when the risk has changed.',
     action: 'I HAVE DRAFTED A REDUCE ORDER',
     keyHint: 'CLICK DAL → REDUCE → ADD TO DRAFT',
     panel: 'PORTFOLIO',
@@ -77,7 +77,7 @@ const STEPS: Step[] = [
     id: 'BUY',
     title: 'LESSON 4 · ADD TO A POSITION',
     instruction: 'Click a position, choose ADD, then ADD TO DRAFT.',
-    detail: 'ADD increases a position you already hold. When conviction is high and the price is right, you size up — not just hold.',
+    detail: 'ADD increases a position you already hold. When conviction is high and the price is right, you size up: not just hold.',
     action: 'I HAVE DRAFTED AN ADD ORDER',
     keyHint: 'CLICK A POSITION → ADD → ADD TO DRAFT',
     panel: 'PORTFOLIO',
@@ -87,7 +87,7 @@ const STEPS: Step[] = [
     id: 'REVIEW_RISK',
     title: 'LESSON 5 · REVIEW YOUR RISK',
     instruction: 'Check risk before committing anything.',
-    detail: 'Sector concentration, drawdown, and turnover live here. Never commit without checking your limits — the machine always checks risk first.',
+    detail: 'Sector concentration, drawdown, and turnover live here. Never commit without checking your limits: the machine always checks risk first.',
     action: 'I HAVE REVIEWED MY RISK',
     keyHint: 'THIS IS YOUR RISK PANEL',
     panel: 'RISK',
@@ -97,7 +97,7 @@ const STEPS: Step[] = [
     id: 'COMMIT',
     title: 'LESSON 6 · COMMIT YOUR DECISION',
     instruction: 'Your draft holds every pending order.',
-    detail: 'Once you commit, the checkpoint resolves and the market moves. A commit cannot be undone — read the draft carefully first.',
+    detail: 'Once you commit, the checkpoint resolves and the market moves. A commit cannot be undone: read the draft carefully first.',
     action: 'I UNDERSTAND HOW TO COMMIT',
     keyHint: 'ENTER TO COMMIT · ESC TO CANCEL',
     panel: 'DRAFT',
@@ -107,7 +107,7 @@ const STEPS: Step[] = [
     id: 'MACHINE',
     title: 'LESSON 7 · COMPARE TO THE MACHINE',
     instruction: 'After you commit, the machine reveals its move.',
-    detail: 'It discloses its action and reasoning — the audit. Your score comes from process quality, not from matching the machine. The machine never sees the future; neither do you.',
+    detail: 'It discloses its action and reasoning: the audit. Your score comes from process quality, not from matching the machine. The machine never sees the future; neither do you.',
     action: 'I UNDERSTAND MACHINE COMPARISON',
     panel: 'DRAFT',
     spotlight: '[data-spotlight="machine"]',
@@ -116,7 +116,7 @@ const STEPS: Step[] = [
     id: 'HOLD',
     title: 'LESSON 8 · HOLD IS A DECISION',
     instruction: 'Sometimes the right answer is to do nothing.',
-    detail: 'HOLD is not inaction — it is a scored decision that your thesis is unchanged. Pick a reason. A good HOLD beats a bad trade, and trading more is never rewarded.',
+    detail: 'HOLD is not inaction: it is a scored decision that your thesis is unchanged. Pick a reason. A good HOLD beats a bad trade, and trading more is never rewarded.',
     action: 'I UNDERSTAND HOW TO HOLD',
     keyHint: 'SELECT A HOLD REASON',
     panel: 'DRAFT',
@@ -149,7 +149,7 @@ const HOLD_REASONS = [
 const MOCK_SIGNAL = {
   title: 'WHO DECLARES PUBLIC HEALTH EMERGENCY OF INTERNATIONAL CONCERN',
   date: 'JAN 30, 2020',
-  body: 'The World Health Organization has declared the Wuhan coronavirus outbreak a Public Health Emergency of International Concern — the highest alert level. International travel restrictions are beginning. Airlines and hotels are pricing in a demand shock.',
+  body: 'The World Health Organization has declared the Wuhan coronavirus outbreak a Public Health Emergency of International Concern: the highest alert level. International travel restrictions are beginning. Airlines and hotels are pricing in a demand shock.',
   signals: [
     { label: 'VIX', value: '18.8', direction: 'up' as const },
     { label: 'S&P 500', value: '-1.8%', direction: 'down' as const },
@@ -416,7 +416,7 @@ export default function TutorialScreen({ onComplete }: Props) {
 
                 {/* Hold decision */}
                 <div data-spotlight="hold" className="mt-4 border-t border-phosphor/15 pt-4">
-                  <div className="text-phosphor-dim text-xs tracking-widest mb-3">OR HOLD — SELECT REASON</div>
+                  <div className="text-phosphor-dim text-xs tracking-widest mb-3">OR HOLD: SELECT REASON</div>
                   <div className="space-y-1.5">
                     {HOLD_REASONS.map(r => (
                       <button

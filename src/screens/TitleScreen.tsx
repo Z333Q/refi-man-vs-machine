@@ -147,7 +147,7 @@ export default function TitleScreen({ onEnter }: Props) {
       <button
         type="button"
         onClick={start}
-        aria-label="Press start — enter the market"
+        aria-label="Press start: enter the market"
         className="flex-1 w-full flex items-center justify-center px-5 py-8 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-phosphor/50"
       >
         <div className="w-full max-w-3xl mx-auto">

@@ -26,9 +26,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 1,
+    machinePar: 60,
     phase: 'BACKGROUND_NOISE',
     crisisDay: 'JAN 22',
-    signalTitle: 'WUHAN CLUSTER — EARLY REPORTS',
+    signalTitle: 'WUHAN CLUSTER: EARLY REPORTS',
     signalBody: 'A respiratory illness cluster in Wuhan. WHO is monitoring. Chinese authorities confirm human-to-human transmission is possible. Market consensus: contained within 6-8 weeks. S&P 500 at all-time highs.',
     marketSignals: [
       { indicator: 'SPX', value: '-0.3%', direction: 'down', magnitude: 'low' },
@@ -37,19 +38,19 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { indicator: 'HOTELS', value: '-0.9%', direction: 'down', magnitude: 'low' },
     ],
     eventFeed: [
-      { category: 'HEALTH', text: 'Wuhan cluster — human-to-human transmission confirmed', relevantAssets: ['DAL', 'MAR'] },
+      { category: 'HEALTH', text: 'Wuhan cluster: human-to-human transmission confirmed', relevantAssets: ['DAL', 'MAR'] },
       { category: 'TRAVEL', text: 'Airlines begin monitoring Wuhan-route passengers', relevantAssets: ['DAL'] },
-      { category: 'CONSENSUS', text: 'Analysts citing SARS 2003 template — contained within 6-8 weeks' },
+      { category: 'CONSENSUS', text: 'Analysts citing SARS 2003 template: contained within 6-8 weeks' },
       { category: 'MARKETS', text: 'S&P 500 at all-time high. No tail risk priced.' },
     ],
     portfolioEffect: { returnBias: 0.002, volatilityDelta: 0.01, correlationLevel: 0.30 },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
-        'Single unconfirmed outbreak — no policy trigger reached',
+        'Single unconfirmed outbreak: no policy trigger reached',
         'Travel exposure (DAL + MAR = 16%) below concentration threshold',
         'SARS analogy: 2003 resolved in 8 weeks with limited economic impact',
-        'Market at ATH — no drawdown, no risk flag',
+        'Market at ATH: no drawdown, no risk flag',
       ],
       policyReason: 'Hold. One data point. No portfolio policy trigger reached.',
       targetChanges: [],
@@ -57,8 +58,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'HOLD',
-        label: 'HOLD — single report, no confirmed outbreak pattern',
+        label: 'HOLD: single report, no confirmed outbreak pattern',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE'],
           alphaImpact: { TURNOVER_DISCIPLINE: 3, RULE_ADHERENCE: 2 },
@@ -68,19 +70,21 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
-        label: 'REDUCE DAL/MAR — travel exposure is obvious vulnerability',
+        label: 'REDUCE DAL/MAR: travel exposure is obvious vulnerability',
         shortLabel: 'REDUCE TRAVEL',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['EARLY_REGIME_SENSITIVITY'],
           alphaImpact: { REGIME_ADAPTATION: 4, TURNOVER_DISCIPLINE: -3 },
-          teachingMessage: 'Unusually early — but the travel vulnerability is real. Cost is turnover. If outbreak develops, this was prescient. If not, it was unnecessary churn.',
+          teachingMessage: 'Unusually early: but the travel vulnerability is real. Cost is turnover. If outbreak develops, this was prescient. If not, it was unnecessary churn.',
           machineComparison: 'Machine holds. Signal too weak. Your travel reduction is early but not wrong in direction.',
         },
       },
       {
         actionCode: 'RAISE_CASH',
-        label: 'RAISE CASH — headline risk is real',
+        label: 'RAISE CASH: headline risk is real',
         shortLabel: 'RAISE CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['ACTION_BIAS'],
           alphaImpact: { TURNOVER_DISCIPLINE: -5, POSITION_SIZING: -3 },
@@ -90,8 +94,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
-        label: 'ROTATE — cyclicals to healthcare/staples',
+        label: 'ROTATE: cyclicals to healthcare/staples',
         shortLabel: 'ROTATE DEFENSIVE',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['ACTION_BIAS', 'RECENCY_BIAS'],
           alphaImpact: { TURNOVER_DISCIPLINE: -4, REGIME_ADAPTATION: -2 },
@@ -103,7 +108,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     teachingPoint: 'BACKGROUND NOISE IS NOT A SIGNAL. ACTING ON EVERY EARLY REPORT ACCUMULATES TURNOVER COST WITHOUT EDGE.',
     isRegimeChange: false,
     isHoldValid: true,
-    holdTeaching: 'Correct. One unconfirmed data point — no trigger. Machine also holds.',
+    holdTeaching: 'Correct. One unconfirmed data point: no trigger. Machine also holds.',
   },
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -111,6 +116,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 2,
+    machinePar: 64,
     phase: 'BACKGROUND_NOISE',
     crisisDay: 'JAN 30',
     signalTitle: 'WHO GLOBAL HEALTH EMERGENCY',
@@ -122,7 +128,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { indicator: 'VIX', value: '17.4', direction: 'up', magnitude: 'medium' },
     ],
     eventFeed: [
-      { category: 'WHO', text: 'Global Health Emergency declared — strongest WHO alert level', relevantAssets: ['DAL', 'MAR'] },
+      { category: 'WHO', text: 'Global Health Emergency declared: strongest WHO alert level', relevantAssets: ['DAL', 'MAR'] },
       { category: 'AIRLINES', text: 'American, United suspend China routes. DAL monitoring.', relevantAssets: ['DAL'] },
       { category: 'HOTELS', text: 'Marriott: Asia-Pacific occupancy demand declining', relevantAssets: ['MAR'] },
       { category: 'MARKETS', text: 'Travel and leisure sector leading broad selloff today' },
@@ -131,9 +137,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
-        'WHO emergency declaration is a confirmed escalation — not background noise',
-        'DAL: Asia routes being cancelled — direct revenue impairment',
-        'MAR: Asia-Pacific occupancy declining — this is a revenue event, not demand softening',
+        'WHO emergency declaration is a confirmed escalation: not background noise',
+        'DAL: Asia routes being cancelled: direct revenue impairment',
+        'MAR: Asia-Pacific occupancy declining: this is a revenue event, not demand softening',
         'Travel cluster (DAL + MAR = 16%) warrants reduction on this confirmed catalyst',
       ],
       policyReason: 'Reduce travel exposure. WHO emergency triggers sector-specific risk policy.',
@@ -145,8 +151,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
-        label: 'REDUCE DAL/MAR — WHO emergency is the real trigger',
+        label: 'REDUCE DAL/MAR: WHO emergency is the real trigger',
         shortLabel: 'REDUCE TRAVEL',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { LOSS_CONTROL: 5, REGIME_ADAPTATION: 4, TURNOVER_DISCIPLINE: 2 },
@@ -156,30 +163,33 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'HOLD',
-        label: 'HOLD — outbreak may still be contained quickly',
+        label: 'HOLD: outbreak may still be contained quickly',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['ANCHORING'],
           alphaImpact: { LOSS_CONTROL: -3, REGIME_ADAPTATION: -2 },
-          teachingMessage: 'Anchoring to the SARS template. WHO emergency is a threshold above background noise — machine acts here.',
+          teachingMessage: 'Anchoring to the SARS template. WHO emergency is a threshold above background noise: machine acts here.',
           machineComparison: 'Machine reduces travel. Holding at WHO emergency signal is behind the risk curve.',
         },
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
-        label: 'ROTATE — sell travel, add JNJ/PG',
+        label: 'ROTATE: sell travel, add JNJ/PG',
         shortLabel: 'ROTATE DEFENSIVE',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { REGIME_ADAPTATION: 3, LOSS_CONTROL: 3, TURNOVER_DISCIPLINE: -1 },
-          teachingMessage: 'Sound direction. Rotating into healthcare and staples is valid — marginally more turnover than targeted reduction.',
+          teachingMessage: 'Sound direction. Rotating into healthcare and staples is valid: marginally more turnover than targeted reduction.',
           machineComparison: 'Machine targets DAL/MAR specifically. Rotation into defensives is the right direction.',
         },
       },
       {
         actionCode: 'RAISE_CASH',
-        label: 'RAISE CASH — convert travel exposure to dry powder',
+        label: 'RAISE CASH: convert travel exposure to dry powder',
         shortLabel: 'RAISE CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['CASH_DRAG'],
           alphaImpact: { LOSS_CONTROL: 2, POSITION_SIZING: -2 },
@@ -191,7 +201,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     teachingPoint: 'WHO EMERGENCY + ROUTE CANCELLATIONS = DIRECT REVENUE IMPAIRMENT. THE MACHINE DISTINGUISHES BETWEEN MARKET ANXIETY AND CONFIRMED BUSINESS IMPACT.',
     isRegimeChange: false,
     isHoldValid: false,
-    holdTeaching: 'Hold was valid at CP1. WHO emergency with route cancellations is confirmed revenue impairment — action warranted.',
+    holdTeaching: 'Hold was valid at CP1. WHO emergency with route cancellations is confirmed revenue impairment: action warranted.',
   },
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -199,10 +209,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 3,
+    machinePar: 63,
     phase: 'BACKGROUND_NOISE',
     crisisDay: 'FEB 12',
-    signalTitle: 'DIAMOND PRINCESS — SPREAD MECHANICS VISIBLE',
-    signalBody: 'Diamond Princess cruise ship: 355 cases among 3,700 passengers in a controlled environment. AAPL revises Q1 revenue guidance down citing China supply chain. Markets still near all-time highs — extreme disconnect between outbreak data and market pricing.',
+    signalTitle: 'DIAMOND PRINCESS: SPREAD MECHANICS VISIBLE',
+    signalBody: 'Diamond Princess cruise ship: 355 cases among 3,700 passengers in a controlled environment. AAPL revises Q1 revenue guidance down citing China supply chain. Markets still near all-time highs: extreme disconnect between outbreak data and market pricing.',
     marketSignals: [
       { indicator: 'SPX', value: '+0.4%', direction: 'up', magnitude: 'low' },
       { indicator: 'AAPL', value: '+2.1%', direction: 'up', magnitude: 'low' },
@@ -211,7 +222,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     ],
     eventFeed: [
       { category: 'OUTBREAK', text: 'Diamond Princess: 9.6% infection rate in controlled environment', relevantAssets: ['DAL', 'MAR'] },
-      { category: 'SUPPLY CHAIN', text: 'AAPL cuts Q1 revenue guidance — China factory disruption', relevantAssets: ['AAPL'] },
+      { category: 'SUPPLY CHAIN', text: 'AAPL cuts Q1 revenue guidance: China factory disruption', relevantAssets: ['AAPL'] },
       { category: 'MARKETS', text: 'S&P 500 at all-time highs. Outbreak narrative: still contained.' },
       { category: 'DISCONNECT', text: 'Outbreak data accelerating. Market disagrees.' },
     ],
@@ -219,10 +230,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
-        'Market at all-time highs — no portfolio drawdown trigger',
+        'Market at all-time highs: no portfolio drawdown trigger',
         'Travel reduction already completed at CP2',
-        'AAPL supply chain warning is worth monitoring — not yet an action',
-        'Diamond Princess is a contained ship environment — not community spread',
+        'AAPL supply chain warning is worth monitoring: not yet an action',
+        'Diamond Princess is a contained ship environment: not community spread',
       ],
       policyReason: 'Hold. No new portfolio policy trigger. Travel already reduced.',
       targetChanges: [],
@@ -230,8 +241,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'HOLD',
-        label: 'HOLD — market at ATH, travel already reduced',
+        label: 'HOLD: market at ATH, travel already reduced',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE'],
           alphaImpact: { TURNOVER_DISCIPLINE: 3, RULE_ADHERENCE: 2 },
@@ -241,19 +253,21 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
-        label: 'REDUCE AAPL — supply chain risk visible',
+        label: 'REDUCE AAPL: supply chain risk visible',
         shortLabel: 'REDUCE AAPL',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { STOCK_SELECTION: 3, REGIME_ADAPTATION: 2, TURNOVER_DISCIPLINE: -2 },
           teachingMessage: 'AAPL guidance cut is a real signal. Reducing on confirmed supply chain disruption is valid stock-selection logic.',
-          machineComparison: 'Machine holds AAPL for now — guidance cut is manageable. Your AAPL reduction is defensible.',
+          machineComparison: 'Machine holds AAPL for now: guidance cut is manageable. Your AAPL reduction is defensible.',
         },
       },
       {
         actionCode: 'ADD_RISK',
-        label: 'ADD EQUITIES — market confirming no systemic risk',
+        label: 'ADD EQUITIES: market confirming no systemic risk',
         shortLabel: 'ADD EQUITIES',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['CHASING', 'OVERCONFIDENCE'],
           alphaImpact: { TURNOVER_DISCIPLINE: -3, POSITION_SIZING: -4 },
@@ -263,8 +277,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'RAISE_CASH',
-        label: 'RAISE CASH — data divergence from price is a warning',
+        label: 'RAISE CASH: data divergence from price is a warning',
         shortLabel: 'RAISE CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['EARLY_REGIME_SENSITIVITY', 'CONTRARIAN_EARLY'],
           alphaImpact: { REGIME_ADAPTATION: 3, TURNOVER_DISCIPLINE: -2 },
@@ -284,10 +299,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 4,
+    machinePar: 70,
     phase: 'REGIME_RECOGNITION',
     crisisDay: 'FEB 21',
-    signalTitle: 'ITALY — COMMUNITY SPREAD IN DEVELOPED WORLD',
-    signalBody: 'Italy reports 152 cases with no China travel link. Community transmission in a developed market confirmed. This breaks the containment playbook. SPX -3.4% — first significant single-day decline from ATH.',
+    signalTitle: 'ITALY: COMMUNITY SPREAD IN DEVELOPED WORLD',
+    signalBody: 'Italy reports 152 cases with no China travel link. Community transmission in a developed market confirmed. This breaks the containment playbook. SPX -3.4%: first significant single-day decline from ATH.',
     marketSignals: [
       { indicator: 'SPX', value: '-3.4%', direction: 'down', magnitude: 'high' },
       { indicator: 'VIX', value: '25.0', direction: 'up', magnitude: 'high' },
@@ -295,7 +311,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { indicator: 'JPM', value: '-3.8%', direction: 'down', magnitude: 'medium' },
     ],
     eventFeed: [
-      { category: 'ITALY', text: 'Community transmission confirmed — no travel link to China' },
+      { category: 'ITALY', text: 'Community transmission confirmed: no travel link to China' },
       { category: 'REGIME', text: 'Containment model fails. Global spread now plausible.' },
       { category: 'EQUITIES', text: 'Cyclicals and financials leading the selloff' },
       { category: 'VIX', text: 'VIX above 25 for first time since August 2019' },
@@ -304,7 +320,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
-        'Community transmission breaks the epidemic containment model — this is a new category',
+        'Community transmission breaks the epidemic containment model: this is a new category',
         'Economic disruption now plausible across developed markets, not just China',
         'Cyclicals (XOM, CAT, HD) face demand destruction risk',
         'Financials (JPM) face loan book stress and credit cycle risk',
@@ -320,19 +336,21 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
-        label: 'REDUCE cyclicals/financials — regime has shifted',
+        label: 'REDUCE cyclicals/financials: regime has shifted',
         shortLabel: 'REDUCE CYCLICALS',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { REGIME_ADAPTATION: 6, LOSS_CONTROL: 5, TURNOVER_DISCIPLINE: 2 },
           teachingMessage: 'Regime recognition. Community spread changes the economic disruption calculus. Cyclicals and financials have the highest sensitivity to demand destruction.',
-          machineComparison: 'Machine reduces XOM, JPM, CAT. Same thesis — economic disruption now plausible at scale.',
+          machineComparison: 'Machine reduces XOM, JPM, CAT. Same thesis: economic disruption now plausible at scale.',
         },
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
-        label: 'ROTATE — sell cyclicals, add JNJ/PG',
+        label: 'ROTATE: sell cyclicals, add JNJ/PG',
         shortLabel: 'ROTATE DEFENSIVE',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { REGIME_ADAPTATION: 5, LOSS_CONTROL: 4 },
@@ -342,8 +360,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'RAISE_CASH',
-        label: 'RAISE CASH — build liquidity for what comes next',
+        label: 'RAISE CASH: build liquidity for what comes next',
         shortLabel: 'RAISE CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { LOSS_CONTROL: 4, REGIME_ADAPTATION: 3 },
@@ -353,13 +372,14 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'HOLD',
-        label: 'HOLD — one bad day does not make a regime',
+        label: 'HOLD: one bad day does not make a regime',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['ANCHORING', 'RECENCY_BIAS'],
           alphaImpact: { REGIME_ADAPTATION: -6, LOSS_CONTROL: -4 },
           teachingMessage: 'Italy community spread is a qualitative regime change, not just a bad price day. Machine acts on the structural signal.',
-          machineComparison: 'Machine reduces. Community transmission breaks the containment model — this is the machine\'s trigger.',
+          machineComparison: 'Machine reduces. Community transmission breaks the containment model: this is the machine\'s trigger.',
         },
       },
     ],
@@ -374,10 +394,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 5,
+    machinePar: 74,
     phase: 'REGIME_RECOGNITION',
     crisisDay: 'FEB 27',
-    signalTitle: 'FASTEST CORRECTION IN HISTORY — -10% IN 6 DAYS',
-    signalBody: 'S&P 500 falls 10% from ATH in 6 trading days — fastest correction on record. VIX above 40. Q1 earnings estimates still unchanged. The repricing is faster than analyst models.',
+    signalTitle: 'FASTEST CORRECTION IN HISTORY: -10% IN 6 DAYS',
+    signalBody: 'S&P 500 falls 10% from ATH in 6 trading days: fastest correction on record. VIX above 40. Q1 earnings estimates still unchanged. The repricing is faster than analyst models.',
     marketSignals: [
       { indicator: 'SPX', value: '-4.4%', direction: 'down', magnitude: 'extreme' },
       { indicator: 'VIX', value: '40.1', direction: 'up', magnitude: 'extreme' },
@@ -386,8 +407,8 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     ],
     eventFeed: [
       { category: 'SPEED', text: 'S&P correction fastest from ATH in 90-year history' },
-      { category: 'CORRELATION', text: 'All equity sectors falling together — no sector providing cover' },
-      { category: 'ESTIMATES', text: 'Q1 earnings estimates unchanged — fundamental re-rating incoming' },
+      { category: 'CORRELATION', text: 'All equity sectors falling together: no sector providing cover' },
+      { category: 'ESTIMATES', text: 'Q1 earnings estimates unchanged: fundamental re-rating incoming' },
       { category: 'BEHAVIOR', text: 'Retail panic selling beginning to appear in data' },
     ],
     portfolioEffect: { returnBias: -0.038, volatilityDelta: 0.06, correlationLevel: 0.78 },
@@ -396,7 +417,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       reasoning: [
         'Reductions already completed at CP2 and CP4',
         'Selling into VIX 40 velocity compounds realized losses with bad execution',
-        'Bid-ask spreads elevated — transaction cost spike',
+        'Bid-ask spreads elevated: transaction cost spike',
         'Machine policy: no panic selling after systematic reduction completed',
         'Current exposure is the deliberate post-reduction position',
       ],
@@ -406,19 +427,21 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'HOLD',
-        label: 'HOLD — already reduced; selling into VIX 40 is panic',
+        label: 'HOLD: already reduced; selling into VIX 40 is panic',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { LOSS_CONTROL: 4, TURNOVER_DISCIPLINE: 5, RULE_ADHERENCE: 3 },
-          teachingMessage: 'Correct. Position right-sized at CP2 and CP4. Selling into velocity at VIX 40 is the behavioral error — not process.',
+          teachingMessage: 'Correct. Position right-sized at CP2 and CP4. Selling into velocity at VIX 40 is the behavioral error: not process.',
           machineComparison: 'Machine holds. Panic selling into speed is not a policy action.',
         },
       },
       {
         actionCode: 'REDUCE',
-        label: 'REDUCE further — momentum is clearly down',
+        label: 'REDUCE further: momentum is clearly down',
         shortLabel: 'REDUCE MORE',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE', 'RECENCY_BIAS'],
           alphaImpact: { LOSS_CONTROL: -4, TURNOVER_DISCIPLINE: -5, REGIME_ADAPTATION: -3 },
@@ -428,19 +451,21 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
-        label: 'ADD EQUITIES — VIX 40 is a historical buy signal',
+        label: 'ADD EQUITIES: VIX 40 is a historical buy signal',
         shortLabel: 'BUY VIX 40',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['CONTRARIAN_EARLY', 'OVERCONFIDENCE'],
           alphaImpact: { REENTRY_DISCIPLINE: -4, POSITION_SIZING: -5 },
-          teachingMessage: 'VIX 40 can reach 80. Adding into a -10% correction week without a policy floor signal is not contrarian — it is averaging down.',
+          teachingMessage: 'VIX 40 can reach 80. Adding into a -10% correction week without a policy floor signal is not contrarian: it is averaging down.',
           machineComparison: 'Machine holds. No re-entry without a stabilization signal.',
         },
       },
       {
         actionCode: 'RAISE_CASH',
-        label: 'RAISE CASH — protect what remains',
+        label: 'RAISE CASH: protect what remains',
         shortLabel: 'RAISE CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE'],
           alphaImpact: { LOSS_CONTROL: -3, TURNOVER_DISCIPLINE: -4 },
@@ -460,10 +485,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 6,
+    machinePar: 66,
     phase: 'REGIME_RECOGNITION',
     crisisDay: 'MAR 2',
-    signalTitle: 'EMERGENCY FED CUT — RALLY FADES TO FLAT',
-    signalBody: 'Fed cuts 50bp in emergency inter-meeting session. Market initially surges +4.6%. Then fades to near-flat. Emergency action that cannot hold a rally is the signal. JPM underperforms — rate cuts compress bank NIM.',
+    signalTitle: 'EMERGENCY FED CUT: RALLY FADES TO FLAT',
+    signalBody: 'Fed cuts 50bp in emergency inter-meeting session. Market initially surges +4.6%. Then fades to near-flat. Emergency action that cannot hold a rally is the signal. JPM underperforms: rate cuts compress bank NIM.',
     marketSignals: [
       { indicator: 'SPX', value: '+0.5% (peak +4.6%)', direction: 'up', magnitude: 'low' },
       { indicator: 'JPM', value: '-2.1%', direction: 'down', magnitude: 'medium' },
@@ -471,9 +497,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { indicator: 'VIX', value: '33.4', direction: 'down', magnitude: 'medium' },
     ],
     eventFeed: [
-      { category: 'FED', text: 'Emergency 50bp cut — first inter-meeting cut since 2008' },
-      { category: 'SIGNAL', text: 'SPX +4.6% rally fades to near-flat — market pricing severity not policy' },
-      { category: 'BANKS', text: 'JPM underperforms — NIM compression from rate cut', relevantAssets: ['JPM'] },
+      { category: 'FED', text: 'Emergency 50bp cut: first inter-meeting cut since 2008' },
+      { category: 'SIGNAL', text: 'SPX +4.6% rally fades to near-flat: market pricing severity not policy' },
+      { category: 'BANKS', text: 'JPM underperforms: NIM compression from rate cut', relevantAssets: ['JPM'] },
       { category: 'ENERGY', text: 'XOM: demand destruction is not rate-sensitive', relevantAssets: ['XOM'] },
     ],
     portfolioEffect: { returnBias: -0.005, volatilityDelta: -0.01, correlationLevel: 0.65 },
@@ -483,7 +509,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         'Faded rally after emergency cut signals market pricing severity, not rate sensitivity',
         'Portfolio already adjusted from prior reductions',
         'JPM NIM compression worth monitoring but not yet an action',
-        'No stabilization signal yet — hold current equity mix',
+        'No stabilization signal yet: hold current equity mix',
       ],
       policyReason: 'Hold. Ambiguous policy signal. Monitor JPM and XOM.',
       targetChanges: [],
@@ -491,8 +517,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'HOLD',
-        label: 'HOLD — faded rally is a warning, not a buying signal',
+        label: 'HOLD: faded rally is a warning, not a buying signal',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { DECISION_CONSISTENCY: 4, TURNOVER_DISCIPLINE: 3 },
@@ -502,34 +529,37 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
-        label: 'ADD EQUITIES — Fed put confirmed',
+        label: 'ADD EQUITIES: Fed put confirmed',
         shortLabel: 'ADD ON FED',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['RECENCY_BIAS', 'CHASING'],
           alphaImpact: { REENTRY_DISCIPLINE: -5, REGIME_ADAPTATION: -3 },
           teachingMessage: 'The rally faded. Adding into a policy bounce that couldn\'t hold is chasing a reversed signal.',
-          machineComparison: 'Machine holds. Fed cut did not stabilize the market — that\'s the key information.',
+          machineComparison: 'Machine holds. Fed cut did not stabilize the market: that\'s the key information.',
         },
       },
       {
         actionCode: 'REDUCE',
-        label: 'REDUCE JPM — rate cuts structurally hurt bank margins',
+        label: 'REDUCE JPM: rate cuts structurally hurt bank margins',
         shortLabel: 'REDUCE JPM',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { REGIME_ADAPTATION: 3, STOCK_SELECTION: 3, TURNOVER_DISCIPLINE: -1 },
           teachingMessage: 'Rate cut → NIM compression → JPM margin pressure. Correct sector logic. Machine holds JPM for now but your reduction is defensible.',
-          machineComparison: 'Machine holds JPM this checkpoint. Your reduction has valid logic — marginal turnover cost.',
+          machineComparison: 'Machine holds JPM this checkpoint. Your reduction has valid logic: marginal turnover cost.',
         },
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
-        label: 'ROTATE into JNJ/PG — rate cut benefits defensives',
+        label: 'ROTATE into JNJ/PG: rate cut benefits defensives',
         shortLabel: 'ROTATE DEFENSIVE',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { REGIME_ADAPTATION: 2, TURNOVER_DISCIPLINE: -2 },
-          teachingMessage: 'Defensives benefit from lower rates and uncertainty. Reasonable — portfolio already has 16% in JNJ/PG.',
+          teachingMessage: 'Defensives benefit from lower rates and uncertainty. Reasonable: portfolio already has 16% in JNJ/PG.',
           machineComparison: 'Machine holds. Portfolio already 16% in defensives. Rotation increases concentration.',
         },
       },
@@ -545,10 +575,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 7,
+    machinePar: 76,
     phase: 'PANIC',
     crisisDay: 'MAR 9',
-    signalTitle: 'CIRCUIT BREAKER #1 — TRADING HALTED',
-    signalBody: 'S&P futures fall 7% overnight. OPEC+ collapses simultaneously — Saudi Arabia launches oil price war. Circuit breaker triggered at open. Market halted 15 minutes. VIX 54. No reliable prices. XOM -14.8% intraday.',
+    signalTitle: 'CIRCUIT BREAKER #1: TRADING HALTED',
+    signalBody: 'S&P futures fall 7% overnight. OPEC+ collapses simultaneously: Saudi Arabia launches oil price war. Circuit breaker triggered at open. Market halted 15 minutes. VIX 54. No reliable prices. XOM -14.8% intraday.',
     marketSignals: [
       { indicator: 'STATUS', value: 'HALTED', direction: 'neutral', magnitude: 'extreme' },
       { indicator: 'SPX', value: '-7.6%', direction: 'down', magnitude: 'extreme' },
@@ -556,29 +587,30 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { indicator: 'VIX', value: '54.4', direction: 'up', magnitude: 'extreme' },
     ],
     eventFeed: [
-      { category: 'HALT', text: 'Circuit breaker Level 1 — 15-minute trading halt at open' },
+      { category: 'HALT', text: 'Circuit breaker Level 1: 15-minute trading halt at open' },
       { category: 'OIL WAR', text: 'OPEC+ collapses. Saudi Arabia to ramp production in April.', relevantAssets: ['XOM'] },
-      { category: 'ENERGY', text: 'XOM -14.8% intraday — oil price war + demand destruction simultaneous', relevantAssets: ['XOM'] },
+      { category: 'ENERGY', text: 'XOM -14.8% intraday: oil price war + demand destruction simultaneous', relevantAssets: ['XOM'] },
       { category: 'SPREADS', text: 'Bid-ask spreads 3-5x normal. Execution price unknown.' },
     ],
     portfolioEffect: { returnBias: -0.062, volatilityDelta: 0.12, correlationLevel: 0.90 },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
-        'Circuit breaker: price discovery has failed — no reliable quotes',
-        'Bid-ask spreads extreme — any execution destroys value on spread alone',
+        'Circuit breaker: price discovery has failed: no reliable quotes',
+        'Bid-ask spreads extreme: any execution destroys value on spread alone',
         'XOM has oil price exposure but selling into circuit breaker is speculation on reopen price',
         'Machine policy: no execution during trading halt',
         'Portfolio was sized correctly. Hold until price discovery restores.',
       ],
-      policyReason: 'Hold. Circuit breaker policy — no execution without reliable price discovery.',
+      policyReason: 'Hold. Circuit breaker policy: no execution without reliable price discovery.',
       targetChanges: [],
     },
     availableActions: [
       {
         actionCode: 'HOLD',
-        label: 'HOLD — no price discovery; circuit breaker policy',
+        label: 'HOLD: no price discovery; circuit breaker policy',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { RULE_ADHERENCE: 6, LOSS_CONTROL: 4, TURNOVER_DISCIPLINE: 4 },
@@ -588,8 +620,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
-        label: 'QUEUE SELLS at reopen — execute regardless',
+        label: 'QUEUE SELLS at reopen: execute regardless',
         shortLabel: 'SELL AT REOPEN',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE', 'ACTION_BIAS'],
           alphaImpact: { LOSS_CONTROL: -6, RULE_ADHERENCE: -5, TURNOVER_DISCIPLINE: -5 },
@@ -599,8 +632,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
-        label: 'BUY EQUITIES — VIX 54 is an extreme buying signal',
+        label: 'BUY EQUITIES: VIX 54 is an extreme buying signal',
         shortLabel: 'BUY PANIC',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['CONTRARIAN_EARLY', 'OVERCONFIDENCE'],
           alphaImpact: { REENTRY_DISCIPLINE: -5, POSITION_SIZING: -6 },
@@ -610,17 +644,18 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'RAISE_CASH',
-        label: 'RAISE CASH — maximum protection',
+        label: 'RAISE CASH: maximum protection',
         shortLabel: 'MAX CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE'],
           alphaImpact: { LOSS_CONTROL: -4, TURNOVER_DISCIPLINE: -4 },
-          teachingMessage: 'Same execution problem — raising cash during halt means selling at worst possible reopening price on extreme spreads.',
+          teachingMessage: 'Same execution problem: raising cash during halt means selling at worst possible reopening price on extreme spreads.',
           machineComparison: 'Machine holds. Cash raise during circuit breaker is speculation on the reopen gap.',
         },
       },
     ],
-    teachingPoint: 'CIRCUIT BREAKERS EXIST BECAUSE THE MARKET CANNOT PRICE RISK AT THAT MOMENT. THE MACHINE HAS AN EXPLICIT POLICY: NO EXECUTION WITHOUT PRICE DISCOVERY. THIS IS NOT INACTION — IT IS THE RULE.',
+    teachingPoint: 'CIRCUIT BREAKERS EXIST BECAUSE THE MARKET CANNOT PRICE RISK AT THAT MOMENT. THE MACHINE HAS AN EXPLICIT POLICY: NO EXECUTION WITHOUT PRICE DISCOVERY. THIS IS NOT INACTION: IT IS THE RULE.',
     isRegimeChange: false,
     isHoldValid: true,
     holdTeaching: 'Hold is mandatory policy during circuit breakers. Machine holds explicitly.',
@@ -631,10 +666,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 8,
+    machinePar: 78,
     phase: 'PANIC',
     crisisDay: 'MAR 11',
-    signalTitle: 'WHO PANDEMIC DECLARATION — TRAVEL BAN',
-    signalBody: 'WHO declares COVID-19 a pandemic. U.S. announces travel ban to Europe. NBA suspended. SPX -4.9%. DAL -11.2%. MAR -9.4%. Pandemic declaration activates force majeure clauses globally — fundamental legal and operational change.',
+    signalTitle: 'WHO PANDEMIC DECLARATION: TRAVEL BAN',
+    signalBody: 'WHO declares COVID-19 a pandemic. U.S. announces travel ban to Europe. NBA suspended. SPX -4.9%. DAL -11.2%. MAR -9.4%. Pandemic declaration activates force majeure clauses globally: fundamental legal and operational change.',
     marketSignals: [
       { indicator: 'SPX', value: '-4.9%', direction: 'down', magnitude: 'extreme' },
       { indicator: 'DAL', value: '-11.2%', direction: 'down', magnitude: 'extreme' },
@@ -642,10 +678,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { indicator: 'JNJ', value: '-2.1%', direction: 'down', magnitude: 'low' },
     ],
     eventFeed: [
-      { category: 'WHO', text: 'COVID-19 declared a pandemic — first since H1N1 2009' },
-      { category: 'TRAVEL BAN', text: 'U.S. travel ban to Europe — DAL and MAR direct operational impact', relevantAssets: ['DAL', 'MAR'] },
-      { category: 'LEGAL', text: 'Pandemic declaration activates force majeure clauses — contract risk across sectors' },
-      { category: 'ECONOMY', text: 'NBA, NCAA, NHL suspending — economic disruption now broad-based' },
+      { category: 'WHO', text: 'COVID-19 declared a pandemic: first since H1N1 2009' },
+      { category: 'TRAVEL BAN', text: 'U.S. travel ban to Europe: DAL and MAR direct operational impact', relevantAssets: ['DAL', 'MAR'] },
+      { category: 'LEGAL', text: 'Pandemic declaration activates force majeure clauses: contract risk across sectors' },
+      { category: 'ECONOMY', text: 'NBA, NCAA, NHL suspending: economic disruption now broad-based' },
     ],
     portfolioEffect: { returnBias: -0.042, volatilityDelta: 0.08, correlationLevel: 0.87 },
     machineDecision: {
@@ -653,9 +689,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       reasoning: [
         'Pandemic + travel ban = operational cessation for DAL, not demand softening',
         'MAR hotel bookings will collapse with travel ban in place',
-        'If travel positions not already reduced — reduce now on confirmed operational impact',
+        'If travel positions not already reduced: reduce now on confirmed operational impact',
         'Pandemic declaration is a legal threshold that changes business model assumptions',
-        'JNJ and PG are defensive holdbacks — maintain',
+        'JNJ and PG are defensive holdbacks: maintain',
       ],
       policyReason: 'Reduce remaining travel exposure. Pandemic + travel ban = operational cessation trigger.',
       targetChanges: [
@@ -666,19 +702,21 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
-        label: 'REDUCE DAL/MAR — travel ban = zero revenue, not reduced revenue',
+        label: 'REDUCE DAL/MAR: travel ban = zero revenue, not reduced revenue',
         shortLabel: 'REDUCE TRAVEL',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { LOSS_CONTROL: 5, REGIME_ADAPTATION: 4, STOCK_SELECTION: 4 },
-          teachingMessage: 'Pandemic + travel ban is not a price event — it is an operational event. Revenue model broken. Correct fundamental distinction.',
+          teachingMessage: 'Pandemic + travel ban is not a price event: it is an operational event. Revenue model broken. Correct fundamental distinction.',
           machineComparison: 'Machine reduces remaining travel. Travel ban means zero revenue. This is not "already priced."',
         },
       },
       {
         actionCode: 'HOLD',
-        label: 'HOLD — -11% means the damage is priced in',
+        label: 'HOLD: -11% means the damage is priced in',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['ANCHORING', 'RECENCY_BIAS'],
           alphaImpact: { LOSS_CONTROL: -4, REGIME_ADAPTATION: -3 },
@@ -688,8 +726,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
-        label: 'ROTATE — sell travel, add healthcare',
+        label: 'ROTATE: sell travel, add healthcare',
         shortLabel: 'ROTATE TO JNJ',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { REGIME_ADAPTATION: 3, LOSS_CONTROL: 3 },
@@ -699,8 +738,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'RAISE_CASH',
-        label: 'RAISE CASH — maximum liquidity',
+        label: 'RAISE CASH: maximum liquidity',
         shortLabel: 'MAX CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['CASH_DRAG'],
           alphaImpact: { LOSS_CONTROL: 2, POSITION_SIZING: -2 },
@@ -709,10 +749,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
         },
       },
     ],
-    teachingPoint: 'PANDEMIC DECLARATION IS A LEGAL AND OPERATIONAL THRESHOLD — NOT A PRICE EVENT. REVENUE MODEL CHANGES ARE DIFFERENT FROM VOLATILITY. THE MACHINE RESPONDS TO FUNDAMENTALS.',
+    teachingPoint: 'PANDEMIC DECLARATION IS A LEGAL AND OPERATIONAL THRESHOLD: NOT A PRICE EVENT. REVENUE MODEL CHANGES ARE DIFFERENT FROM VOLATILITY. THE MACHINE RESPONDS TO FUNDAMENTALS.',
     isRegimeChange: true,
     isHoldValid: false,
-    holdTeaching: 'Travel ban + pandemic = zero revenue. This is not "already priced" — it is a new fundamental state.',
+    holdTeaching: 'Travel ban + pandemic = zero revenue. This is not "already priced": it is a new fundamental state.',
   },
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -720,10 +760,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 9,
+    machinePar: 80,
     phase: 'PANIC',
     crisisDay: 'MAR 16',
-    signalTitle: 'CIRCUIT BREAKER #3 — WORST DAY SINCE 1987',
-    signalBody: 'S&P -12% — worst single-day decline since Black Monday 1987. Circuit breaker #3 triggered. Fed cut to 0-0.25% Sunday — market ignores it. VIX 82.7. Portfolio at -28% from starting value. All equities correlated.',
+    signalTitle: 'CIRCUIT BREAKER #3: WORST DAY SINCE 1987',
+    signalBody: 'S&P -12%: worst single-day decline since Black Monday 1987. Circuit breaker #3 triggered. Fed cut to 0-0.25% Sunday: market ignores it. VIX 82.7. Portfolio at -28% from starting value. All equities correlated.',
     marketSignals: [
       { indicator: 'SPX', value: '-12.0%', direction: 'down', magnitude: 'extreme' },
       { indicator: 'VIX', value: '82.7', direction: 'up', magnitude: 'extreme' },
@@ -733,16 +774,16 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     eventFeed: [
       { category: 'HISTORY', text: 'Worst single-day since Black Monday 1987' },
       { category: 'FED', text: 'Fed cut to 0-0.25% + $700B QE announced Sunday. Market falls -12% anyway.' },
-      { category: 'CORRELATION', text: 'All equities at 0.95 correlation — diversification has failed today' },
+      { category: 'CORRELATION', text: 'All equities at 0.95 correlation: diversification has failed today' },
       { category: 'LIQUIDITY', text: 'Bid-ask spreads 5-10x normal. Some names effectively unquoteable.' },
     ],
     portfolioEffect: { returnBias: -0.092, volatilityDelta: 0.20, correlationLevel: 0.95 },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
-        'VIX 82.7 — transaction costs at extreme levels, execution destroys value',
-        'Fed cut + QE did not stop the decline — market pricing systemic shock',
-        'Portfolio reduced progressively at CP2, CP4, CP8 — current exposure is deliberate',
+        'VIX 82.7: transaction costs at extreme levels, execution destroys value',
+        'Fed cut + QE did not stop the decline: market pricing systemic shock',
+        'Portfolio reduced progressively at CP2, CP4, CP8: current exposure is deliberate',
         'Selling at VIX 82 would be worst execution in the entire crisis',
         'Machine policy: no execution at VIX above 60',
       ],
@@ -752,19 +793,21 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'HOLD',
-        label: 'HOLD — VIX 82 means selling at maximum destruction cost',
+        label: 'HOLD: VIX 82 means selling at maximum destruction cost',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { RULE_ADHERENCE: 6, LOSS_CONTROL: 5, DECISION_CONSISTENCY: 4 },
-          teachingMessage: 'Correct. VIX 82 means bid-ask spreads are 5-10x normal. Selling locks in losses at maximum execution cost. Machine holds — its rule exists precisely for this moment.',
+          teachingMessage: 'Correct. VIX 82 means bid-ask spreads are 5-10x normal. Selling locks in losses at maximum execution cost. Machine holds: its rule exists precisely for this moment.',
           machineComparison: 'Machine holds. Policy does not permit execution at VIX above 60.',
         },
       },
       {
         actionCode: 'REDUCE',
-        label: 'REDUCE — get flat before things get worse',
+        label: 'REDUCE: get flat before things get worse',
         shortLabel: 'SELL ALL',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE', 'ACTION_BIAS'],
           alphaImpact: { LOSS_CONTROL: -8, RULE_ADHERENCE: -7, TURNOVER_DISCIPLINE: -7 },
@@ -774,19 +817,21 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
-        label: 'BUY — VIX 82 has never lasted',
+        label: 'BUY: VIX 82 has never lasted',
         shortLabel: 'BUY PANIC',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['CONTRARIAN_EARLY'],
           alphaImpact: { REENTRY_DISCIPLINE: -4, POSITION_SIZING: -5 },
-          teachingMessage: 'VIX 82 has never lasted — but it can persist for weeks. No policy floor yet. Adding into maximum uncertainty is premature.',
+          teachingMessage: 'VIX 82 has never lasted: but it can persist for weeks. No policy floor yet. Adding into maximum uncertainty is premature.',
           machineComparison: 'Machine holds. No re-entry signal even at historic VIX extremes.',
         },
       },
       {
         actionCode: 'RAISE_CASH',
-        label: 'RAISE CASH — maximum defense',
+        label: 'RAISE CASH: maximum defense',
         shortLabel: 'MAX CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['PANIC_REDUCTION_LARGE'],
           alphaImpact: { LOSS_CONTROL: -5, TURNOVER_DISCIPLINE: -5 },
@@ -806,10 +851,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 10,
+    machinePar: 79,
     phase: 'POLICY_INTERVENTION',
     crisisDay: 'MAR 23',
-    signalTitle: 'FED UNLIMITED QE — CARES ACT IMMINENT',
-    signalBody: 'Fed announces unlimited asset purchases — first time in history. Congress confirms $2.2T CARES Act will pass this week. S&P still falls -3% as market awaits fiscal confirmation. This is the last leg of the decline. Trough is -33.9% from February high.',
+    signalTitle: 'FED UNLIMITED QE: CARES ACT IMMINENT',
+    signalBody: 'Fed announces unlimited asset purchases: first time in history. Congress confirms $2.2T CARES Act will pass this week. S&P still falls -3% as market awaits fiscal confirmation. This is the last leg of the decline. Trough is -33.9% from February high.',
     marketSignals: [
       { indicator: 'SPX', value: '-2.9%', direction: 'down', magnitude: 'medium' },
       { indicator: 'POLICY', value: 'UNLIMITED QE', direction: 'neutral', magnitude: 'extreme' },
@@ -817,8 +863,8 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { indicator: 'JNJ', value: '+0.4%', direction: 'up', magnitude: 'low' },
     ],
     eventFeed: [
-      { category: 'FED', text: 'Unlimited QE announced — no cap on purchases' },
-      { category: 'FISCAL', text: '$2.2T CARES Act — bipartisan; signing expected within days' },
+      { category: 'FED', text: 'Unlimited QE announced: no cap on purchases' },
+      { category: 'FISCAL', text: '$2.2T CARES Act: bipartisan; signing expected within days' },
       { category: 'DEFENSIVES', text: 'JNJ and PG beginning to show relative stability', relevantAssets: ['JNJ', 'PG'] },
       { category: 'SIGNAL', text: 'Policy floor being constructed. Market still falling on fiscal uncertainty.' },
     ],
@@ -826,11 +872,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     machineDecision: {
       actionCode: 'STAGED_BUY',
       reasoning: [
-        'Unlimited QE removes liquidity collapse tail risk — systemic failure scenario off the table',
-        '$2.2T CARES Act imminent — economic floor being constructed',
-        'Begin staged equity re-entry — 25% of planned allocation this checkpoint',
+        'Unlimited QE removes liquidity collapse tail risk: systemic failure scenario off the table',
+        '$2.2T CARES Act imminent: economic floor being constructed',
+        'Begin staged equity re-entry: 25% of planned allocation this checkpoint',
         'Quality growth (MSFT) and defensive growth (JNJ) first buys',
-        'Not all-in — staged to manage execution risk as market still falling',
+        'Not all-in: staged to manage execution risk as market still falling',
       ],
       policyReason: 'Begin staged equity re-entry. Policy floor established. 25% of planned allocation.',
       targetChanges: [
@@ -841,41 +887,45 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'STAGED_BUY',
-        label: 'STAGED BUY — begin re-entry, policy floor confirmed',
+        label: 'STAGED BUY: begin re-entry, policy floor confirmed',
         shortLabel: 'STAGED BUY',
+        turnoverCost: 0.03,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { REENTRY_DISCIPLINE: 6, REGIME_ADAPTATION: 5, POSITION_SIZING: 4 },
-          teachingMessage: 'Correct process. Unlimited QE removes systemic tail risk. Begin staged re-entry — not all-in. Exactly what the machine does.',
+          teachingMessage: 'Correct process. Unlimited QE removes systemic tail risk. Begin staged re-entry: not all-in. Exactly what the machine does.',
           machineComparison: 'Machine begins staged buy. Same trigger, same staging logic.',
         },
       },
       {
         actionCode: 'HOLD',
-        label: 'HOLD — market still falling, wait for confirmation',
+        label: 'HOLD: market still falling, wait for confirmation',
         shortLabel: 'WAIT FOR BOTTOM',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['REENTRY_DELAY', 'ANCHORING'],
           alphaImpact: { REENTRY_DISCIPLINE: -3, REGIME_ADAPTATION: -2 },
-          teachingMessage: 'Waiting for the price bottom is not a process. The machine begins re-entry when policy floor is established — not when price confirms the bottom. You will always be late.',
+          teachingMessage: 'Waiting for the price bottom is not a process. The machine begins re-entry when policy floor is established: not when price confirms the bottom. You will always be late.',
           machineComparison: 'Machine begins staged re-entry here. Waiting for price confirmation costs the first leg of recovery.',
         },
       },
       {
         actionCode: 'ADD_RISK',
-        label: 'ALL IN — unlimited QE guarantees the recovery',
+        label: 'ALL IN: unlimited QE guarantees the recovery',
         shortLabel: 'ALL IN',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['OVERCONFIDENCE', 'HIGH_CONVICTION_ACTION'],
           alphaImpact: { REENTRY_DISCIPLINE: -4, POSITION_SIZING: -5 },
-          teachingMessage: 'All-in conviction at maximum uncertainty is not process — it is luck. Staged entry is superior even when direction is correct.',
+          teachingMessage: 'All-in conviction at maximum uncertainty is not process: it is luck. Staged entry is superior even when direction is correct.',
           machineComparison: 'Machine stages. Even correct directional conviction should be sized across time.',
         },
       },
       {
         actionCode: 'RAISE_CASH',
-        label: 'STAY DEFENSIVE — market may fall further',
+        label: 'STAY DEFENSIVE: market may fall further',
         shortLabel: 'STAY CASH',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['ANCHORING', 'REENTRY_DELAY'],
           alphaImpact: { REENTRY_DISCIPLINE: -5, REGIME_ADAPTATION: -3 },
@@ -895,10 +945,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 11,
+    machinePar: 81,
     phase: 'BOTTOMING',
     crisisDay: 'MAR 26',
-    signalTitle: 'LARGEST SINGLE-DAY GAIN SINCE 1933 — +9.4%',
-    signalBody: 'S&P gains +9.4% — largest single-day since 1933. CARES Act signed. Jobless claims 3.28M — worst in U.S. history by factor of 5x. Best equity day ever. Worst employment day ever. Simultaneously.',
+    signalTitle: 'LARGEST SINGLE-DAY GAIN SINCE 1933: +9.4%',
+    signalBody: 'S&P gains +9.4%: largest single-day since 1933. CARES Act signed. Jobless claims 3.28M: worst in U.S. history by factor of 5x. Best equity day ever. Worst employment day ever. Simultaneously.',
     marketSignals: [
       { indicator: 'SPX', value: '+9.4%', direction: 'up', magnitude: 'extreme' },
       { indicator: 'CAT', value: '+14.7%', direction: 'up', magnitude: 'extreme' },
@@ -906,19 +957,19 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { indicator: 'JOBLESS', value: '3.28M', direction: 'up', magnitude: 'extreme' },
     ],
     eventFeed: [
-      { category: 'HISTORY', text: '+9.4% SPX — largest single-day gain since 1933' },
+      { category: 'HISTORY', text: '+9.4% SPX: largest single-day gain since 1933' },
       { category: 'FISCAL', text: '$2.2T CARES Act signed by President' },
-      { category: 'JOBS', text: '3.28M jobless claims — worst in U.S. history by 5x' },
+      { category: 'JOBS', text: '3.28M jobless claims: worst in U.S. history by 5x' },
       { category: 'SIGNAL', text: 'Market pricing the outcome, not the present. Classic bottoming.' },
     ],
     portfolioEffect: { returnBias: 0.072, volatilityDelta: -0.08, correlationLevel: 0.75 },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
-        'Staged re-entry began at CP10 — no need to chase the surge',
-        'VIX still 61 — not adding aggressively into a single-day surge',
+        'Staged re-entry began at CP10: no need to chase the surge',
+        'VIX still 61: not adding aggressively into a single-day surge',
         '+9.4% day adds transaction cost on any buy order',
-        'Staged plan continues on schedule — not accelerated by the up-day',
+        'Staged plan continues on schedule: not accelerated by the up-day',
         'Hold plan, do not react to single-day moves',
       ],
       policyReason: 'Hold. Staged plan in motion. Do not chase single-day surges.',
@@ -927,8 +978,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'HOLD',
-        label: 'HOLD — staged plan in motion; do not chase the surge',
+        label: 'HOLD: staged plan in motion; do not chase the surge',
         shortLabel: 'HOLD PLAN',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { REENTRY_DISCIPLINE: 5, TURNOVER_DISCIPLINE: 4, DECISION_CONSISTENCY: 3 },
@@ -938,8 +990,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
-        label: 'ADD — CARES Act signed; recovery confirmed',
+        label: 'ADD: CARES Act signed; recovery confirmed',
         shortLabel: 'ADD MORE',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['CHASING', 'RECENCY_BIAS'],
           alphaImpact: { REENTRY_DISCIPLINE: -4, TURNOVER_DISCIPLINE: -3 },
@@ -949,8 +1002,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
-        label: 'TAKE PROFITS — sell into the surge',
+        label: 'TAKE PROFITS: sell into the surge',
         shortLabel: 'TAKE PROFITS',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['RECENCY_BIAS', 'THESIS_CONTRADICTION'],
           alphaImpact: { REENTRY_DISCIPLINE: -5, REGIME_ADAPTATION: -4 },
@@ -960,17 +1014,18 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
-        label: 'ROTATE cyclicals — biggest winners in the crash should recover most',
+        label: 'ROTATE cyclicals: biggest winners in the crash should recover most',
         shortLabel: 'BUY CYCLICALS',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['RECENCY_BIAS', 'CHASING'],
           alphaImpact: { TURNOVER_DISCIPLINE: -3, DECISION_CONSISTENCY: -3 },
           teachingMessage: 'Rotating into cyclicals on the best day of the crisis is chasing momentum, not a considered rotation thesis.',
-          machineComparison: 'Machine holds current mix. Cyclical rotation is valid — but not executed on a +9.4% day.',
+          machineComparison: 'Machine holds current mix. Cyclical rotation is valid: but not executed on a +9.4% day.',
         },
       },
     ],
-    teachingPoint: 'THE MACHINE DOES NOT CHASE SINGLE-DAY SURGES. IT EXECUTES ITS PLAN ON THE PLAN\'S SCHEDULE. THE +9.4% DAY REWARDS PATIENCE — IT DOES NOT INVITE PANIC BUYING.',
+    teachingPoint: 'THE MACHINE DOES NOT CHASE SINGLE-DAY SURGES. IT EXECUTES ITS PLAN ON THE PLAN\'S SCHEDULE. THE +9.4% DAY REWARDS PATIENCE: IT DOES NOT INVITE PANIC BUYING.',
     isRegimeChange: false,
     isHoldValid: true,
     holdTeaching: 'Hold the plan. Staged re-entry in motion. Machine holds.',
@@ -981,10 +1036,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 12,
+    machinePar: 80,
     phase: 'BOTTOMING',
     crisisDay: 'APR 9',
-    signalTitle: 'S&P +25% FROM TROUGH — STRUCTURAL VS. SPECULATIVE',
-    signalBody: 'S&P has recovered 25% from March 23 trough. MSFT +38% from low. DAL +71% from low. Unemployment at 14.7%. The market is pricing the recovery — but not every company is the same recovery story. MSFT revenue is accelerating. DAL revenue is still zero.',
+    signalTitle: 'S&P +25% FROM TROUGH: STRUCTURAL VS. SPECULATIVE',
+    signalBody: 'S&P has recovered 25% from March 23 trough. MSFT +38% from low. DAL +71% from low. Unemployment at 14.7%. The market is pricing the recovery: but not every company is the same recovery story. MSFT revenue is accelerating. DAL revenue is still zero.',
     marketSignals: [
       { indicator: 'SPX', value: '+25% from low', direction: 'up', magnitude: 'high' },
       { indicator: 'MSFT', value: '+38% from low', direction: 'up', magnitude: 'extreme' },
@@ -992,20 +1048,20 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { indicator: 'UNEMPLOYMENT', value: '14.7%', direction: 'up', magnitude: 'extreme' },
     ],
     eventFeed: [
-      { category: 'RECOVERY', text: 'S&P +25% from trough in 17 days — fastest bear market exit on record' },
+      { category: 'RECOVERY', text: 'S&P +25% from trough in 17 days: fastest bear market exit on record' },
       { category: 'DIVERGENCE', text: 'DAL +71% from low but Q2 revenue guidance: zero', relevantAssets: ['DAL'] },
-      { category: 'DIGITAL', text: 'MSFT Azure cloud revenue +27% YoY — digital acceleration is structural', relevantAssets: ['MSFT'] },
-      { category: 'EARNINGS', text: 'Q1 earnings season begins — broad guidance withdrawals' },
+      { category: 'DIGITAL', text: 'MSFT Azure cloud revenue +27% YoY: digital acceleration is structural', relevantAssets: ['MSFT'] },
+      { category: 'EARNINGS', text: 'Q1 earnings season begins: broad guidance withdrawals' },
     ],
     portfolioEffect: { returnBias: 0.032, volatilityDelta: -0.06, correlationLevel: 0.58 },
     machineDecision: {
       actionCode: 'ROTATE_RISK',
       reasoning: [
-        'Market +25% from trough — recovery pricing in progress',
-        'MSFT Azure revenue accelerating through COVID — digital adoption is structural, not cyclical',
-        'DAL +71% from low but Q2 revenue is zero — speculative recovery on hope, not earnings',
+        'Market +25% from trough: recovery pricing in progress',
+        'MSFT Azure revenue accelerating through COVID: digital adoption is structural, not cyclical',
+        'DAL +71% from low but Q2 revenue is zero: speculative recovery on hope, not earnings',
         'Rotate: add MSFT and JNJ on quality, reduce DAL on speculative recovery',
-        'HD and PG benefiting from stay-at-home demand — hold',
+        'HD and PG benefiting from stay-at-home demand: hold',
       ],
       policyReason: 'Rotate to structural winners. Reduce speculative recovery names.',
       targetChanges: [
@@ -1017,19 +1073,21 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'ROTATE_RISK',
-        label: 'ROTATE — MSFT/JNJ over DAL; structural over speculative',
+        label: 'ROTATE: MSFT/JNJ over DAL; structural over speculative',
         shortLabel: 'ROTATE QUALITY',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS', 'ADAPTATION_EVENT'],
           alphaImpact: { STOCK_SELECTION: 6, REGIME_ADAPTATION: 5, REENTRY_DISCIPLINE: 3 },
           teachingMessage: 'Excellent stock selection. MSFT revenue is accelerating. DAL revenue is zero. The machine rotates into quality growth away from speculative recovery.',
-          machineComparison: 'Machine rotates MSFT/JNJ higher, reduces DAL. Structural vs. speculative — same thesis.',
+          machineComparison: 'Machine rotates MSFT/JNJ higher, reduces DAL. Structural vs. speculative: same thesis.',
         },
       },
       {
         actionCode: 'ADD_RISK',
-        label: 'ADD DAL/CAT — biggest bounces still ahead',
+        label: 'ADD DAL/CAT: biggest bounces still ahead',
         shortLabel: 'ADD CYCLICALS',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['RECENCY_BIAS', 'CHASING'],
           alphaImpact: { STOCK_SELECTION: -5, REENTRY_DISCIPLINE: -4 },
@@ -1039,8 +1097,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'HOLD',
-        label: 'HOLD — do not trade the recovery noise',
+        label: 'HOLD: do not trade the recovery noise',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE'],
           alphaImpact: { TURNOVER_DISCIPLINE: 2, STOCK_SELECTION: -1 },
@@ -1050,12 +1109,13 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'RAISE_CASH',
-        label: 'RAISE CASH — +25% bounce is a selling opportunity',
+        label: 'RAISE CASH: +25% bounce is a selling opportunity',
         shortLabel: 'TAKE PROFITS',
+        turnoverCost: 0.04,
         branchEffect: {
           flagsAdd: ['THESIS_CONTRADICTION', 'REENTRY_DELAY'],
           alphaImpact: { REENTRY_DISCIPLINE: -5, REGIME_ADAPTATION: -4 },
-          teachingMessage: 'You staged into recovery at CP10 to capture it. Raising cash after +25% reverses that decision. Machine holds and rotates — does not exit.',
+          teachingMessage: 'You staged into recovery at CP10 to capture it. Raising cash after +25% reverses that decision. Machine holds and rotates: does not exit.',
           machineComparison: 'Machine holds and rotates. Exiting the recovery at +25% is premature.',
         },
       },
@@ -1071,9 +1131,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 13,
+    machinePar: 82,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'MAY 14',
-    signalTitle: 'CONCENTRATION AUDIT — FIVE STOCKS, THREE RISKS',
+    signalTitle: 'CONCENTRATION AUDIT: FIVE STOCKS, THREE RISKS',
     signalBody: 'Portfolio audit: MSFT + AAPL now represent 22% of portfolio. Correlation between MSFT and AAPL: 0.87. You have five names but three effective risk clusters. Concentration is measured in economic exposure, not ticker count.',
     marketSignals: [
       { indicator: 'MSFT', value: '+38% YTD', direction: 'up', magnitude: 'high' },
@@ -1083,9 +1144,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     ],
     eventFeed: [
       { category: 'CONCENTRATION', text: 'MSFT + AAPL at 22% with 0.87 correlation = one effective 22% position', relevantAssets: ['MSFT', 'AAPL'] },
-      { category: 'ALPHA', text: 'Tech positions generated +30% relative vs. cyclicals — correct thesis' },
+      { category: 'ALPHA', text: 'Tech positions generated +30% relative vs. cyclicals: correct thesis' },
       { category: 'RISK', text: 'At 22% tech concentration: any single regulatory or earnings miss has doubled impact' },
-      { category: 'MACHINE', text: 'Machine kept tech below 20% — sacrificed return for concentration control' },
+      { category: 'MACHINE', text: 'Machine kept tech below 20%: sacrificed return for concentration control' },
     ],
     portfolioEffect: { returnBias: 0.010, volatilityDelta: 0.01, correlationLevel: 0.55 },
     machineDecision: {
@@ -1093,9 +1154,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       reasoning: [
         'MSFT + AAPL at 22% with 0.87 correlation = effective single 22% position',
         'Concentration rule: no correlated sector cluster above 20%',
-        'Trim both positions back to 9% each — not exit, but right-size',
+        'Trim both positions back to 9% each: not exit, but right-size',
         'This is concentration policy, not a market call on tech',
-        'The thesis is intact — the sizing is the problem',
+        'The thesis is intact: the sizing is the problem',
       ],
       policyReason: 'Trim tech concentration back to policy threshold. Portfolio rule, not market view.',
       targetChanges: [
@@ -1106,19 +1167,21 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
-        label: 'TRIM tech — concentration rule, not a market call',
+        label: 'TRIM tech: concentration rule, not a market call',
         shortLabel: 'TRIM TECH',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { CONCENTRATION_CONTROL: 7, RULE_ADHERENCE: 5, POSITION_SIZING: 4 },
-          teachingMessage: 'Critical distinction: trimming on concentration policy is not selling on a bearish view. The machine maintains the thesis — it just right-sizes the position.',
+          teachingMessage: 'Critical distinction: trimming on concentration policy is not selling on a bearish view. The machine maintains the thesis: it just right-sizes the position.',
           machineComparison: 'Machine trims tech to concentration threshold. Portfolio rule, not market timing.',
         },
       },
       {
         actionCode: 'HOLD',
-        label: 'HOLD — both positions working; do not sell winners',
+        label: 'HOLD: both positions working; do not sell winners',
         shortLabel: 'HOLD WINNERS',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['OVERCONFIDENCE', 'ANCHORING'],
           alphaImpact: { CONCENTRATION_CONTROL: -6, RULE_ADHERENCE: -4 },
@@ -1128,8 +1191,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
-        label: 'ADD MSFT/AAPL — momentum plus quality',
+        label: 'ADD MSFT/AAPL: momentum plus quality',
         shortLabel: 'ADD TECH',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['OVERCONFIDENCE', 'CHASING'],
           alphaImpact: { CONCENTRATION_CONTROL: -8, POSITION_SIZING: -7 },
@@ -1139,13 +1203,14 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
-        label: 'ROTATE tech profits into defensive equities',
+        label: 'ROTATE: tech profits into defensive equities',
         shortLabel: 'ROTATE OUT',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { CONCENTRATION_CONTROL: 4, REGIME_ADAPTATION: 3, TURNOVER_DISCIPLINE: -2 },
-          teachingMessage: 'Right direction — reducing tech concentration. Rotating into defensives has slightly higher turnover than a simple trim.',
-          machineComparison: 'Machine trims rather than rotates — lower turnover, same concentration result.',
+          teachingMessage: 'Right direction: reducing tech concentration. Rotating into defensives has slightly higher turnover than a simple trim.',
+          machineComparison: 'Machine trims rather than rotates: lower turnover, same concentration result.',
         },
       },
     ],
@@ -1160,9 +1225,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 14,
+    machinePar: 82,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'JUN 8',
-    signalTitle: 'RECOVERY ROTATION — WHICH RECOVERY DO YOU OWN?',
+    signalTitle: 'RECOVERY ROTATION: WHICH RECOVERY DO YOU OWN?',
     signalBody: 'S&P -1% YTD. Tech +12% YTD. Airlines -50%. Energy -35%. Two distinct equity recovery paths: structural winners (digital, healthcare, consumer staples) vs. damaged cyclicals (travel, energy, financials). Which recovery does your portfolio own?',
     marketSignals: [
       { indicator: 'TECH', value: '+12% YTD', direction: 'up', magnitude: 'high' },
@@ -1182,8 +1248,8 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       reasoning: [
         'Portfolio already correctly positioned through CPs 2, 4, 8, 12',
         'Current mix: overweight quality growth, underweight speculative recovery',
-        'DAL revenue still 80% below 2019 — value case not yet confirmed by earnings',
-        'No new trigger for rotation — thesis still intact',
+        'DAL revenue still 80% below 2019: value case not yet confirmed by earnings',
+        'No new trigger for rotation: thesis still intact',
         'Hold and let the position work',
       ],
       policyReason: 'Hold. Thesis intact. No new rotation trigger.',
@@ -1192,8 +1258,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'HOLD',
-        label: 'HOLD — structural winners thesis intact; no new trigger',
+        label: 'HOLD: structural winners thesis intact; no new trigger',
         shortLabel: 'HOLD',
+        turnoverCost: 0,
         branchEffect: {
           flagsAdd: ['PATIENCE_POSITIVE', 'GOOD_PROCESS'],
           alphaImpact: { DECISION_CONSISTENCY: 5, TURNOVER_DISCIPLINE: 4, RULE_ADHERENCE: 3 },
@@ -1203,8 +1270,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
-        label: 'ADD energy/airlines — the damage is now in the price',
+        label: 'ADD energy/airlines: the damage is now in the price',
         shortLabel: 'BUY DAMAGED',
+        turnoverCost: 0.07,
         branchEffect: {
           flagsAdd: ['RECENCY_BIAS'],
           alphaImpact: { STOCK_SELECTION: -4, DECISION_CONSISTENCY: -3 },
@@ -1214,8 +1282,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
-        label: 'REDUCE tech — take profits after a strong run',
+        label: 'REDUCE tech: take profits after a strong run',
         shortLabel: 'TAKE PROFITS',
+        turnoverCost: 0.05,
         branchEffect: {
           flagsAdd: ['THESIS_CONTRADICTION'],
           alphaImpact: { DECISION_CONSISTENCY: -4, REGIME_ADAPTATION: -2 },
@@ -1225,12 +1294,13 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
-        label: 'ADD quality growth — extend the winning thesis',
+        label: 'ADD quality growth: extend the winning thesis',
         shortLabel: 'ADD GROWTH',
+        turnoverCost: 0.06,
         branchEffect: {
           flagsAdd: ['GOOD_PROCESS'],
           alphaImpact: { STOCK_SELECTION: 2, CONCENTRATION_CONTROL: -2 },
-          teachingMessage: 'Sound extension of the thesis. Concentration is the watch item — adding more to winners raises concentration above threshold.',
+          teachingMessage: 'Sound extension of the thesis. Concentration is the watch item: adding more to winners raises concentration above threshold.',
           machineComparison: 'Machine holds. Extending the thesis by adding raises concentration risk.',
         },
       },
