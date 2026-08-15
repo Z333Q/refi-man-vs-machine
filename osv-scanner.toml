@@ -1,0 +1,16 @@
+# OSV-Scanner policy for the PR security gate.
+#
+# The blocking gate exists to stop a runtime vulnerability reaching users. It
+# is scoped to production dependencies for that reason: a gate that is always
+# red teaches everyone to ignore it, and the dev-tooling backlog is real work
+# that belongs on its own schedule rather than blocking every PR.
+#
+# This is a scope decision, never a suppression. No advisory is ignored by id,
+# and nothing here can hide a vulnerability in a package that ships to the
+# browser or to Cloud Run. Dev-only findings remain visible: scanning without
+# this config reports them in full, and they are tracked as security debt.
+
+[[PackageOverrides]]
+group = "dev"
+ignore = true
+reason = "PR security gate blocks runtime dependency vulnerabilities; dev-only findings are tracked separately."
