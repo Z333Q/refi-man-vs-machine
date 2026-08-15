@@ -1267,8 +1267,8 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         answers={{
           happening: `${cp.crisisDay} · ${cp.phase.replace(/_/g, ' ')}`,
           info: 'SIGNAL · PORTFOLIO · RISK',
-          canDo: 'STANCE · THESIS · CONVICTION',
-          onCommit: 'MARKET RESOLVES · MACHINE COMPARES',
+          canDo: 'STANCE · CONVICTION · COMMIT',
+          onCommit: 'THESIS → MARKET RESOLVES · MACHINE COMPARES',
           vsMachine: `YOU ${run.playerScore} · MCH ${run.machineScore}`,
         }}
       />
