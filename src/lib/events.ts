@@ -26,7 +26,17 @@ export type GameEventType =
   | 'arena.passed'
   | 'arena.failed'
   | 'arena.machine_beaten'
-  | 'score.run.computed';
+  | 'score.run.computed'
+  // Gesture telemetry (Addendum C section C.4). Cancellations carry a reason so
+  // exploration can be told apart from a pointer-capture defect: a 10% cancel
+  // rate from players trying the draw is healthy, the same rate from lost
+  // capture is a bug.
+  | 'gesture.started'
+  | 'gesture.armed'
+  | 'gesture.cancelled'
+  | 'gesture.dead_zone_released'
+  | 'gesture.committed'
+  | 'gesture.focused_controls_opened';
 
 interface EmitOptions {
   arenaId?: string | null;
