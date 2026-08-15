@@ -4,6 +4,10 @@ import type {
 } from './gameTypes';
 import { COVID_CHECKPOINTS, getCheckpoint } from './covidArena';
 import { scoreCheckpoint } from './scoringEngine';
+import {
+  clampConviction, confidenceToConviction, consultedRisk,
+  CONVICTION_DEFAULT, convictionToConfidence,
+} from './decisionContract';
 
 // ─── Run engine ───────────────────────────────────────────────────────────────
 // Pure, deterministic run-state machinery, kept out of the React layer so it is
@@ -84,7 +88,7 @@ export function createInitialRun(): RunState {
     investigatedModules: [],
     pendingAction: null,
     pendingThesis: null,
-    pendingConfidence: 0.6,
+    pendingConfidence: convictionToConfidence(CONVICTION_DEFAULT),
     result: 'ACTIVE',
   };
 }
@@ -198,15 +202,25 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
   if (!cp) return null;
 
   const branch = cp.availableActions.find(a => a.actionCode === action);
-  const flags: BehavioralFlag[] = branch?.branchEffect.flagsAdd ?? [];
+  const flags: BehavioralFlag[] = [...(branch?.branchEffect.flagsAdd ?? [])];
   const dimUpdates = branch?.branchEffect.alphaImpact ?? {};
   const turnoverCost = turnoverCostFor(action, cp);
+  // The UI clamps conviction to the range this checkpoint exposes; the engine
+  // guarantees it, so a stale or out-of-range value can never reach scoring.
+  const conviction = clampConviction(confidenceToConviction(run.pendingConfidence), run.currentCheckpoint);
+  const confidence = convictionToConfidence(conviction);
+
+  // Investigation pays. Consulting risk before calling a regime turn is the
+  // process the game exists to teach, so the record credits it.
+  if (cp.isRegimeChange && consultedRisk(run.investigatedModules) && !flags.includes('GOOD_PROCESS')) {
+    flags.push('GOOD_PROCESS');
+  }
 
   const score = scoreCheckpoint({
     action,
     checkpoint: cp,
     flags,
-    confidence: run.pendingConfidence,
+    confidence,
     turnoverUsed: run.portfolio.turnoverUsed,
     portfolioDD: run.portfolio.drawdown,
     machineDD: run.portfolio.drawdown - 0.02,
@@ -216,7 +230,7 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
     checkpointSequence: run.currentCheckpoint,
     actionCode: action,
     thesisCode: run.pendingThesis ?? undefined,
-    confidence: run.pendingConfidence,
+    confidence,
     modulesConsulted: run.investigatedModules,
     turnoverCost,
     scoreContribution: score.totalScore,
@@ -267,5 +281,8 @@ export function advanceRunCheckpoint(run: RunState): RunState {
     investigatedModules: [],
     pendingAction: null,
     pendingThesis: null,
+    // Each checkpoint starts from the same neutral conviction, so a high call
+    // has to be re-argued rather than inherited.
+    pendingConfidence: convictionToConfidence(CONVICTION_DEFAULT),
   };
 }
