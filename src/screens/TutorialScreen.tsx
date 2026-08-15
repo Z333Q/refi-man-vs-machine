@@ -188,21 +188,21 @@ const PRACTICE_STANCES: ActionBranch[] = [
     actionCode: 'REDUCE',
     shortLabel: 'REDUCE',
     label: 'REDUCE: trim exposure where the risk has changed, without exiting the thesis',
-    turnoverCost: 0.04,
+    turnoverCost: 0.05,
     branchEffect: { flagsAdd: [], alphaImpact: {} },
   },
   {
     actionCode: 'RAISE_CASH',
     shortLabel: 'RAISE CASH',
     label: 'RAISE CASH: move capital out of equities and take on the re-entry decision',
-    turnoverCost: 0.06,
+    turnoverCost: 0.04,
     branchEffect: { flagsAdd: [], alphaImpact: {} },
   },
   {
     actionCode: 'ROTATE_DEFENSIVE',
     shortLabel: 'ROTATE DEFENSIVE',
     label: 'ROTATE DEFENSIVE: shift weight from cyclicals into defensives at equal exposure',
-    turnoverCost: 0.05,
+    turnoverCost: 0.07,
     branchEffect: { flagsAdd: [], alphaImpact: {} },
   },
 ];
@@ -446,7 +446,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                       { label: 'DRAWDOWN', value: '-2.3%' },
                       { label: 'VOLATILITY', value: '16.0%' },
                       { label: 'TURNOVER USED', value: '4%' },
-                      { label: 'TURNOVER REMAINING', value: '26%' },
+                      { label: 'TURNOVER REMAINING', value: '36%' },
                       { label: 'CASH WEIGHT', value: '15%' },
                     ].map(m => (
                       <div key={m.label} className="flex justify-between text-xs">
