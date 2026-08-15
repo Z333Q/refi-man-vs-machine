@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { useTips } from '../context/TipContext';
 import type { ActionCode, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
+import { canAffordAction, isHoldOnly, STARTING_CAPITAL } from '../lib/runEngine';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
 import MachinePipeline from '../components/game/MachinePipeline';
@@ -362,6 +363,10 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
   const handleDraftCommit = () => {
     if (draftOrders.length === 0 && !holdConfirmed) return;
+    // A stance the remaining budget cannot fully cover is not available. The
+    // stance cards enforce this visually in the reworked decision surface;
+    // here it guards the commit path.
+    if (!holdConfirmed && run && !canAffordAction(run, positionActionsToGameAction(draftOrders))) return;
     if (!holdConfirmed) {
       const gameAction = positionActionsToGameAction(draftOrders);
       setPendingAction(gameAction);
@@ -403,9 +408,22 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   const cp = currentCheckpointData;
   const phase = run.phase;
   const portfolio = run.portfolio;
-  const portfolioGain = ((portfolio.value - 100000) / 100000) * 100;
-  const isObservation = portfolio.drawdown <= -0.20;
+  const portfolioGain = ((portfolio.value - STARTING_CAPITAL) / STARTING_CAPITAL) * 100;
+  const isObservation = run.criticalFailure;
   const hasDraft = draftOrders.length > 0 || holdConfirmed;
+
+  // Turnover is a finite run-scoped resource, so the meter is always on screen.
+  const turnoverBudget = run.turnoverBudget;
+  const turnoverSpentPct = turnoverBudget > 0 ? portfolio.turnoverUsed / turnoverBudget : 1;
+  const turnoverExhausted = isHoldOnly(run, cp);
+  const turnoverColor =
+    turnoverSpentPct > 0.85 ? 'text-risk-red' :
+    turnoverSpentPct > 0.60 ? 'text-alert-amber' :
+    'text-phosphor';
+  const turnoverBarColor =
+    turnoverSpentPct > 0.85 ? 'bg-risk-red' :
+    turnoverSpentPct > 0.60 ? 'bg-alert-amber' :
+    'bg-phosphor';
 
   const PANEL_TABS: { id: ActivePanel; label: string; key: string }[] = [
     { id: 'SIGNAL', label: 'SIGNAL', key: 'S' },
@@ -529,11 +547,31 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                 {(portfolio.drawdown * 100).toFixed(1)}%
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-phosphor-dim">TURNOVER</span>
-              <span className={portfolio.turnoverUsed > 0.3 ? 'text-alert-amber' : 'text-phosphor'}>
-                {(portfolio.turnoverUsed * 100).toFixed(0)}%
-              </span>
+            <div>
+              <div className="flex justify-between">
+                <span className="text-phosphor-dim">TURNOVER BUDGET</span>
+                <span className={turnoverColor}>
+                  {(portfolio.turnoverUsed * 100).toFixed(0)}% / {(turnoverBudget * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div
+                className="mt-1 h-1.5 bg-phosphor/10"
+                role="meter"
+                aria-label="TURNOVER BUDGET SPENT"
+                aria-valuenow={Math.round(turnoverSpentPct * 100)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div
+                  className={`h-full ${turnoverBarColor}`}
+                  style={{ width: `${Math.min(100, turnoverSpentPct * 100)}%` }}
+                />
+              </div>
+              {turnoverExhausted && (
+                <div className="text-risk-red text-xs tracking-widest mt-1">
+                  TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
+                </div>
+              )}
             </div>
           </div>
         </div>

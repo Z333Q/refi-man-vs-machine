@@ -1,10 +1,10 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type {
-  RunState, PlayerProfile, ActionCode, ThesisCode, ModuleCode,
-  RunDecision, BehavioralFlag, DimensionCode,
+  RunState, PlayerProfile, ActionCode, ThesisCode, ModuleCode, DimensionCode,
 } from '../lib/gameTypes';
-import { COVID_CHECKPOINTS, getCheckpoint } from '../lib/covidArena';
+import { getCheckpoint } from '../lib/covidArena';
 import { scoreCheckpoint, computeXpAward, getDimensionUpdates } from '../lib/scoringEngine';
+import { createInitialRun, commitPendingDecision, advanceRunCheckpoint } from '../lib/runEngine';
 import { createDefaultProfile, updateDimensions, checkModuleUnlocks, getRankForXp } from '../lib/progressionEngine';
 import { supabase, getSessionId } from '../lib/supabase';
 import {
@@ -47,100 +47,6 @@ type GameAction =
   | { type: 'EARN_XP'; amount: number }
   | { type: 'RECORD_MACHINE_ATTEMPT'; won: boolean };
 
-// ─── Initial portfolio state ──────────────────────────────────────────────────
-
-// U.S. equities only. Bonds, gold, and commodities are signals, not positions.
-// Embedded risks: TRAVEL (DAL+MAR=16%), TECH CONC (MSFT+AAPL=20%), CYCLICAL (CAT+XOM+HD=23%)
-const initialPortfolio: RunState['portfolio'] = {
-  value: 100000,
-  cashWeight: 0.15,
-  positions: [
-    { symbol: 'MSFT', weight: 0.10, pnl: 0, riskContrib: 0.14, sector: 'TECHNOLOGY' },
-    { symbol: 'AAPL', weight: 0.10, pnl: 0, riskContrib: 0.14, sector: 'TECHNOLOGY' },
-    { symbol: 'JPM',  weight: 0.10, pnl: 0, riskContrib: 0.18, sector: 'FINANCIALS' },
-    { symbol: 'DAL',  weight: 0.08, pnl: 0, riskContrib: 0.20, sector: 'AIRLINES' },
-    { symbol: 'MAR',  weight: 0.08, pnl: 0, riskContrib: 0.18, sector: 'HOTELS' },
-    { symbol: 'XOM',  weight: 0.08, pnl: 0, riskContrib: 0.16, sector: 'ENERGY' },
-    { symbol: 'JNJ',  weight: 0.08, pnl: 0, riskContrib: 0.07, sector: 'HEALTHCARE' },
-    { symbol: 'PG',   weight: 0.08, pnl: 0, riskContrib: 0.06, sector: 'CONSUMER STAPLES' },
-    { symbol: 'CAT',  weight: 0.08, pnl: 0, riskContrib: 0.15, sector: 'INDUSTRIALS' },
-    { symbol: 'HD',   weight: 0.07, pnl: 0, riskContrib: 0.10, sector: 'CONSUMER DISCRETIONARY' },
-  ],
-  drawdown: 0,
-  volatility: 0.16,
-  sectorExposure: {
-    TECHNOLOGY: 0.20, FINANCIALS: 0.10, AIRLINES: 0.08,
-    HOTELS: 0.08, ENERGY: 0.08, HEALTHCARE: 0.08,
-    'CONSUMER STAPLES': 0.08, INDUSTRIALS: 0.08, 'CONSUMER DISCRETIONARY': 0.07,
-  },
-  turnoverUsed: 0,
-  correlationIndex: 0.48,
-};
-
-function createInitialRun(): RunState {
-  return {
-    id: null,
-    arenaId: 'covid_black_swan',
-    machineId: 'refi_rules',
-    currentCheckpoint: 1,
-    totalCheckpoints: COVID_CHECKPOINTS.length,
-    phase: 'SIGNAL',
-    portfolio: { ...initialPortfolio },
-    playerScore: 50,
-    machineScore: 50,
-    decisions: [],
-    criticalFailure: false,
-    activeModules: ['PRICE_RETURN', 'PORTFOLIO_SUMMARY', 'SECTOR_EXPOSURE', 'NEWS_FEED'],
-    investigatedModules: [],
-    pendingAction: null,
-    pendingThesis: null,
-    pendingConfidence: 0.6,
-    result: 'ACTIVE',
-  };
-}
-
-// ─── Portfolio simulation ─────────────────────────────────────────────────────
-
-function simulatePortfolioAdvance(
-  portfolio: RunState['portfolio'],
-  action: ActionCode,
-  checkpointSeq: number
-): RunState['portfolio'] {
-  const cp = getCheckpoint(checkpointSeq);
-  if (!cp) return portfolio;
-
-  const { returnBias, volatilityDelta, correlationLevel } = cp.portfolioEffect;
-  const actionMultiplier =
-    action === 'REDUCE' ? 0.6 :
-    action === 'RAISE_CASH' ? 0.3 :
-    action === 'ADD_RISK' ? 1.4 :
-    action === 'ROTATE_DEFENSIVE' ? 0.7 :
-    1.0;
-
-  const portfolioReturn = returnBias * actionMultiplier;
-  const newValue = portfolio.value * (1 + portfolioReturn);
-  const peakValue = 100000;
-  const newDrawdown = Math.min(0, (newValue - peakValue) / peakValue);
-  const newVolatility = Math.max(0.08, portfolio.volatility + volatilityDelta);
-  const cashDelta = action === 'RAISE_CASH' ? 0.10 : action === 'ADD_RISK' ? -0.05 : action === 'REDUCE' ? 0.05 : 0;
-  const newCash = Math.max(0.05, Math.min(0.60, portfolio.cashWeight + cashDelta));
-  const newTurnover = portfolio.turnoverUsed + (action === 'HOLD' ? 0 : 0.04 + Math.random() * 0.06);
-
-  return {
-    ...portfolio,
-    value: newValue,
-    drawdown: newDrawdown,
-    volatility: newVolatility,
-    cashWeight: newCash,
-    turnoverUsed: newTurnover,
-    correlationIndex: correlationLevel,
-    positions: portfolio.positions.map(pos => ({
-      ...pos,
-      pnl: pos.pnl + portfolioReturn * (Math.random() * 0.5 + 0.75),
-    })),
-  };
-}
-
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
 function reducer(state: GameState, action: GameAction): GameState {
@@ -182,48 +88,19 @@ function reducer(state: GameState, action: GameAction): GameState {
 
     case 'COMMIT_DECISION': {
       const { run } = state;
-      if (!run || !run.pendingAction) return state;
-      const pendingAction = run.pendingAction;
-      const cp = getCheckpoint(run.currentCheckpoint);
-      if (!cp) return state;
+      if (!run) return state;
 
-      const branch = cp.availableActions.find(a => a.actionCode === pendingAction);
-      const flags: BehavioralFlag[] = branch?.branchEffect.flagsAdd ?? [];
-      const dimUpdates = branch?.branchEffect.alphaImpact ?? {};
+      // Run-state transition lives in the pure engine; the reducer keeps only
+      // the profile side (XP, dimensions, module unlocks).
+      const outcome = commitPendingDecision(run);
+      if (!outcome) return state;
+      const { score, flags, dimUpdates, checkpoint } = outcome;
 
-      const score = scoreCheckpoint({
-        action: pendingAction,
-        checkpoint: cp,
-        flags,
-        confidence: run.pendingConfidence,
-        turnoverUsed: run.portfolio.turnoverUsed,
-        portfolioDD: run.portfolio.drawdown,
-        machineDD: run.portfolio.drawdown - 0.02,
-      });
-
-      const newDecision: RunDecision = {
-        checkpointSequence: run.currentCheckpoint,
-        actionCode: pendingAction,
-        thesisCode: run.pendingThesis ?? undefined,
-        confidence: run.pendingConfidence,
-        modulesConsulted: run.investigatedModules,
-        scoreContribution: score.totalScore,
-        quality: score.quality,
-        behavioralFlags: flags,
-        machineActionCode: cp.machineDecision.actionCode,
-        committed: true,
-      };
-
-      const newPortfolio = simulatePortfolioAdvance(run.portfolio, pendingAction, run.currentCheckpoint);
-      const newPlayerScore = Math.round((run.playerScore * (run.currentCheckpoint - 1) + score.totalScore) / run.currentCheckpoint);
-      const newMachineScore = Math.round((run.machineScore * (run.currentCheckpoint - 1) + score.machineScore) / run.currentCheckpoint);
-      const xpEarned = computeXpAward(score, cp.isRegimeChange);
+      const xpEarned = computeXpAward(score, checkpoint.isRegimeChange);
       const newDimensions = updateDimensions(state.profile.dimensions, getDimensionUpdates(flags, dimUpdates));
       const newXp = state.profile.alphaXp + xpEarned;
       const newModuleUnlocks = checkModuleUnlocks({ ...state.profile, alphaXp: newXp }, run.currentCheckpoint);
       const newUnlocked = [...state.profile.unlockedModules, ...newModuleUnlocks];
-
-      const criticalFailure = newPortfolio.drawdown <= -0.20;
 
       return {
         ...state,
@@ -237,38 +114,13 @@ function reducer(state: GameState, action: GameAction): GameState {
           dimensions: newDimensions,
           unlockedModules: newUnlocked,
         },
-        run: {
-          ...run,
-          phase: 'RESOLVING',
-          decisions: [...run.decisions, newDecision],
-          portfolio: newPortfolio,
-          playerScore: newPlayerScore,
-          machineScore: newMachineScore,
-          pendingAction: null,
-          pendingThesis: null,
-          investigatedModules: [],
-          criticalFailure,
-        },
+        run: outcome.run,
       };
     }
 
     case 'ADVANCE_CHECKPOINT': {
       if (!state.run) return state;
-      const next = state.run.currentCheckpoint + 1;
-      if (next > state.run.totalCheckpoints) {
-        return { ...state, run: { ...state.run, phase: 'COMPLETE' } };
-      }
-      return {
-        ...state,
-        run: {
-          ...state.run,
-          currentCheckpoint: next,
-          phase: 'SIGNAL',
-          investigatedModules: [],
-          pendingAction: null,
-          pendingThesis: null,
-        },
-      };
+      return { ...state, run: advanceRunCheckpoint(state.run) };
     }
 
     case 'COMPLETE_RUN': {
