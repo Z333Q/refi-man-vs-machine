@@ -122,7 +122,6 @@ function failedRun(): RunState {
     currentCheckpoint: 7,
     portfolio: { ...run.portfolio, value: 82000, peakValue: 100000, drawdown: -0.18 },
     pendingAction: 'ADD_RISK',
-    pendingThesis: 'VALUATION',
     pendingConfidence: 0.9,
   };
   const outcome = commitPendingDecision(run);
@@ -166,7 +165,6 @@ test('a later crossing does not overwrite where it first happened', () => {
     ...run,
     portfolio: { ...run.portfolio, value: 70000, peakValue: 100000, drawdown: -0.30 },
     pendingAction: 'HOLD',
-    pendingThesis: 'THESIS_UNCHANGED',
   };
   const outcome = commitPendingDecision(run);
   assert.ok(outcome);

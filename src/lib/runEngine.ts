@@ -1,6 +1,6 @@
 import type {
   ActionCode, BehavioralFlag, CheckpointData, CheckpointScore,
-  DimensionCode, PortfolioState, RunDecision, RunState,
+  DimensionCode, PortfolioState, RunDecision, RunState, ThesisCode,
 } from './gameTypes';
 import { COVID_CHECKPOINTS, getCheckpoint } from './covidArena';
 import { scoreCheckpoint } from './scoringEngine';
@@ -88,7 +88,6 @@ export function createInitialRun(): RunState {
     activeModules: ['PRICE_RETURN', 'PORTFOLIO_SUMMARY', 'SECTOR_EXPOSURE', 'NEWS_FEED'],
     investigatedModules: [],
     pendingAction: null,
-    pendingThesis: null,
     pendingConfidence: convictionToConfidence(CONVICTION_DEFAULT),
     result: 'ACTIVE',
   };
@@ -233,7 +232,8 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
   const decision: RunDecision = {
     checkpointSequence: run.currentCheckpoint,
     actionCode: action,
-    thesisCode: run.pendingThesis ?? undefined,
+    // Thesis is attached after the commit, never before it. See attachThesis.
+    thesisCode: undefined,
     confidence,
     modulesConsulted: run.investigatedModules,
     turnoverCost,
@@ -259,7 +259,6 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
       playerScore,
       machineScore,
       pendingAction: null,
-      pendingThesis: null,
       investigatedModules: [],
       // Crossing the critical drawdown is a fact about the run, not a current
       // reading: once crossed it stays crossed, and a later recovery does not
@@ -273,6 +272,39 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
     dimUpdates,
     checkpoint: cp,
   };
+}
+
+// ─── Thesis attachment ────────────────────────────────────────────────────────
+
+/**
+ * Attach the thesis to the decision just committed.
+ *
+ * Addendum C section C.5: stance and conviction become immutable at commit.
+ * Thesis explains a decision already made and cannot revise it. That ordering
+ * is the whole point of asking after release: the player is accounting for an
+ * instinct already exposed rather than searching for a defensible reason
+ * before choosing, which is what keeps the Alpha Profile signal clean.
+ *
+ * First thesis wins. A second call is a no-op, so a late tap arriving after
+ * the timeout cannot overwrite what was recorded.
+ */
+export function attachThesis(run: RunState, thesis: ThesisCode): RunState {
+  const last = run.decisions.length - 1;
+  if (last < 0) return run;
+  const decision = run.decisions[last];
+  if (decision.thesisCode !== undefined) return run;
+
+  const decisions = [...run.decisions];
+  // Only thesisCode is written. Everything else on the record is carried
+  // through untouched by construction.
+  decisions[last] = { ...decision, thesisCode: thesis };
+  return { ...run, decisions };
+}
+
+/** Whether the decision just committed is still waiting for its thesis. */
+export function awaitingThesis(run: RunState): boolean {
+  const decision = run.decisions[run.decisions.length - 1];
+  return Boolean(decision) && decision.thesisCode === undefined;
 }
 
 // ─── Observation mode ─────────────────────────────────────────────────────────
@@ -311,7 +343,6 @@ export function advanceRunCheckpoint(run: RunState): RunState {
     phase: 'SIGNAL',
     investigatedModules: [],
     pendingAction: null,
-    pendingThesis: null,
     // Each checkpoint starts from the same neutral conviction, so a high call
     // has to be re-argued rather than inherited.
     pendingConfidence: convictionToConfidence(CONVICTION_DEFAULT),

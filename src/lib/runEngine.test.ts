@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { ActionCode, RunState } from './gameTypes';
+import type { ActionCode, RunState, ThesisCode } from './gameTypes';
 import { COVID_CHECKPOINTS, getCheckpoint } from './covidArena';
 import {
   createInitialRun, createInitialPortfolio, commitPendingDecision, advanceRunCheckpoint,
@@ -12,7 +12,7 @@ import {
 
 // A scripted decision sequence covering every checkpoint of the COVID arena,
 // mixing stances so the replay exercises each action multiplier and cost.
-const SEQUENCE: { action: ActionCode; thesis: RunState['pendingThesis']; confidence: number }[] = [
+const SEQUENCE: { action: ActionCode; thesis: ThesisCode; confidence: number }[] = [
   { action: 'HOLD',             thesis: 'THESIS_UNCHANGED',        confidence: 0.60 },
   { action: 'REDUCE',           thesis: 'DETERIORATING_FUNDAMENTALS', confidence: 0.70 },
   { action: 'HOLD',             thesis: 'THESIS_UNCHANGED',        confidence: 0.55 },
@@ -40,7 +40,6 @@ function playScriptedRun(
     run = {
       ...run,
       pendingAction: action,
-      pendingThesis: step.thesis,
       pendingConfidence: step.confidence,
     };
     const outcome = commitPendingDecision(run);
@@ -76,7 +75,7 @@ test('replay: diverging one decision changes the outcome', () => {
 
 test('positions move by the authored checkpoint return, with no per-position noise', () => {
   let run = createInitialRun();
-  run = { ...run, pendingAction: 'HOLD', pendingThesis: null, pendingConfidence: 0.6 };
+  run = { ...run, pendingAction: 'HOLD', pendingConfidence: 0.6 };
   const outcome = commitPendingDecision(run);
   assert.ok(outcome);
   const cp = getCheckpoint(1);
@@ -113,7 +112,7 @@ test('turnover accounting is the exact sum of the authored costs paid', () => {
     if (run.phase === 'COMPLETE') break;
     const cp = getCheckpoint(run.currentCheckpoint);
     expected += turnoverCostFor(step.action, cp);
-    run = { ...run, pendingAction: step.action, pendingThesis: step.thesis, pendingConfidence: step.confidence };
+    run = { ...run, pendingAction: step.action, pendingConfidence: step.confidence };
     const outcome = commitPendingDecision(run);
     assert.ok(outcome);
     run = advanceRunCheckpoint(outcome.run);
@@ -208,7 +207,7 @@ test('drawdown is measured from the peak, not from starting capital', () => {
 
   // A portfolio sitting at its own high-water mark is not in drawdown.
   run = { ...run, portfolio: { ...run.portfolio, value: 120000, peakValue: 120000 } };
-  run = { ...run, pendingAction: 'HOLD', pendingThesis: null, pendingConfidence: 0.6 };
+  run = { ...run, pendingAction: 'HOLD', pendingConfidence: 0.6 };
   const outcome = commitPendingDecision(run);
   assert.ok(outcome);
   const cpReturn = getCheckpoint(1)!.portfolioEffect.returnBias;
@@ -229,7 +228,6 @@ test('a crossed critical drawdown stays crossed', () => {
     currentCheckpoint: 7,
     portfolio: { ...run.portfolio, value: 82000, peakValue: 100000, drawdown: -0.18 },
     pendingAction: 'ADD_RISK',
-    pendingThesis: 'VALUATION',
     pendingConfidence: 0.9,
   };
   const failed = commitPendingDecision(run);
@@ -242,7 +240,6 @@ test('a crossed critical drawdown stays crossed', () => {
     ...recovered,
     portfolio: { ...recovered.portfolio, value: 100000, peakValue: 100000, drawdown: 0 },
     pendingAction: 'HOLD',
-    pendingThesis: 'THESIS_UNCHANGED',
     pendingConfidence: 0.6,
   };
   const after = commitPendingDecision(recovered);

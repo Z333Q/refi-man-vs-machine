@@ -38,30 +38,70 @@ export function thesisLabel(code: ThesisCode | null | undefined): string {
 
 // ─── Conviction ───────────────────────────────────────────────────────────────
 
+// The permanent span. Every integer in it is a real, committable value.
+// Addendum C section 4: the distance-to-conviction mapping never changes, not
+// per checkpoint, not per arena, not per session, not by experiment. The pull
+// gesture (PR 2B) reads these same bounds, so the hand's calibration and the
+// slider's calibration are one scale.
+export const CONVICTION_MIN = 50;
+export const CONVICTION_MAX = 95;
 export const CONVICTION_DEFAULT = 70;
-export const CONVICTION_STEP = 5;
 
-// The full range opens at CP5. Early checkpoints clamp it, because a player
-// who has not yet seen a regime turn has no basis for a 95. This narrows the
-// input, never the interface: the slider is in the same place, doing the same
-// thing, at every checkpoint.
-export const CONVICTION_CLAMPED_RANGE = { min: 60, max: 75 } as const;
-export const CONVICTION_FULL_RANGE = { min: 50, max: 95 } as const;
-export const CONVICTION_UNLOCK_CHECKPOINT = 5;
+// Value resolution. Addendum C section C.2: conviction is integer 50 through
+// 95 and is never snapped, because the calibration score needs the resolution
+// to be worth playing for. 72, 73 and 74 are all real values.
+export const CONVICTION_STEP = 1;
 
-export function convictionRange(checkpointSequence: number): { min: number; max: number } {
-  return checkpointSequence < CONVICTION_UNLOCK_CHECKPOINT
-    ? { ...CONVICTION_CLAMPED_RANGE }
-    : { ...CONVICTION_FULL_RANGE };
+// Detents are tactile and visual landmarks only. They draw ticks and (in the
+// gesture) fire haptics; they do not quantize the value.
+export const CONVICTION_DETENT = 5;
+
+// The three landmarks the hand learns: the rest reference, the gate into the
+// high-draw range, and the hard stop.
+export const CONVICTION_LANDMARKS = [70, 85, 95] as const;
+
+export function isDetent(conviction: number): boolean {
+  return conviction % CONVICTION_DETENT === 0;
 }
 
-export function isConvictionClamped(checkpointSequence: number): boolean {
-  return checkpointSequence < CONVICTION_UNLOCK_CHECKPOINT;
+export function isLandmark(conviction: number): boolean {
+  return (CONVICTION_LANDMARKS as readonly number[]).includes(conviction);
 }
 
-/** Snap a conviction value into the range this checkpoint exposes. */
+// ─── The governor ─────────────────────────────────────────────────────────────
+
+// CP1 to CP4 cap exposure while the player learns. Addendum C section 2.2 and
+// C.1: this is a governor on the value the permanent mapping produces, never a
+// remap of the mapping itself. A remap would mean the same physical pull
+// silently changes meaning at CP5, betraying the player's calibration exactly
+// when the stakes rise. The slider therefore always spans 50 to 95; during the
+// governed checkpoints it simply cannot be driven past 75.
+//
+// Note the governor raises the floor as well as capping the ceiling. That is
+// intended: a governed checkpoint commits somewhere in 60 to 75.
+export const GOVERNOR_BOUNDS = { min: 60, max: 75 } as const;
+export const GOVERNOR_LIFTS_AT_CHECKPOINT = 5;
+export const GOVERNOR_CAPTION = 'LIMITED TO 75. FULL RANGE OPENS AT CP5.';
+
+/** The permanent span the control renders, identical at every checkpoint. */
+export function convictionSpan(): { min: number; max: number } {
+  return { min: CONVICTION_MIN, max: CONVICTION_MAX };
+}
+
+export function isGovernorActive(checkpointSequence: number): boolean {
+  return checkpointSequence < GOVERNOR_LIFTS_AT_CHECKPOINT;
+}
+
+/** The bounds the committed value is clamped into at this checkpoint. */
+export function convictionGovernor(checkpointSequence: number): { min: number; max: number } {
+  return isGovernorActive(checkpointSequence)
+    ? { ...GOVERNOR_BOUNDS }
+    : { min: CONVICTION_MIN, max: CONVICTION_MAX };
+}
+
+/** Apply the governor to a value the permanent mapping produced. */
 export function clampConviction(value: number, checkpointSequence: number): number {
-  const { min, max } = convictionRange(checkpointSequence);
+  const { min, max } = convictionGovernor(checkpointSequence);
   return Math.max(min, Math.min(max, Math.round(value)));
 }
 
@@ -132,3 +172,48 @@ export const PANEL_MODULE: Record<'PORTFOLIO' | 'RISK', ModuleCode> = {
 export function consultedRisk(modules: ModuleCode[]): boolean {
   return modules.includes(PANEL_MODULE.RISK);
 }
+
+// ─── Thesis offered after commit ──────────────────────────────────────────────
+
+// Two to three theses per stance, so the post-commit question is one tap and
+// not a survey. Content may author `thesisOptions` per branch; this is the
+// default set until the copy pass (Addendum B section B3) does.
+const THESIS_BY_ACTION: Record<ActionCode, ThesisCode[]> = {
+  HOLD:             ['THESIS_UNCHANGED', 'LIQUIDITY_PRESERVATION', 'VALUATION'],
+  REDUCE:           ['DETERIORATING_FUNDAMENTALS', 'VOLATILITY_CONTROL', 'PANIC_REDUCTION'],
+  ROTATE_DEFENSIVE: ['REGIME_CHANGE', 'VOLATILITY_CONTROL', 'DIVERSIFICATION'],
+  ROTATE_RISK:      ['REGIME_CHANGE', 'MOMENTUM', 'VALUATION'],
+  RAISE_CASH:       ['LIQUIDITY_PRESERVATION', 'VOLATILITY_CONTROL', 'PANIC_REDUCTION'],
+  ADD_RISK:         ['VALUATION', 'MOMENTUM', 'CONTRARIAN'],
+  STAGED_BUY:       ['VALUATION', 'POLICY_RESPONSE', 'CONTRARIAN'],
+  STAGED_SELL:      ['VOLATILITY_CONTROL', 'DIVERSIFICATION', 'DETERIORATING_FUNDAMENTALS'],
+};
+
+/** The thesis chips shown after committing this stance. */
+export function thesisOptionsFor(branch: ActionBranch): { code: ThesisCode; label: string }[] {
+  const codes = branch.thesisOptions ?? THESIS_BY_ACTION[branch.actionCode];
+  return codes.map(code => ({ code, label: thesisLabel(code) }));
+}
+
+/** Recorded when the player commits and lets the thesis prompt time out. */
+export const THESIS_TIMEOUT_MS = 5000;
+export const THESIS_TIMEOUT_CODE: ThesisCode = 'THESIS_UNSTATED';
+
+// ─── Desktop and tablet input parity ──────────────────────────────────────────
+
+// The pull gesture (Addendum C) is the signature input and is at its best on a
+// tablet, where the thumb has a comfortable arc and the draw distances were
+// derived. Desktop gets the same pointer drag, but the primary desktop input
+// is the keyboard, and integer conviction resolution (C.2) makes a plain
+// arrow-per-point traverse 45 keystrokes wide. So the keyboard gets the same
+// three-speed control the hand gets from detents:
+//
+//   arrows              1 point    fine calibration
+//   shift + arrows      5 points   detent to detent, the tick rhythm
+//   PageUp / PageDown   5 points   same, for keyboards without a comfortable shift reach
+//   Home / End          jump to the governed minimum or maximum
+//
+// This keeps the keyboard path exactly as expressive as the drag, which is
+// invariant 7: the gesture is never the only door.
+export const CONVICTION_KEY_STEP = CONVICTION_STEP;
+export const CONVICTION_KEY_STEP_COARSE = CONVICTION_DETENT;

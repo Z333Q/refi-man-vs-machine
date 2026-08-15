@@ -6,6 +6,7 @@ import { getCheckpoint } from '../lib/covidArena';
 import { scoreCheckpoint, computeXpAward, getDimensionUpdates } from '../lib/scoringEngine';
 import {
   createInitialRun, commitPendingDecision, advanceRunCheckpoint, resolveRunResult,
+  attachThesis,
 } from '../lib/runEngine';
 import { createDefaultProfile, updateDimensions, checkModuleUnlocks, getRankForXp } from '../lib/progressionEngine';
 import { supabase, getSessionId } from '../lib/supabase';
@@ -37,7 +38,7 @@ type GameAction =
   | { type: 'SET_RUN_PHASE'; phase: RunState['phase'] }
   | { type: 'INVESTIGATE_MODULE'; module: ModuleCode }
   | { type: 'SET_PENDING_ACTION'; action: ActionCode }
-  | { type: 'SET_PENDING_THESIS'; thesis: ThesisCode }
+  | { type: 'ATTACH_THESIS'; thesis: ThesisCode }
   | { type: 'SET_PENDING_CONFIDENCE'; confidence: number }
   | { type: 'COMMIT_DECISION' }
   | { type: 'ADVANCE_CHECKPOINT' }
@@ -79,9 +80,10 @@ function reducer(state: GameState, action: GameAction): GameState {
       if (!state.run) return state;
       return { ...state, run: { ...state.run, pendingAction: action.action, phase: 'COMMITTING' } };
 
-    case 'SET_PENDING_THESIS':
+    case 'ATTACH_THESIS':
       if (!state.run) return state;
-      return { ...state, run: { ...state.run, pendingThesis: action.thesis } };
+      // Explains the committed decision; cannot revise it (Addendum C C.5).
+      return { ...state, run: attachThesis(state.run, action.thesis) };
 
     case 'SET_PENDING_CONFIDENCE':
       if (!state.run) return state;
@@ -195,7 +197,7 @@ interface GameContextValue {
   setPhase: (phase: RunState['phase']) => void;
   investigateModule: (module: ModuleCode) => void;
   setPendingAction: (action: ActionCode) => void;
-  setPendingThesis: (thesis: ThesisCode) => void;
+  attachThesis: (thesis: ThesisCode) => void;
   setPendingConfidence: (confidence: number) => void;
   commitDecision: () => void;
   advanceCheckpoint: () => void;
@@ -461,7 +463,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const setPhase = useCallback((phase: RunState['phase']) => dispatch({ type: 'SET_RUN_PHASE', phase }), []);
   const investigateModule = useCallback((module: ModuleCode) => dispatch({ type: 'INVESTIGATE_MODULE', module }), []);
   const setPendingAction = useCallback((action: ActionCode) => dispatch({ type: 'SET_PENDING_ACTION', action }), []);
-  const setPendingThesis = useCallback((thesis: ThesisCode) => dispatch({ type: 'SET_PENDING_THESIS', thesis }), []);
+  const attachDecisionThesis = useCallback((thesis: ThesisCode) => dispatch({ type: 'ATTACH_THESIS', thesis }), []);
   const setPendingConfidence = useCallback((confidence: number) => dispatch({ type: 'SET_PENDING_CONFIDENCE', confidence }), []);
   const commitDecision = useCallback(() => dispatch({ type: 'COMMIT_DECISION' }), []);
   const advanceCheckpoint = useCallback(() => dispatch({ type: 'ADVANCE_CHECKPOINT' }), []);
@@ -479,7 +481,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setPhase,
       investigateModule,
       setPendingAction,
-      setPendingThesis,
+      attachThesis: attachDecisionThesis,
       setPendingConfidence,
       commitDecision,
       advanceCheckpoint,

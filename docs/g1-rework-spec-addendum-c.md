@@ -170,3 +170,18 @@ PR 2 (`feat/g1-decision-contract`) shipped most of 2A before this addendum exist
 - **Governor vs range.** Shipped clamping the slider's own min/max to 60..75 for CP1 to CP4, which is the remap C §2.2 corrects. The slider must span 50..95 permanently with a visible limiter at 75, and the caption becomes `LIMITED TO 75. FULL RANGE OPENS AT CP5.`
 - **Thesis order.** Shipped as thesis-before-commit. B §B2 and C.5 move it after touch-up, with `THESIS_UNSTATED` on a 5-second timeout.
 - **Immutability.** Needs an explicit engine guarantee that a committed stance and conviction cannot be revised by the thesis step.
+
+## C.8 Desktop and tablet input parity
+
+The pull is at its best on a tablet: the thumb has a comfortable arc, and the draw distances in §2.1 were derived for exactly that hand. Desktop gets the same pointer drag, but the primary desktop input is the keyboard, and integer conviction resolution (C.2) makes a plain arrow-per-point traverse 45 keystrokes wide. So the keyboard gets the same three speeds the hand gets from detents:
+
+| Input | Change | Purpose |
+|---|---|---|
+| Arrows | 1 point | fine calibration |
+| Shift + arrows | 5 points | detent to detent, the tick rhythm |
+| PageUp / PageDown | 5 points | same, for keyboards without a comfortable shift reach |
+| Home / End | jump to bounds | the governed minimum or maximum |
+
+This keeps the keyboard exactly as expressive as the drag, which is invariant 7: the gesture is never the only door. The stance cards keep `1..4`, the thesis chips take `1..3`, `Enter` commits, and `Escape` backs out.
+
+The three-speed model is also why detents are landmarks rather than quantization (C.2). Shift-arrow lands on them; a plain arrow walks between them; both are real.
