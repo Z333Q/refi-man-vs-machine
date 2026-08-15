@@ -84,6 +84,7 @@ export function createInitialRun(): RunState {
     machineScore: 50,
     decisions: [],
     criticalFailure: false,
+    criticalFailureCheckpoint: null,
     activeModules: ['PRICE_RETURN', 'PORTFOLIO_SUMMARY', 'SECTOR_EXPOSURE', 'NEWS_FEED'],
     investigatedModules: [],
     pendingAction: null,
@@ -223,7 +224,10 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
     confidence,
     turnoverUsed: run.portfolio.turnoverUsed,
     portfolioDD: run.portfolio.drawdown,
-    machineDD: run.portfolio.drawdown - 0.02,
+    // No fabricated machine drawdown. Where content authors one it is used;
+    // otherwise drawdown scores against the arena risk budget.
+    machineDD: cp.portfolioEffect.machineDrawdown,
+    riskBudgetDD: CRITICAL_DRAWDOWN,
   });
 
   const decision: RunDecision = {
@@ -241,6 +245,7 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
   };
 
   const portfolio = simulatePortfolioAdvance(run.portfolio, action, run.currentCheckpoint);
+  const crossedNow = portfolio.drawdown <= CRITICAL_DRAWDOWN;
   const n = run.currentCheckpoint;
   const playerScore = Math.round((run.playerScore * (n - 1) + score.totalScore) / n);
   const machineScore = Math.round((run.machineScore * (n - 1) + score.machineScore) / n);
@@ -259,13 +264,39 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
       // Crossing the critical drawdown is a fact about the run, not a current
       // reading: once crossed it stays crossed, and a later recovery does not
       // erase it.
-      criticalFailure: run.criticalFailure || portfolio.drawdown <= CRITICAL_DRAWDOWN,
+      criticalFailure: crossedNow || run.criticalFailure,
+      criticalFailureCheckpoint: run.criticalFailureCheckpoint
+        ?? (crossedNow ? run.currentCheckpoint : null),
     },
     score,
     flags,
     dimUpdates,
     checkpoint: cp,
   };
+}
+
+// ─── Observation mode ─────────────────────────────────────────────────────────
+
+/**
+ * A run that crossed the critical drawdown cannot beat the machine.
+ *
+ * Observation mode has to cost something or it is only a banner. Crossing
+ * -20% ends the contest: the run continues so the player can keep reading
+ * machine decisions, but MACHINE_BEATEN is off the table for the rest of it,
+ * whatever the average score says afterwards.
+ */
+export function resolveRunResult(run: RunState, requested: RunState['result']): RunState['result'] {
+  if (!run.criticalFailure) return requested;
+  return requested === 'MACHINE_BEATEN' ? 'PASSED' : requested;
+}
+
+/** One line stating where the run lost its claim on the machine. */
+export function observationModeReason(run: RunState): string | null {
+  if (!run.criticalFailure) return null;
+  const at = run.criticalFailureCheckpoint;
+  return at
+    ? `DRAWDOWN EXCEEDED -20% AT CP${String(at).padStart(2, '0')}. THIS RUN CANNOT BEAT THE MACHINE.`
+    : 'DRAWDOWN EXCEEDED -20%. THIS RUN CANNOT BEAT THE MACHINE.';
 }
 
 /** Move to the next checkpoint, or mark the run complete. */

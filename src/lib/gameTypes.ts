@@ -124,6 +124,11 @@ export interface ActionBranch {
 
 export interface CheckpointData {
   sequence: number;
+  // The machine's score to beat at this checkpoint. Par is content, not engine
+  // logic, so the rules-machine export pipeline can later overwrite these rows
+  // without touching the scoring engine. It is published in the UI: difficulty
+  // is legible, never hidden.
+  machinePar: number;
   phase: CheckpointPhase;
   crisisDay: string;
   signalTitle: string;
@@ -138,6 +143,9 @@ export interface CheckpointData {
     // every position moves by the checkpoint return exactly. No noise term:
     // run state must be reproducible from the decision sequence alone.
     positionReturns?: Record<string, number>;
+    // Optional authored machine drawdown at this checkpoint. Scoring uses it
+    // when present and never fabricates one when it is absent.
+    machineDrawdown?: number;
   };
   machineDecision: MachineDecision;
   availableActions: ActionBranch[];
@@ -211,6 +219,9 @@ export interface RunState {
   machineScore: number;
   decisions: RunDecision[];
   criticalFailure: boolean;
+  // The checkpoint at which the critical drawdown was first crossed, so the
+  // run can say where it happened rather than only that it did.
+  criticalFailureCheckpoint: number | null;
   activeModules: ModuleCode[];
   investigatedModules: ModuleCode[];
   pendingAction: ActionCode | null;
