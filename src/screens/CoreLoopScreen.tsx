@@ -3,7 +3,10 @@ import { useGame } from '../context/GameContext';
 import { useTips } from '../context/TipContext';
 import type { ActionBranch } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
-import { canAffordAction, isHoldOnly, turnoverCostFor, STARTING_CAPITAL } from '../lib/runEngine';
+import {
+  canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
+  STARTING_CAPITAL,
+} from '../lib/runEngine';
 import {
   THESIS_OPTIONS, thesisLabel, stanceLine, stanceTitle,
   convictionRange, isConvictionClamped, clampConviction,
@@ -369,6 +372,12 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     turnoverSpentPct > 0.85 ? 'bg-risk-red' :
     turnoverSpentPct > 0.60 ? 'bg-alert-amber' :
     'bg-phosphor';
+
+  // A run in observation mode cannot report MACHINE_BEATEN, whatever the
+  // average score says. The engine resolves it; the screen only reports it.
+  const observationReason = observationModeReason(run);
+  const beatTheMachine =
+    resolveRunResult(run, run.playerScore > run.machineScore ? 'MACHINE_BEATEN' : 'PASSED') === 'MACHINE_BEATEN';
 
   const lastDecision = run.decisions[run.decisions.length - 1];
   const earnedProcessCredit = Boolean(lastDecision?.behavioralFlags.includes('GOOD_PROCESS')) && cp.isRegimeChange;
@@ -908,6 +917,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                   <div className="text-right">
                     <div className="text-phosphor-dim text-xs tracking-widest">MACHINE</div>
                     <div className="text-2xl font-bold text-phosphor-mid mt-1">{lastCheckpointScore.machineScore}</div>
+                    <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">PAR {cp.machinePar}</div>
                   </div>
                 </div>
 
@@ -994,12 +1004,18 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
           {phase === 'COMPLETE' && (
             <div className="flex-1 flex flex-col items-center justify-center p-6">
               <div className="text-phosphor-dim text-xs tracking-widest mb-2">RUN COMPLETE</div>
-              <div className={`text-3xl font-bold mb-2 ${run.playerScore > run.machineScore ? 'text-paper-green' : 'text-risk-red'}`}>
-                {run.playerScore > run.machineScore ? 'MACHINE BEATEN' : 'MACHINE WINS'}
+              <div className={`text-3xl font-bold mb-2 ${beatTheMachine ? 'text-paper-green' : 'text-risk-red'}`}>
+                {beatTheMachine ? 'MACHINE BEATEN' : 'MACHINE WINS'}
               </div>
-              <div className="text-phosphor-mid text-sm mb-6">
+              <div className="text-phosphor-mid text-sm mb-2">
                 {run.playerScore} vs {run.machineScore}
               </div>
+              {observationReason && (
+                <div className="text-risk-red text-xs tracking-widest text-center max-w-md mb-4 leading-relaxed">
+                  {observationReason}
+                </div>
+              )}
+              <div className="mb-2" />
               <button onClick={onComplete} className="cmd-button-primary px-8 py-3 tracking-widest text-sm">
                 VIEW AUTOPSY ▶
               </button>

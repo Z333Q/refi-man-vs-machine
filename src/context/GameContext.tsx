@@ -4,7 +4,9 @@ import type {
 } from '../lib/gameTypes';
 import { getCheckpoint } from '../lib/covidArena';
 import { scoreCheckpoint, computeXpAward, getDimensionUpdates } from '../lib/scoringEngine';
-import { createInitialRun, commitPendingDecision, advanceRunCheckpoint } from '../lib/runEngine';
+import {
+  createInitialRun, commitPendingDecision, advanceRunCheckpoint, resolveRunResult,
+} from '../lib/runEngine';
 import { createDefaultProfile, updateDimensions, checkModuleUnlocks, getRankForXp } from '../lib/progressionEngine';
 import { supabase, getSessionId } from '../lib/supabase';
 import {
@@ -124,10 +126,14 @@ function reducer(state: GameState, action: GameAction): GameState {
 
     case 'COMPLETE_RUN': {
       if (!state.run) return state;
-      const won = action.result === 'MACHINE_BEATEN';
+      // Observation mode is enforced here, not at the call site: a run that
+      // crossed the critical drawdown cannot report MACHINE_BEATEN, and so
+      // cannot bank a machine beat or extend a streak.
+      const result = resolveRunResult(state.run, action.result);
+      const won = result === 'MACHINE_BEATEN';
       return {
         ...state,
-        run: { ...state.run, result: action.result, phase: 'COMPLETE' },
+        run: { ...state.run, result, phase: 'COMPLETE' },
         profile: {
           ...state.profile,
           machineAttempts: state.profile.machineAttempts + 1,
