@@ -112,6 +112,9 @@ export interface ActionBranch {
   actionCode: ActionCode;
   label: string;
   shortLabel: string;
+  // Optional one-line stance-card description. Where absent, the card derives
+  // its line from `label` (see stanceLine in decisionContract).
+  stanceLabel?: string;
   // Fixed, authored turnover price of taking this stance. The run's turnover
   // budget is a finite, deterministic resource: no estimate, no noise term.
   // HOLD is always 0.
