@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { isProgressSaved, markProgressSaved } from '../../lib/alphaIdentity';
-import { buildHandoffToken, handoffRedirectUrl, type HandoffDestination } from '../../lib/handoff';
+import { claimHandoff, type IntendedDestination } from '../../lib/handoff';
 import { emitEvent } from '../../lib/events';
 
 // Never-trap onboarding bridge (§4.1) — a persistent, unobtrusive surface
@@ -10,7 +10,7 @@ import { emitEvent } from '../../lib/events';
 // not leak top-of-funnel traffic; it is intentionally absent from the
 // attract screen and hidden during an active checkpoint decision.
 
-const EXITS: { dest: HandoffDestination; label: string; note: string }[] = [
+const EXITS: { dest: IntendedDestination; label: string; note: string }[] = [
   { dest: 'PAPER', label: 'RUN IN PAPER MODE', note: 'History is closed. The live market is not.' },
   { dest: 'ELIGIBILITY', label: 'ENTER REFI ONBOARDING', note: 'Your game progress is preserved.' },
 ];
@@ -18,6 +18,8 @@ const EXITS: { dest: HandoffDestination; label: string; note: string }[] = [
 export function OnboardingBridge() {
   const [saved, setSaved] = useState(() => isProgressSaved());
   const [open, setOpen] = useState(false);
+  const [handoffPending, setHandoffPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const openMenu = () => {
     setOpen(o => {
@@ -27,11 +29,23 @@ export function OnboardingBridge() {
     });
   };
 
-  const startHandoff = (dest: HandoffDestination) => {
+  const startHandoff = async (dest: IntendedDestination) => {
+    if (handoffPending) return;
+
     if (dest === 'PAPER') emitEvent('conversion.paper_started', { surface: 'onboarding_bridge' });
-    const token = buildHandoffToken(dest);
-    // User-initiated exit into the formal product (opaque handoff id only).
-    window.location.assign(handoffRedirectUrl(token));
+
+    setHandoffPending(true);
+    setError(null);
+
+    try {
+      // User-initiated exit into the formal product. The token is minted
+      // server-side and opaque, and claimHandoff redirects on success, so
+      // there is no success path to reset.
+      await claimHandoff(dest);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Handoff failed. Try again.');
+      setHandoffPending(false);
+    }
   };
 
   return (
@@ -45,14 +59,20 @@ export function OnboardingBridge() {
             {EXITS.map(x => (
               <button
                 key={x.dest}
-                onClick={() => startHandoff(x.dest)}
-                className="w-full text-left border border-phosphor/25 rounded-terminal px-3 py-2 hover:border-phosphor/50 hover:bg-phosphor/5 transition-colors"
+                onClick={() => void startHandoff(x.dest)}
+                disabled={handoffPending}
+                className="w-full text-left border border-phosphor/25 rounded-terminal px-3 py-2 hover:border-phosphor/50 hover:bg-phosphor/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="text-phosphor text-xs tracking-wide">{x.label} ▸</div>
                 <div className="text-phosphor-dim text-xs mt-0.5 leading-snug">{x.note}</div>
               </button>
             ))}
           </div>
+          {error && (
+            <div className="text-red-400 text-xs mt-2 leading-snug" role="alert">
+              {error}
+            </div>
+          )}
           <div className="text-phosphor-dim/70 text-xs mt-2 leading-snug" style={{ fontSize: '10px' }}>
             OPTIONAL · YOUR FORMAL PROFILE IS COLLECTED SEPARATELY
           </div>
