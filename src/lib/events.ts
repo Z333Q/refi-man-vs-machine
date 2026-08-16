@@ -15,6 +15,10 @@
 // sees the future" auditable (§69 / §4.2).
 
 import { supabase, getSessionId } from './supabase';
+import {
+  bufferEvent, drainBuffer, restoreBuffer, sinkConfigStatus, describeSinkStatus,
+  type BufferStorage, type EventEnvelope,
+} from './eventBuffer';
 
 // The §57 event types emitted so far. Extend as more mutations are wired.
 // The onboarding.* pair is the top of the alpha funnel and feeds the same
@@ -154,6 +158,74 @@ export function covidCrisisDayToISO(crisisDay: string | undefined): string | nul
   return `2020-${month}-${day}T21:00:00Z`;
 }
 
+// ─── Sink delivery ────────────────────────────────────────────────────────────
+
+/** localStorage, where available. Absent in SSR and locked-down browsers. */
+function bufferStore(): BufferStorage | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
+let sinkReported = false;
+
+/**
+ * Report a misconfigured sink once, loudly, at first emit.
+ *
+ * The placeholder that broke telemetry survived because nothing ever said so.
+ * It is a warning rather than a thrown error because the player must never be
+ * stopped by a telemetry problem: the events queue instead.
+ */
+function reportSinkOnce(): void {
+  if (sinkReported) return;
+  sinkReported = true;
+  const status = sinkConfigStatus(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_ANON_KEY,
+  );
+  if (status !== 'OK') console.warn(`[refi telemetry] ${describeSinkStatus(status)}`);
+}
+
+/** Send one envelope. Returns false on any failure, without throwing. */
+async function deliver(envelope: EventEnvelope): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('game_events').insert(envelope);
+    if (error) {
+      console.debug('game_events insert failed', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.debug('game_events insert threw', err);
+    return false;
+  }
+}
+
+/**
+ * Try to deliver everything queued. Whatever fails goes back, in order.
+ *
+ * Called opportunistically on emit rather than on a timer: the first successful
+ * send after an outage carries the backlog with it, and a sink that is still
+ * down costs one failed request rather than a retry storm.
+ */
+async function flushBuffer(store: BufferStorage): Promise<void> {
+  const queued = drainBuffer(store);
+  if (queued.length === 0) return;
+
+  const undelivered: EventEnvelope[] = [];
+  for (let i = 0; i < queued.length; i++) {
+    if (await deliver(queued[i])) continue;
+    // First failure stops the flush: the sink is down again, and pushing the
+    // rest would just fail in order while losing the ordering guarantee.
+    undelivered.push(...queued.slice(i));
+    break;
+  }
+  restoreBuffer(store, undelivered);
+}
+
 export async function emitEvent(
   eventType: GameEventType,
   payload: Record<string, unknown> = {},
@@ -179,14 +251,20 @@ export async function emitEvent(
   };
 
   lastEventId = eventId;
+  reportSinkOnce();
 
-  try {
-    const { error } = await supabase.from('game_events').insert(envelope);
-    if (error) {
-      // Telemetry is best-effort; never surface to the player.
-      console.debug('game_events insert failed', error.message);
-    }
-  } catch (err) {
-    console.debug('game_events insert threw', err);
+  const store = bufferStore();
+
+  // Best-effort for the player, durable for the record: a failed send queues
+  // rather than vanishing, and the next success carries the backlog with it.
+  if (!store) {
+    await deliver(envelope);
+    return;
+  }
+
+  await flushBuffer(store);
+
+  if (!(await deliver(envelope))) {
+    bufferEvent(store, envelope);
   }
 }
