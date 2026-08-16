@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import type { DimensionCode } from './gameTypes';
 import assert from 'node:assert/strict';
 import type { ActionBranch, ThesisCode } from './gameTypes';
 import { COVID_CHECKPOINTS } from './covidArena';
@@ -9,7 +10,8 @@ import {
   convictionToConfidence, confidenceToConviction, consultedRisk,
   isDetent, isLandmark,
   CONVICTION_MIN, CONVICTION_MAX, CONVICTION_STEP, CONVICTION_DETENT,
-  CONVICTION_DEFAULT, GOVERNOR_BOUNDS,
+  CONVICTION_DEFAULT, GOVERNOR_BOUNDS, CONVICTION_DERIVED_DIMENSIONS,
+  PROVISIONAL_UNTIL_DECISIONS, isDimensionProvisional,
   THESIS_TIMEOUT_CODE, PANEL_MODULE,
 } from './decisionContract';
 
@@ -427,4 +429,33 @@ test('a committed decision is exactly stance, conviction, then thesis', () => {
   // No symbol-level orders survive anywhere in the record.
   assert.equal('orders' in d, false);
   assert.equal('symbol' in d, false);
+});
+
+// ─── Provisional dimensions (Amendment 1's third compensating control) ────────
+
+test('conviction-derived dimensions are provisional until the sample settles', () => {
+  // The governor is gone, so a player can commit at 95 on their first decision
+  // with no calibration at all. That verdict must not harden into an identity
+  // before there is evidence for it.
+  for (const dim of CONVICTION_DERIVED_DIMENSIONS) {
+    assert.equal(isDimensionProvisional(dim, 0), true, `${dim} at 0`);
+    assert.equal(isDimensionProvisional(dim, PROVISIONAL_UNTIL_DECISIONS - 1), true, `${dim} just below`);
+    assert.equal(isDimensionProvisional(dim, PROVISIONAL_UNTIL_DECISIONS), false, `${dim} at threshold`);
+    assert.equal(isDimensionProvisional(dim, 40), false, `${dim} well past`);
+  }
+});
+
+test('dimensions that do not depend on conviction are never provisional', () => {
+  // A turnover or drawdown score does not rest on a calibration the player has
+  // not built yet, so it reports plainly from the first sample.
+  for (const dim of ['TURNOVER_DISCIPLINE', 'LOSS_CONTROL', 'REGIME_ADAPTATION'] as DimensionCode[]) {
+    assert.equal(isDimensionProvisional(dim, 0), false, dim);
+    assert.equal(isDimensionProvisional(dim, 1), false, dim);
+  }
+});
+
+test('the provisional set is exactly the dimensions the scorer feeds conviction into', () => {
+  // If a future dimension starts consuming `confidence`, it belongs here too,
+  // and this assertion is where that gets noticed.
+  assert.deepEqual([...CONVICTION_DERIVED_DIMENSIONS].sort(), ['DECISION_CONSISTENCY', 'POSITION_SIZING']);
 });

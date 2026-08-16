@@ -1,4 +1,4 @@
-import type { ActionBranch, ActionCode, ModuleCode, ThesisCode } from './gameTypes';
+import type { ActionBranch, ActionCode, DimensionCode, ModuleCode, ThesisCode } from './gameTypes';
 
 // ─── The three-input decision contract ────────────────────────────────────────
 // A committed decision is exactly three things: one authored stance, one
@@ -253,3 +253,32 @@ export const THESIS_TIMEOUT_CODE: ThesisCode = 'THESIS_UNSTATED';
 // invariant 7: the gesture is never the only door.
 export const CONVICTION_KEY_STEP = CONVICTION_STEP;
 export const CONVICTION_KEY_STEP_COARSE = CONVICTION_DETENT;
+
+// ─── Provisional profile dimensions ───────────────────────────────────────────
+
+/**
+ * The dimensions whose score is computed from conviction.
+ *
+ * These are the two the scoring engine feeds `confidence` into. They are the
+ * ones Amendment 1 puts a provisional tag on, because removing the governor
+ * means a player can commit at 95 on their very first decision, before they
+ * have any calibration to speak of. Early miscalibration should inform the
+ * player without permanently staining the dataset the archetype is built from.
+ */
+export const CONVICTION_DERIVED_DIMENSIONS: DimensionCode[] = [
+  'POSITION_SIZING',
+  'DECISION_CONSISTENCY',
+];
+
+/**
+ * Whether a dimension's score should be shown as provisional.
+ *
+ * Conviction-derived dimensions are provisional until they have seen
+ * PROVISIONAL_UNTIL_DECISIONS scored decisions. Everything else is reported
+ * plainly from the first sample: a turnover or drawdown score does not depend
+ * on a calibration the player has not built yet.
+ */
+export function isDimensionProvisional(dimension: DimensionCode, sampleSize: number): boolean {
+  if (!CONVICTION_DERIVED_DIMENSIONS.includes(dimension)) return false;
+  return sampleSize < PROVISIONAL_UNTIL_DECISIONS;
+}
