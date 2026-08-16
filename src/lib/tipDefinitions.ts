@@ -8,10 +8,8 @@ export type TipTriggerEvent =
   | 'game.first_entry'
   | 'tutorial.first_signal'
   | 'tutorial.portfolio_open'
-  | 'tutorial.position_selected'
-  | 'tutorial.first_order_added'
-  | 'tutorial.draft_ready'
-  | 'tutorial.first_review'
+  | 'tutorial.stance_selected'
+  | 'tutorial.review_ready'
   | 'tutorial.first_commit'
   | 'tutorial.machine_reveal'
   | 'tutorial.first_score'
@@ -34,7 +32,7 @@ export type TipTriggerEvent =
 
 export interface TipAction {
   label: string;
-  action: 'DISMISS' | 'COMPLETE' | 'SNOOZE' | 'OPEN_PORTFOLIO' | 'OPEN_RISK' | 'OPEN_DRAFT' | 'OPEN_SIGNAL' | 'TRY_HOLD';
+  action: 'DISMISS' | 'COMPLETE' | 'SNOOZE' | 'OPEN_PORTFOLIO' | 'OPEN_RISK' | 'OPEN_DECIDE' | 'OPEN_SIGNAL' | 'TRY_HOLD';
 }
 
 export interface TipDef {
@@ -106,6 +104,7 @@ export const TIP_LIBRARY: TipDef[] = [
     title: 'YOUR PORTFOLIO',
     body: [
       'EVERY POSITION SHOWS: WEIGHT, PROFIT OR LOSS, SECTOR, RISK CONTRIBUTION.',
+      'READ THEM AS EVIDENCE. YOU DECIDE FOR THE WHOLE PORTFOLIO, NOT ONE NAME.',
       'PRESS [P] OR CLICK PORTFOLIO.',
     ],
     trigger: 'tutorial.portfolio_open',
@@ -115,20 +114,20 @@ export const TIP_LIBRARY: TipDef[] = [
     requiredMode: 'FULL',
     spotlight: 'PORTFOLIO PANEL',
     actions: [
-      { label: 'SELECT A POSITION', action: 'COMPLETE' },
+      { label: 'CONTINUE', action: 'COMPLETE' },
     ],
   },
 
   {
-    code: 'FIRST_RUN_04_POSITION_ACTIONS',
+    code: 'FIRST_RUN_04_STANCE',
     type: 'DECISION',
-    title: 'POSITION CONTROLS',
+    title: 'ONE STANCE, ONE CHECKPOINT',
     body: [
-      'ADD: INCREASE THIS POSITION.',
-      'REDUCE: SELL PART OF THIS POSITION.',
-      'EXIT: SELL THE FULL POSITION.',
+      'YOU SET A STANCE FOR THE WHOLE PORTFOLIO. THERE IS NO PER POSITION ORDER.',
+      'CONVICTION SETS HOW STRONGLY YOU BELIEVE IT.',
+      'HOLD IS A REAL, SCORED DECISION AND COSTS NO TURNOVER.',
     ],
-    trigger: 'tutorial.position_selected',
+    trigger: 'tutorial.stance_selected',
     priority: 90,
     blocking: false,
     maxShowCount: 1,
@@ -137,32 +136,15 @@ export const TIP_LIBRARY: TipDef[] = [
   },
 
   {
-    code: 'FIRST_RUN_05_DRAFT',
-    type: 'SPOTLIGHT',
-    title: 'DECISION DRAFT',
-    body: [
-      'YOUR ACTION HAS NOT BEEN EXECUTED YET.',
-      'YOU MAY COMBINE SEVERAL ACTIONS INTO ONE CHECKPOINT DECISION.',
-      'EXAMPLE: REDUCE AIRLINE · ADD HEALTHCARE · RAISE CASH',
-    ],
-    trigger: 'tutorial.first_order_added',
-    priority: 90,
-    blocking: false,
-    maxShowCount: 1,
-    requiredMode: 'FULL',
-    spotlight: 'DRAFT PANEL',
-    actions: [{ label: 'VIEW DRAFT', action: 'COMPLETE' }],
-  },
-
-  {
     code: 'FIRST_RUN_06_RISK',
     type: 'SPOTLIGHT',
     title: 'CHECK THE EFFECT',
     body: [
-      'BEFORE COMMITTING, INSPECT: CASH · MAX POSITION SIZE · SECTOR EXPOSURE · DRAWDOWN · TURNOVER · PORTFOLIO RISK.',
+      'BEFORE COMMITTING, INSPECT: CASH · SECTOR EXPOSURE · DRAWDOWN · TURNOVER BUDGET · PORTFOLIO RISK.',
+      'TURNOVER IS FINITE AND DOES NOT REFILL. SPENDING IT IS PART OF THE DECISION.',
       'PRESS [R] OR CLICK RISK.',
     ],
-    trigger: 'tutorial.draft_ready',
+    trigger: 'tutorial.review_ready',
     priority: 85,
     blocking: false,
     maxShowCount: 1,
@@ -180,8 +162,8 @@ export const TIP_LIBRARY: TipDef[] = [
       'THE HISTORICAL MARKET ADVANCES.',
       'THE MACHINE\'S DECISION REMAINS HIDDEN UNTIL YOUR CHOICE IS FINAL.',
     ],
-    trigger: 'tutorial.first_review',
-    priority: 90,
+    trigger: 'tutorial.review_ready',
+    priority: 88,
     blocking: false,
     maxShowCount: 1,
     requiredMode: 'FULL',
