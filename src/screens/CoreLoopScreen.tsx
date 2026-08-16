@@ -5,15 +5,17 @@ import type { ActionBranch, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
 import {
   canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
-  STARTING_CAPITAL,
+  STARTING_CAPITAL, type DecisionCommand,
 } from '../lib/runEngine';
 import {
-  thesisLabel, thesisOptionsFor, stanceLine, stanceTitle,
+  thesisLabel, thesisOptionsFor, stanceTitle,
   convictionSpan, convictionGovernor, isGovernorActive, clampConviction,
   convictionToConfidence, confidenceToConviction, isDetent, isLandmark,
   CONVICTION_KEY_STEP, CONVICTION_KEY_STEP_COARSE,
   GOVERNOR_CAPTION, PANEL_MODULE, THESIS_TIMEOUT_MS, THESIS_TIMEOUT_CODE,
 } from '../lib/decisionContract';
+import { classifyDevice, type DeviceClass, type RegionBounds } from '../lib/gestureGeometry';
+import PullToCommit from '../components/game/PullToCommit';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
 import MachinePipeline from '../components/game/MachinePipeline';
@@ -84,6 +86,43 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   // The post-commit thesis prompt. Shown between the release and the reveal so
   // the player explains an instinct already exposed (Addendum B B2, C C.5).
   const [thesisPrompt, setThesisPrompt] = useState(false);
+
+  // ─── Gesture geometry ───────────────────────────────────────────────────────
+  // The device class is decided once per run from the usable decision region,
+  // never from raw viewport dimensions (Addendum C C.3). Browser chrome, safe
+  // areas and embedded webviews all distort the viewport, and a class that
+  // moved mid-run would silently recalibrate the hand. Resize and orientation
+  // still cancel an active gesture through the state machine; they do not
+  // reclassify the geometry.
+  const convictionInputRef = useRef<HTMLInputElement | null>(null);
+  const [regionBounds, setRegionBounds] = useState<RegionBounds | null>(null);
+  const [deviceClass, setDeviceClass] = useState<DeviceClass>('STANDARD');
+
+  /**
+   * Measure the decision region the moment it first exists, and freeze the
+   * classification for the rest of the run.
+   *
+   * This is a callback ref rather than an effect on purpose. The stance region
+   * lives inside the DECIDE panel, which is gated on both `activePanel` and
+   * `decisionPhase`; an effect would have to name every piece of state that can
+   * mount it, and the day one of them is missed the region stays unmeasured and
+   * every pull silently falls back to the precise controls forever. React calls
+   * this when the node attaches, whatever caused the mount.
+   *
+   * It measures once. Later attachments (panel reopened, next checkpoint) find
+   * bounds already set and leave the class alone, so the geometry cannot shift
+   * under a hand that has already calibrated to it.
+   */
+  const measureDecisionRegion = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    setRegionBounds(prev => {
+      if (prev) return prev;
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return prev;
+      setDeviceClass(classifyDevice({ width: rect.width, height: rect.height }));
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    });
+  }, []);
 
   // ─── First-run coaching (P0 IA: a guided, spotlit first checkpoint) ───────────
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -312,6 +351,30 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     setPendingConfidence(convictionToConfidence(clampConviction(next, run.currentCheckpoint)));
   }, [run, setPendingConfidence]);
 
+  /**
+   * The precise fallback, and the destination of anything that is not a clean
+   * pull: keyboard activation, a timid dead-zone release, and a grip without
+   * the clearance to reach full draw all land here.
+   *
+   * An unaffordable stance is never selected by this path. The card can explain
+   * why it is priced out, but it must not become the pending decision through a
+   * callback shared with the affordable cards.
+   */
+  const openFocusedControls = useCallback((branch: ActionBranch) => {
+    if (!run) return;
+    if (!canAffordAction(run, branch.actionCode, currentCheckpointData)) return;
+    selectStance(branch);
+    setActivePanel('DECIDE');
+    // An actual focus move, not just a state change: the fallback has to leave
+    // the caret on the control the player now needs.
+    window.requestAnimationFrame(() => {
+      const input = convictionInputRef.current;
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      input.scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
+    });
+  }, [run, currentCheckpointData, selectStance, reducedMotion]);
+
   const handleReview = useCallback(() => {
     if (!run?.pendingAction) return;
     setCommitConfirm(true);
@@ -319,11 +382,32 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     tipOnce('draft_ready', () => triggerEvent('tutorial.draft_ready'));
   }, [run?.pendingAction, tipOnce, triggerEvent]);
 
-  const handleFinalCommit = useCallback(() => {
-    commitDecision();
+  // The post-commit UI sequence, shared by both doors so the screen cannot end
+  // up in a different state depending on how the decision was made.
+  const afterCommit = useCallback(() => {
     setCommitConfirm(false);
     setThesisPrompt(true);
-  }, [commitDecision]);
+  }, []);
+
+  /**
+   * The one place this screen commits. Both doors call it with a complete
+   * command; nothing here reads pending state, so a commit can never pick up a
+   * half-applied stance or a stale conviction.
+   */
+  const submitDecision = useCallback((command: DecisionCommand) => {
+    commitDecision(command);
+    afterCommit();
+  }, [commitDecision, afterCommit]);
+
+  // The precise door: whatever the slider and keyboard have built becomes the
+  // command. Same boundary as the gesture, same engine call.
+  const handleFinalCommit = useCallback(() => {
+    if (!run?.pendingAction) return;
+    submitDecision({
+      action: run.pendingAction,
+      conviction: confidenceToConviction(run.pendingConfidence),
+    });
+  }, [run?.pendingAction, run?.pendingConfidence, submitDecision]);
 
   const pickThesis = useCallback((code: ThesisCode) => {
     attachThesis(code);
@@ -458,6 +542,18 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   const governed = isGovernorActive(run.currentCheckpoint);
   const decisionReady = Boolean(stance);
   const selectedBranch = branches.find(b => b.actionCode === stance) ?? null;
+
+  // The conviction committed at the previous checkpoint, drawn as a faint
+  // marker on the pull meter so the hand has a reference to move against.
+  const previousDecision = run.decisions[run.decisions.length - 1];
+  const previousConviction = previousDecision
+    ? confidenceToConviction(previousDecision.confidence ?? 0)
+    : null;
+
+  // TODO(addendum-c): the player-facing mute/settings surface is not built yet,
+  // so the tick channel is left audible and only reduced motion is honoured.
+  // Tracked as outstanding Addendum C work; see the PR report.
+  const audioMuted = false;
 
   // ─── Turnover ────────────────────────────────────────────────────────────────
 
@@ -810,46 +906,28 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                     <div className="text-phosphor-dim text-xs tracking-widest mb-2">
                       1 · STANCE
                     </div>
-                    <div className="space-y-2 mb-6">
+                    <div className="space-y-2 mb-6" ref={measureDecisionRegion}>
                       {branches.map((branch, i) => {
                         const affordable = canAffordAction(run, branch.actionCode, cp);
                         const selected = stance === branch.actionCode;
                         const cost = turnoverCostFor(branch.actionCode, cp);
                         return (
-                          <button
+                          <PullToCommit
                             key={branch.actionCode}
-                            onClick={() => affordable && selectStance(branch)}
-                            disabled={!affordable}
-                            aria-pressed={selected}
-                            className={`w-full text-left p-3 border transition-colors ${
-                              selected
-                                ? 'border-phosphor bg-phosphor/10'
-                                : affordable
-                                  ? 'border-phosphor/20 hover:border-phosphor/45 hover:bg-phosphor/5'
-                                  : 'border-phosphor/10 opacity-40 cursor-not-allowed'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-phosphor-dim/60 text-xs">[{i + 1}]</span>
-                                <span className={`text-sm font-bold tracking-wide ${selected ? 'text-phosphor' : 'text-phosphor-mid'}`}>
-                                  {stanceTitle(branch)}
-                                </span>
-                                {selected && <span className="text-phosphor text-xs">✓</span>}
-                              </div>
-                              <span className={`text-xs tabular-nums ${affordable ? 'text-phosphor-dim' : 'text-risk-red'}`}>
-                                {cost === 0 ? 'FREE' : `${(cost * 100).toFixed(0)}% TURNOVER`}
-                              </span>
-                            </div>
-                            <div className="text-phosphor-dim text-xs leading-snug mt-1 pl-7">
-                              {stanceLine(branch)}
-                            </div>
-                            {!affordable && (
-                              <div className="text-risk-red text-xs tracking-widest mt-1 pl-7">
-                                NOT ENOUGH TURNOVER BUDGET REMAINING.
-                              </div>
-                            )}
-                          </button>
+                            branch={branch}
+                            index={i}
+                            affordable={affordable}
+                            turnoverCost={cost}
+                            checkpointSequence={run.currentCheckpoint}
+                            selected={selected}
+                            reducedMotion={reducedMotion}
+                            muted={audioMuted}
+                            deviceClass={deviceClass}
+                            regionBounds={regionBounds}
+                            previousConviction={previousConviction}
+                            onCommit={conviction => submitDecision({ action: branch.actionCode, conviction })}
+                            onOpenFocusedControls={() => openFocusedControls(branch)}
+                          />
                         );
                       })}
                     </div>
@@ -882,6 +960,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                             step={CONVICTION_KEY_STEP}
                             value={conviction}
                             onChange={e => adjustConviction(Number(e.target.value))}
+                            ref={convictionInputRef}
                             aria-label="CONVICTION"
                             aria-valuemin={governor.min}
                             aria-valuemax={governor.max}

@@ -180,6 +180,48 @@ export function simulatePortfolioAdvance(
   };
 }
 
+// ─── The decision command ─────────────────────────────────────────────────────
+
+/**
+ * A complete decision, as one value.
+ *
+ * Every input door produces exactly this and nothing else: the slider and the
+ * keyboard build it from the editable pending state, and the pull gesture emits
+ * it on a clean release. Committing is therefore a single atomic step rather
+ * than a sequence of UI dispatches whose ordering the engine would have to
+ * trust. Thesis is deliberately absent: it is attached after the commit
+ * (Addendum C C.5) and cannot revise the decision it explains.
+ */
+export interface DecisionCommand {
+  action: ActionCode;
+  conviction: number;
+}
+
+/**
+ * Fold a command into the run's pending fields, clamped by this checkpoint's
+ * governor. Split out from the commit so the conversion is inspectable on its
+ * own and both doors demonstrably share it.
+ */
+export function prepareDecisionCommand(run: RunState, command: DecisionCommand): RunState {
+  const conviction = clampConviction(command.conviction, run.currentCheckpoint);
+  return {
+    ...run,
+    pendingAction: command.action,
+    pendingConfidence: convictionToConfidence(conviction),
+  };
+}
+
+/**
+ * The single commit boundary. Gesture, slider and keyboard all arrive here, so
+ * an equivalence test at this seam covers every door rather than one of them.
+ *
+ * No scoring or portfolio logic lives here: commitPendingDecision remains the
+ * engine authority and this only decides what is handed to it.
+ */
+export function commitDecisionCommand(run: RunState, command: DecisionCommand): CommitOutcome | null {
+  return commitPendingDecision(prepareDecisionCommand(run, command));
+}
+
 // ─── Commit ───────────────────────────────────────────────────────────────────
 
 export interface CommitOutcome {
@@ -201,9 +243,24 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
   const cp = getCheckpoint(run.currentCheckpoint);
   if (!cp) return null;
 
+  // The engine is the authority on what may be committed, not the screen that
+  // happened to send it. Now that a DecisionCommand can name any stance, both
+  // laws are enforced here so every route obeys them: a direct engine call, the
+  // command helper, an old test, a replay.
+  //
+  // A stance this checkpoint does not author has no branch, and therefore no
+  // authored flags, alpha impact or turnover price. Inventing fallback
+  // economics for it would let a decision score against numbers no content
+  // author ever wrote.
   const branch = cp.availableActions.find(a => a.actionCode === action);
-  const flags: BehavioralFlag[] = [...(branch?.branchEffect.flagsAdd ?? [])];
-  const dimUpdates = branch?.branchEffect.alphaImpact ?? {};
+  if (!branch) return null;
+
+  // The turnover budget is a hard constraint. A stance the run cannot pay for
+  // is not committable, whichever door proposed it.
+  if (!canAffordAction(run, action, cp)) return null;
+
+  const flags: BehavioralFlag[] = [...branch.branchEffect.flagsAdd];
+  const dimUpdates = branch.branchEffect.alphaImpact;
   const turnoverCost = turnoverCostFor(action, cp);
   // The UI clamps conviction to the range this checkpoint exposes; the engine
   // guarantees it, so a stale or out-of-range value can never reach scoring.

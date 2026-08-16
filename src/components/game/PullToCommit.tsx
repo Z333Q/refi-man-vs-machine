@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionBranch } from '../../lib/gameTypes';
 import { stanceLine, stanceTitle, convictionGovernor, isLandmark } from '../../lib/decisionContract';
 import {
-  classifyDevice, geometryFor, radialDistance, rubberBand,
-  hasClearance, type DeviceClass, type PullGeometry,
+  geometryFor, radialDistance, rubberBand,
+  gripDisposition, type DeviceClass, type PullGeometry, type RegionBounds,
 } from '../../lib/gestureGeometry';
 import { PullFilter } from '../../lib/oneEuroFilter';
 import {
@@ -33,6 +33,10 @@ interface Props {
   selected: boolean;
   reducedMotion: boolean;
   muted: boolean;
+  /** Decided once per run from the usable decision region (Addendum C C.3). */
+  deviceClass: DeviceClass;
+  /** The usable decision region in client coordinates, or null before measure. */
+  regionBounds: RegionBounds | null;
   onCommit: (conviction: number) => void;
   onOpenFocusedControls: () => void;
   /** Conviction committed at the previous checkpoint, drawn as a faint marker. */
@@ -41,7 +45,8 @@ interface Props {
 
 export default function PullToCommit({
   branch, index, affordable, turnoverCost, checkpointSequence, selected,
-  reducedMotion, muted, onCommit, onOpenFocusedControls, previousConviction,
+  reducedMotion, muted, deviceClass, regionBounds,
+  onCommit, onOpenFocusedControls, previousConviction,
 }: Props) {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const contextRef = useRef<GestureContext>(initialGestureContext());
@@ -49,7 +54,6 @@ export default function PullToCommit({
   const filterRef = useRef(new PullFilter());
   const rawDistanceRef = useRef(0);
 
-  const [deviceClass, setDeviceClass] = useState<DeviceClass>('STANDARD');
   const [conviction, setConviction] = useState<number | null>(null);
   const [pullVector, setPullVector] = useState<{ x: number; y: number } | null>(null);
   const [flash, setFlash] = useState<FeedbackKind | null>(null);
@@ -61,13 +65,6 @@ export default function PullToCommit({
     () => ({ muted, reducedMotion }),
     [muted, reducedMotion],
   );
-
-  // Device class is decided once, from the usable region rather than raw
-  // viewport height, and never changes during a run (Addendum C C.3).
-  useEffect(() => {
-    const region = { width: window.innerWidth, height: window.innerHeight };
-    setDeviceClass(classifyDevice(region));
-  }, []);
 
   const tick = useCallback((kind: FeedbackKind) => {
     reportFeedback(kind, preferences, {
@@ -122,18 +119,44 @@ export default function PullToCommit({
       return;
     }
 
-    const rect = cardRef.current?.getBoundingClientRect();
-    const region = { width: window.innerWidth, height: window.innerHeight };
+    // Clearance is decided before the gesture owns anything. A grip that cannot
+    // reach the hard stop in every working direction would cap conviction below
+    // the maximum by direction, and the player would only discover it halfway
+    // down a pull they had already committed to. So it never becomes a pull:
+    // no GRIP, no pointer capture, no reachable COMMIT. The stance goes to the
+    // precise controls instead, which can express any value.
+    // An unaffordable stance is not committable by any door, so it never grips
+    // and never reaches the precise controls either. The card keeps explaining
+    // itself; that is the whole interaction.
+    if (!affordable) return;
+
+    // Before the region has been measured there is no verified geometry, and a
+    // viewport guess is exactly the thing C.3 rules out. Take the safe door.
+    if (!regionBounds) {
+      onOpenFocusedControls();
+      return;
+    }
+
+    // The clearance call takes the client point and the region bounds together,
+    // so the viewport-to-region conversion happens in one place that cannot be
+    // called with mismatched coordinate spaces.
+    const disposition = gripDisposition(
+      { x: e.clientX, y: e.clientY },
+      regionBounds,
+      geometry,
+      affordable,
+    );
+
+    if (disposition === 'UNAVAILABLE') return;
+    if (disposition === 'PRECISE_CONTROLS') {
+      setClearanceWarning(true);
+      onOpenFocusedControls();
+      return;
+    }
+
     originRef.current = { x: e.clientX, y: e.clientY };
     filterRef.current.reset();
     rawDistanceRef.current = 0;
-
-    // A card that cannot reach full draw in every direction would silently cap
-    // conviction below the maximum, which breaks the geometry contract
-    // invisibly. Surface it rather than shipping a quiet lie.
-    if (rect && !hasClearance({ x: e.clientX, y: e.clientY }, region, geometry)) {
-      setClearanceWarning(true);
-    }
 
     // Pointer capture keeps the gesture alive once the finger leaves the card,
     // and turns a screen-edge exit into a clean cancel rather than a lost
@@ -287,12 +310,12 @@ export default function PullToCommit({
         onPointerUp={affordable ? onPointerUp : undefined}
         onPointerCancel={affordable ? onPointerCancel : undefined}
         onKeyDown={e => {
+          if (!affordable) return;
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             onOpenFocusedControls();
           }
         }}
-        onClick={() => { if (!affordable) onOpenFocusedControls(); }}
         // Without this the browser claims the drag as a scroll and fires
         // pointercancel. It is the most common cause of drag gestures failing
         // on mobile web.
