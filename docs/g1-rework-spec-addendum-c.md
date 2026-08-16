@@ -257,6 +257,19 @@ trigger, which watches median conviction against 85, the exact region the
 shipped curve makes effortless. Moving the knee aligns the hand, the label, and
 the scoring exposure on where normal ends.
 
+**Shipping condition (integrity, not preference):** Amendment 2's curve change
+does not ship until the events sink is live and recording. Both rollback
+triggers, Amendment 1's and this one, read from telemetry, and the governor's
+removal was justified partly on those guards. A safety mechanism that cannot
+fire is not a safety mechanism, so shipping the curve while the sink is down
+would silently convert a guarded change into an unguarded one.
+
+Note the asymmetry, because it decides merge order elsewhere: the sink blocks
+the curve, not the grammar. The verdict grammar's invariant is enforced by
+tests rather than telemetry, so it may ship while the sink is down. Any future
+change whose stated guard is a metric inherits this condition; any change whose
+guard is a test does not.
+
 **Telemetry addendum:** alongside Amendment 1's trigger, log the share of
 commits landing in the 76 to 95 band per checkpoint index. If the eased zone
 overcorrects and first-arena players cluster below a median of 65, the knee
@@ -327,3 +340,19 @@ fixed label.
 answered only by the CP1 demonstration and the face-down machine card. If
 testers miss it, the remediation order is: strengthen the demonstration, then
 the card's first appearance, and only then add a text fallback.
+
+## Working practice: a ruling ships with its test twin
+
+Two of the verdict grammar's tests are rulings converted into executable law:
+one sweeps every margin from -20 to +20 and asserts a loss never carries a
+nudge and a win never carries a criticism; the other asserts a one point loss
+is staged identically to a fifteen point loss, which is the rule 16 near-miss
+boundary expressed as an assertion rather than a paragraph.
+
+This is the house pattern. Every future ruling lands with its test twin
+wherever one is expressible, because a ruling that lives only in prose is a
+ruling that gets reverted in good faith by someone who never read the prose.
+
+The Verb specification's acceptance item 8, that no sound, animation or haptic
+differs between an eventual win and an eventual loss at the moment of release,
+is explicitly in scope for this treatment when the Resolution Engine PR lands.
