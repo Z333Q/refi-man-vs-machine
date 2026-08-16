@@ -1,18 +1,26 @@
 import ClaimHandoffButton from '../components/ClaimHandoffButton';
+import { useGame } from '../context/GameContext';
+import type { DimensionCode } from '../lib/gameTypes';
+import { isDimensionProvisional, PROVISIONAL_UNTIL_DECISIONS } from '../lib/decisionContract';
 
 interface Props {
   onBasketWriter: () => void;
   onBack: () => void;
 }
 
-const DIMENSIONS = [
-  { dim: 'STOCK SELECTION', score: 81 },
-  { dim: 'POSITION SIZING', score: 43 },
-  { dim: 'LOSS CONTROL', score: 76 },
-  { dim: 'RE-ENTRY DISCIPLINE', score: 38 },
-  { dim: 'TURNOVER DISCIPLINE', score: 54 },
-  { dim: 'REGIME ADAPTATION', score: 84 },
-  { dim: 'RULE ADHERENCE', score: 47 },
+// The dimensions this screen reports, in reading order. Scores come from the
+// player's own profile: this screen previously rendered a fixed mock array, so
+// every player saw the same seven numbers from the specification's example.
+// The profile is the one surface that argues from the player's own behaviour,
+// and it cannot do that with someone else's data.
+const DIMENSION_ROWS: { code: DimensionCode; label: string }[] = [
+  { code: 'STOCK_SELECTION', label: 'STOCK SELECTION' },
+  { code: 'POSITION_SIZING', label: 'POSITION SIZING' },
+  { code: 'LOSS_CONTROL', label: 'LOSS CONTROL' },
+  { code: 'REENTRY_DISCIPLINE', label: 'RE-ENTRY DISCIPLINE' },
+  { code: 'TURNOVER_DISCIPLINE', label: 'TURNOVER DISCIPLINE' },
+  { code: 'REGIME_ADAPTATION', label: 'REGIME ADAPTATION' },
+  { code: 'RULE_ADHERENCE', label: 'RULE ADHERENCE' },
 ];
 
 function BarScore({ score }: { score: number }) {
@@ -37,6 +45,40 @@ function BarScore({ score }: { score: number }) {
 }
 
 export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
+  const { state } = useGame();
+
+  // Read the player's own dimensions. sampleSize already rides on each one, so
+  // the provisional rule needs no schema change.
+  const rows = DIMENSION_ROWS.map(r => {
+    const d = state.profile.dimensions[r.code] ?? { score: 50, sampleSize: 0 };
+    return {
+      ...r,
+      score: Math.round(d.score),
+      sampleSize: d.sampleSize,
+      provisional: isDimensionProvisional(r.code, d.sampleSize),
+    };
+  });
+
+  // A dimension nobody has evidence for is not a strength or a gap. Provisional
+  // conviction dimensions are also held back: Amendment 1 removed the governor,
+  // so a first-decision 95 must be allowed to be wrong without that verdict
+  // hardening into an identity the player did not earn.
+  const reportable = rows.filter(r => r.sampleSize > 0 && !r.provisional);
+  const strengths = reportable.filter(r => r.score >= 70);
+  const gaps = reportable.filter(r => r.score < 55);
+  const anyProvisional = rows.some(r => r.provisional);
+
+  // The pattern is read off the player's own extremes rather than authored.
+  // A claim about someone's behaviour has to come from their behaviour, or it
+  // is just copy wearing a data costume.
+  const best = [...reportable].sort((a, b) => b.score - a.score)[0];
+  const worst = [...reportable].sort((a, b) => a.score - b.score)[0];
+  const pattern: string[] = [];
+  if (best && best.score >= 70) pattern.push(`YOUR STRONGEST DIMENSION IS ${best.label}.`);
+  if (worst && worst.score < 55 && worst.code !== best?.code) {
+    pattern.push(`${worst.label} IS COSTING YOU MORE THAN YOUR CALLS ARE.`);
+  }
+
   return (
     <div className="terminal-screen min-h-screen flex flex-col">
       <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between">
@@ -62,13 +104,29 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
                 DIMENSION SCORES
               </div>
               <div className="space-y-4">
-                {DIMENSIONS.map(item => (
-                  <div key={item.dim} className="space-y-1.5">
-                    <div className="font-mono text-xs text-phosphor-mid">{item.dim}</div>
+                {rows.map(item => (
+                  <div key={item.code} className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-phosphor-mid">{item.label}</span>
+                      {item.provisional && (
+                        <span className="font-mono text-xs text-alert-amber border border-alert-amber/40 px-1.5 tracking-widest">
+                          PROVISIONAL
+                        </span>
+                      )}
+                      {item.sampleSize === 0 && !item.provisional && (
+                        <span className="font-mono text-xs text-phosphor-dim tracking-widest">NO DATA YET</span>
+                      )}
+                    </div>
                     <BarScore score={item.score} />
                   </div>
                 ))}
               </div>
+              {anyProvisional && (
+                <div className="font-mono text-xs text-phosphor-dim leading-5 border-t border-phosphor/10 pt-3">
+                  PROVISIONAL: CONVICTION SCORES SETTLE AFTER {PROVISIONAL_UNTIL_DECISIONS} DECISIONS.
+                  EARLY CALIBRATION IS EXPECTED TO BE WRONG.
+                </div>
+              )}
             </div>
 
             {/* Right panel */}
@@ -78,8 +136,11 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
                   PATTERN DETECTED
                 </div>
                 <div className="space-y-3 font-mono text-sm text-phosphor leading-7">
-                  <div>YOU IDENTIFY REGIME CHANGE WELL.</div>
-                  <div>YOU OVERSIZE HIGH-CONVICTION DECISIONS.</div>
+                  {pattern.length === 0 ? (
+                    <div className="text-phosphor-dim">
+                      COMMIT MORE DECISIONS AND A PATTERN WILL APPEAR HERE.
+                    </div>
+                  ) : pattern.map(line => <div key={line}>{line}</div>)}
                 </div>
               </div>
 
@@ -88,10 +149,12 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
                   STRENGTHS
                 </div>
                 <div className="space-y-2 font-mono text-xs">
-                  {DIMENSIONS.filter(d => d.score >= 70).map(d => (
-                    <div key={d.dim} className="flex items-center gap-3">
+                  {strengths.length === 0 ? (
+                    <div className="text-phosphor-dim">NOT ENOUGH DECISIONS YET.</div>
+                  ) : strengths.map(d => (
+                    <div key={d.code} className="flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-phosphor flex-shrink-0" />
-                      <span className="text-phosphor">{d.dim}</span>
+                      <span className="text-phosphor">{d.label}</span>
                       <span className="text-phosphor-dim ml-auto">{d.score}</span>
                     </div>
                   ))}
@@ -103,10 +166,12 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
                   SYSTEMATIC GAPS
                 </div>
                 <div className="space-y-2 font-mono text-xs">
-                  {DIMENSIONS.filter(d => d.score < 55).map(d => (
-                    <div key={d.dim} className="flex items-center gap-3">
+                  {gaps.length === 0 ? (
+                    <div className="text-phosphor-dim">NOT ENOUGH DECISIONS YET.</div>
+                  ) : gaps.map(d => (
+                    <div key={d.code} className="flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-risk-red flex-shrink-0" />
-                      <span className="negative-value">{d.dim}</span>
+                      <span className="negative-value">{d.label}</span>
                       <span className="text-phosphor-dim ml-auto">{d.score}</span>
                     </div>
                   ))}
