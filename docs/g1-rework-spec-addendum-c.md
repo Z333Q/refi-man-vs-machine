@@ -425,3 +425,65 @@ sequence driven through the slider path.
 existing node test runner. A real browser fixture is better and remains the
 long-term target, but it is not a precondition, and its absence has been used
 for long enough as a reason to defer the check entirely.
+
+---
+
+# Addendum C, Part 4: Process rules earned from Amendment 2
+
+## Rule 1: a ruling that touches constants ships with its worked table
+
+Amendment 2 was issued with correct semantics and a sign error in its own
+mechanism. It moved `kneeConviction` to 75 while freezing the geometry, which
+inverted the effort-ramp invariant it existed to strengthen: 122 pt for 25
+points below the knee against 45 pt for 20 points above it makes the top less
+than half the effort per point of the bottom. Hauling to 95 would have become
+physically cheaper than in the build the amendment was written to harden.
+
+It was invisible without dividing. The rationale read correctly, the constant
+change read correctly, and the defect only appeared when the numbers were worked
+against the shipped geometry.
+
+**The rule:** any ruling that changes a constant carries, in the ruling itself,
+the worked table of what the constant produces before and after, and states the
+invariant it must preserve as an inequality a test can hold.
+
+**The corollary, which is the part that generalises:** the invariant here is a
+ratio between two zones, so a boundary cannot move in one dimension alone.
+Freezing the geometry while moving the conviction was wrong in principle, not
+merely in outcome, because moving one boundary redefines both zones. When a
+constant participates in a relationship, the ruling must say which relationship
+and change every term that relationship depends on.
+
+**"Tunable" is not "unchecked."** Feel constants may be tuned freely inside the
+invariants that bind them. Declaring a constant tunable never removes an
+invariant; it only says where the freedom lies.
+
+## Rule 2: the engagement floor is validated from behaviour, not opinion
+
+`MIN_ENGAGEMENT_MS = 350` shipped without human validation, deliberately, with
+the telemetry needed to validate it. The review criterion, fixed now so it is
+not argued later:
+
+Look at the two seconds following each `FLICK` cancel.
+
+- Mostly followed by a deliberate commit of **the same stance at similar
+  conviction**: the floor is taxing real decisions and must come down.
+- Mostly followed by **nothing, or by a different stance**: those were
+  accidents, and the floor is earning its keep.
+
+The conviction carried on the flick telemetry is the input that makes this
+readable, which is why it is recorded rather than only the fact of the cancel.
+
+**Blocked on:** the events sink. Until it records, this criterion cannot be
+evaluated, exactly as Amendment 1's and Amendment 2's rollback triggers cannot
+fire. The sink now blocks three separate guards on work that has already
+shipped, which makes it infrastructure debt rather than a feature request.
+
+## Docs backlog
+
+- **Vendor Addendum A into the repo**, section F in particular. Fixture F1 is
+  referenced by §6's merge gate and by the pointer-path replay test, but the
+  authored sequence lives outside this repository. The replay currently uses a
+  documented stand-in with a code comment recording the substitution; vendoring
+  §F gives that stand-in an expiry date rather than letting it become the
+  definition by default.
