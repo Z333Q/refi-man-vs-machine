@@ -20,15 +20,44 @@ All distances are radial from the grip origin (the touch-down point on the card)
 |---|---|---|
 | Dead zone | 0 to 28 pt | Not armed. Release here is a tap, not a commit. |
 | Arm point | 28 pt | Conviction 50. Haptic arm-tick. Screen dims 20%. Meter appears. |
-| Working range | 28 to 150 pt | Conviction 50 to 85, linear, detent every 5 (roughly 17.4 pt per step). |
-| High-draw range | 150 to 195 pt | Conviction 85 to 95, expanded spacing (roughly 22.5 pt per step). |
+| Working range | 28 to 115 pt | Conviction 50 to 75, linear, detent every 5 (roughly 17.4 pt per step). AMENDED 2. |
+| High-draw range | 115 to 195 pt | Conviction 75 to 95, expanded spacing (roughly 20 pt per step). AMENDED 2. |
 | Full draw | 195 pt | Conviction 95. Hard stop. |
 
-The expanded spacing at the top is a safety property expressed as physics: 95 requires a full deliberate thumb extension (about 52 mm), so maximum conviction is something a player does on purpose, never something they drift into. The last two detents cost more distance per point, which means overconfidence is physically more work, exactly as it should be.
+The expanded spacing at the top is a safety property expressed as physics: 95 requires a full deliberate thumb extension (about 52 mm), so maximum conviction is something a player does on purpose, never something they drift into. Detents above the knee cost more distance per point, which means overconfidence is physically more work, exactly as it should be.
+
+**The effort-ramp invariant, stated so it cannot be lost again:**
+
+```text
+(fullDraw - knee) / (CONVICTION_MAX - kneeConviction)
+  MUST EXCEED
+(knee - deadZone) / (kneeConviction - CONVICTION_MIN)
+```
+
+In words: a point of conviction above the knee must cost more travel than a
+point below it. This is the whole reason the high-draw range exists, and it is
+not implied by any single constant. Moving `kneeConviction` alone inverts it,
+because the high zone then carries more conviction points across the same
+distance. A unit test asserts this inequality directly against the constants
+file, so the curve cannot silently invert again.
+
+Under the amended geometry: 87 pt over 25 points below the knee is 3.48 pt per
+point; 80 pt over 20 points above it is 4.0 pt per point. The invariant holds,
+and the working-range gradient is preserved to three decimal places against the
+original 122 pt over 35 points, so calibration learned below the knee survives
+the amendment untouched.
 
 On small screens (viewport height 667 pt or less) all distances scale by 0.85. This scale is a device-class constant fixed at first launch. It never varies by checkpoint, arena, screen, or session, for the reason in §4.
 
 ### 2.2 The clamp is a governor, not a remap (CORRECTION to Addendum B §B1)
+
+> **SUPERSEDED by Amendment 1 (Part 3).** The governor is removed: the full 50
+> to 95 range is available from the first conviction input. The section is kept
+> because its reasoning still governs. The distinction it draws, between a
+> governor on a permanent mapping and a remap of that mapping, remains binding
+> on any future clamp, and its argument is why Amendment 2 moves the knee
+> distance rather than compressing the range.
+
 
 Addendum B said the CP1 to CP4 conviction clamp "compresses the pull range accordingly." That is wrong and this section replaces it. If 60 to 75 filled the full draw distance during the tutorial checkpoints, then at CP5 the identical physical pull would suddenly mean 95, betraying the player's learned calibration at exactly the moment stakes rise. Instead, the global distance-to-conviction mapping is permanent from the first touch. During CP1 to CP4 the meter simply arms at 60 and stops at 75: pulling past the 75 detent hits a visible governor (a limiter block on the meter, a distinct dull thunk haptic unlike any detent tick, the band compresses instead of stretching). The caption reads `LIMITED TO 75. FULL RANGE OPENS AT CP5.` The player is learning the true geometry from checkpoint one while their exposure is capped. When the clamp lifts, nothing about the physics changes; the governor is removed and the road they could already feel keeps going.
 
@@ -42,9 +71,9 @@ To stop a sweaty-thumb micro-twitch in the final frames from moving 75 to 70, th
 
 **Touch-down (GRIP).** Within one frame (16 ms), the touched card lifts: scale 1.00 to 1.03, shadow deepens, the other cards dim to 40% opacity and desaturate. No haptic yet; grip is free and reversible.
 
-**Crossing the arm point.** The background dims a further 20%. The conviction meter materializes above the card (never below, never where a finger or palm can occlude it): a horizontal arc with the numeral in large tabular figures at its center, tick marks at every detent, landmark ticks visually heavier at 70, 85, and 95. Haptic: one medium arm-tick, unmistakably different from the detent ticks that follow.
+**Crossing the arm point.** The background dims a further 20%. The conviction meter materializes above the card (never below, never where a finger or palm can occlude it): a horizontal arc with the numeral in large tabular figures at its center, tick marks at every detent, landmark ticks visually heavier at 75 and 95 (AMENDED 2). Haptic: one medium arm-tick, unmistakably different from the detent ticks that follow.
 
-**During the pull.** A band renders from the card's near edge to the finger point: a slightly curved taut elastic, 3 px wide and dim mint at conviction 50, thickening to 6 px and reaching full brand mint intensity by 85. From 85 upward the band gains a fine high-frequency shimmer (a strained material, not a warning; it stays mint, never amber, because high conviction is not an error). The card itself strains toward the finger: it tilts up to 4 degrees along the pull vector and grows tension striations on its surface, two lines at 60, four at 75, six at 85 and above. Every detent crossing fires a light haptic tick within 10 ms of the crossing; 85 fires a double-tick announcing the high-draw zone; 95 fires the double-tick plus the hard-stop resistance. The numeral counts through every value; it never skips.
+**During the pull.** A band renders from the card's near edge to the finger point: a slightly curved taut elastic, 3 px wide and dim mint at conviction 50, thickening to 6 px and reaching full brand mint intensity by 85. From 85 upward the band gains a fine high-frequency shimmer (a strained material, not a warning; it stays mint, never amber, because high conviction is not an error). The card itself strains toward the finger: it tilts up to 4 degrees along the pull vector and grows tension striations on its surface, two lines at 60, four at 75, six at 85 and above. Every detent crossing fires a light haptic tick within 10 ms of the crossing; 75 fires a double-tick announcing the high-draw zone; 95 fires the double-tick plus the hard-stop resistance (AMENDED 2). The numeral counts through every value; it never skips.
 
 **Release at or beyond the arm point (COMMIT).** The commit registers at the touch-up event itself, zero delay; everything after is theater and never blocks game state. The band snaps back into the card with a spring (mass 1, stiffness 400, damping 28, roughly 200 ms with a single 4% overshoot). One crisp impact haptic, medium at conviction below 90, heavy at 90 and above. The released energy visibly goes somewhere: a single pulse of light travels from the card up into the run's progress bar, reading as your decision entering the tape. At 120 ms into the snapback, the thesis chips (Addendum B §B2) fade in beneath the settling card, so the "why" question arrives while the release still resonates. The reveal pipeline is already loading behind all of this.
 
@@ -60,7 +89,7 @@ The gesture is designed to be learned by the hand, not the eyes, and everything 
 
 **The geometry contract.** Distance-to-conviction mapping, dead-zone radius, detent spacing, and landmark positions never change. Not per checkpoint, not per arena, not per session, not by A/B test. This is the same contract an FPS player has with mouse sensitivity: calibration lives in the cerebellum, and changing the mapping even once destroys trust in the hand permanently. The CP1 to CP4 governor (§2.2) exists precisely so the tutorial does not violate this contract. Any future experiment that wants to touch these constants is vetoed by this paragraph.
 
-**Landmarks the thumb learns.** Three detents are physically distinct: 70 (the rest reference, a heavier tick, where the old default lived), 85 (the double-tick gate into the high-draw zone and the point where spacing widens), and 95 (the hard stop). Within a session players stop reading the numeral and start counting ticks past landmarks: three ticks past the heavy one is 85. That is the intended end state, and it is why the numeral never skips values and detents never mistime; the rhythm is the interface.
+**Landmarks the thumb learns.** AMENDED 2. Two detents are physically distinct: 75 (the double-tick gate into the high-draw zone and the point where spacing widens) and 95 (the hard stop). 70 is demoted to a normal detent tick: it remains the resting default value, but it is no longer a landmark, because a heavy tick five points below the gate would compete with the gate for the thumb's attention. 85 loses its double-tick for the same reason; it is now an ordinary detent inside the high-draw range. Within a session players stop reading the numeral and start counting ticks past landmarks: two ticks past the double-tick is 85. That is the intended end state, and it is why the numeral never skips values and detents never mistime; the rhythm is the interface.
 
 **Closing the calibration loop.** After release, a faint ghost tick remains on the meter at the committed value through the reveal, so the player's eye pairs that pull with that number with that outcome while all three are on screen together. On the next grip, a dim marker shows where the previous pull ended. Over a run this builds an internal scale: the hand starts to know what 80 feels like, and since the calibration score (Addendum A §C) rewards exactly that knowledge, the motor learning and the game's grading converge on the same skill. The gesture is not decoration on the calibration mechanic; it is the calibration mechanic made physical.
 
@@ -233,20 +262,38 @@ detent at 70. Also formally withdraws the viewport-relative track geometry
 proposed in the Verb specification (track length as 38% of viewport height with
 a 260 to 420 px clamp); see the geometry ruling below.
 
-**Unchanged, and re-frozen:** the radial mapping; the physical geometry, dead
-zone 28 pt, knee 150 pt, full draw 195 pt; the STANDARD and COMPACT device
-classes at 0.85 scale; the detent cadence of every 5 points.
+**Unchanged, and re-frozen:** the radial mapping; the dead zone at 28 pt; full
+draw at 195 pt; the STANDARD and COMPACT device classes at 0.85 scale; the
+detent cadence of every 5 points.
 
 **Changed:**
 
-1. `kneeConviction`: 85 becomes 75. Linear 50 to 75 from the dead zone to the
-   knee; eased 75 to 95 from the knee to full draw, each point above 75 costing
-   more travel than the last.
-2. Landmark detents: 70, 85, 95 becomes 75, 85, 95. The 5-point cadence ticks
-   are unchanged everywhere; landmarks are only the stronger haptic and visual
-   tick.
-3. `tMin = 350 ms`, the minimum engagement before a release may commit, enters
+1. `kneeConviction`: 85 becomes 75.
+2. `knee` distance: 150 pt becomes 115 pt. **This is not optional and does not
+   travel separately from change 1.** Moving the conviction alone would leave
+   20 conviction points to cross the same 45 pt of high-draw travel, making a
+   point at the top cost 2.25 pt against 4.88 pt in the working range. That
+   inverts the effort-ramp invariant in §2.1: reaching 95 would become easier
+   than it is today, which is the precise opposite of this amendment's purpose.
+   Easing cannot rescue it, because a curve redistributes effort within a zone
+   and cannot change the zone's total travel.
+
+   115 pt is not a round number chosen for tidiness. It is the distance at which
+   the working-range gradient is preserved: 87 pt over 25 points is 3.48 pt per
+   point against the original 122 pt over 35 points at 3.486. Calibration the
+   hand already learned below 75 is therefore untouched, while 75 becomes the
+   point where spacing widens and the top stays more expensive at 4.0 pt per
+   point.
+3. Landmark detents: 70, 85, 95 becomes 75 and 95 only. 70 is demoted to a
+   normal detent and remains the resting default value; 85 loses its double-tick
+   and becomes an ordinary detent inside the high-draw range. Two landmarks
+   rather than three, because a heavy tick five points below the gate competes
+   with the gate for the thumb's attention.
+4. `tMin = 350 ms`, the minimum engagement before a release may commit, enters
    the same constants file with its own tests.
+5. The effort-ramp invariant of §2.1 is asserted by a unit test against the
+   constants file. The defect above was caught by reading the specification's
+   own worked numbers, which is not a control that scales; the test is.
 
 **Rationale:** 75 is the semantic boundary this game already shipped and taught.
 The governor capped learning play at 75, and the band vocabulary ends FIRM at
@@ -356,3 +403,25 @@ ruling that gets reverted in good faith by someone who never read the prose.
 The Verb specification's acceptance item 8, that no sound, animation or haptic
 differs between an eventual win and an eventual loss at the moment of release,
 is explicitly in scope for this treatment when the Resolution Engine PR lands.
+
+
+## Amendment 5: the pointer-path replay is a merge gate
+
+**Clarifies:** §6's acceptance criterion, which was written as a goal and has so
+far been treated as outstanding work rather than as a gate.
+
+The equivalence tests shipped with the gesture mount prove that the gesture and
+the slider agree at the command boundary. That is a real guarantee and it is not
+the one §6 asks for: it exercises the state machine, not the translation from
+pointer samples into machine events, which is where coalesced events, the jitter
+filter and touch-up sampling live. A defect in that translation would leave the
+existing tests green.
+
+**The gate:** no PR that changes gesture behaviour merges without a pointer-path
+replay of fixture F1 producing byte-identical run state to the same conviction
+sequence driven through the slider path.
+
+**Acceptable minimum:** synthetic PointerEvent-shaped samples driven through the
+existing node test runner. A real browser fixture is better and remains the
+long-term target, but it is not a precondition, and its absence has been used
+for long enough as a reason to defer the check entirely.
