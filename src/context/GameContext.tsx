@@ -5,8 +5,8 @@ import type {
 import { getCheckpoint } from '../lib/covidArena';
 import { scoreCheckpoint, computeXpAward, getDimensionUpdates } from '../lib/scoringEngine';
 import {
-  createInitialRun, commitPendingDecision, advanceRunCheckpoint, resolveRunResult,
-  attachThesis,
+  createInitialRun, commitDecisionCommand, advanceRunCheckpoint, resolveRunResult,
+  attachThesis, type DecisionCommand,
 } from '../lib/runEngine';
 import { createDefaultProfile, updateDimensions, checkModuleUnlocks, getRankForXp } from '../lib/progressionEngine';
 import { supabase, getSessionId } from '../lib/supabase';
@@ -41,7 +41,7 @@ type GameAction =
   | { type: 'SET_PENDING_ACTION'; action: ActionCode }
   | { type: 'ATTACH_THESIS'; thesis: ThesisCode }
   | { type: 'SET_PENDING_CONFIDENCE'; confidence: number }
-  | { type: 'COMMIT_DECISION' }
+  | { type: 'COMMIT_DECISION'; command: DecisionCommand }
   | { type: 'ADVANCE_CHECKPOINT' }
   | { type: 'COMPLETE_RUN'; result: RunState['result'] }
   | { type: 'CLEAR_MODULE_UNLOCK' }
@@ -95,8 +95,10 @@ function reducer(state: GameState, action: GameAction): GameState {
       if (!run) return state;
 
       // Run-state transition lives in the pure engine; the reducer keeps only
-      // the profile side (XP, dimensions, module unlocks).
-      const outcome = commitPendingDecision(run);
+      // the profile side (XP, dimensions, module unlocks). The command carries
+      // the whole decision, so the commit never depends on which pending
+      // dispatch happened to land first.
+      const outcome = commitDecisionCommand(run, action.command);
       if (!outcome) return state;
       const { score, flags, dimUpdates, checkpoint } = outcome;
 
@@ -200,7 +202,7 @@ interface GameContextValue {
   setPendingAction: (action: ActionCode) => void;
   attachThesis: (thesis: ThesisCode) => void;
   setPendingConfidence: (confidence: number) => void;
-  commitDecision: () => void;
+  commitDecision: (command: DecisionCommand) => void;
   advanceCheckpoint: () => void;
   completeRun: (result: RunState['result']) => void;
   clearModuleUnlock: () => void;
@@ -476,7 +478,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const setPendingAction = useCallback((action: ActionCode) => dispatch({ type: 'SET_PENDING_ACTION', action }), []);
   const attachDecisionThesis = useCallback((thesis: ThesisCode) => dispatch({ type: 'ATTACH_THESIS', thesis }), []);
   const setPendingConfidence = useCallback((confidence: number) => dispatch({ type: 'SET_PENDING_CONFIDENCE', confidence }), []);
-  const commitDecision = useCallback(() => dispatch({ type: 'COMMIT_DECISION' }), []);
+  const commitDecision = useCallback(
+    (command: DecisionCommand) => dispatch({ type: 'COMMIT_DECISION', command }),
+    [],
+  );
   const advanceCheckpoint = useCallback(() => dispatch({ type: 'ADVANCE_CHECKPOINT' }), []);
   const completeRun = useCallback((result: RunState['result']) => dispatch({ type: 'COMPLETE_RUN', result }), []);
   const clearModuleUnlock = useCallback(() => dispatch({ type: 'CLEAR_MODULE_UNLOCK' }), []);

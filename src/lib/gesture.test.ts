@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { ActionCode } from './gameTypes';
+import type { ActionCode, RunState } from './gameTypes';
 import {
   geometryFor, classifyDevice, clearanceAt, hasClearance, radialDistance,
   convictionForDistance, distanceForConviction, gainAt, rubberBand, COMPACT_SCALE,
+  gripDisposition, type RegionBounds,
 } from './gestureGeometry';
+import { getCheckpoint } from './covidArena';
 import { OneEuroFilter, MedianOf3, PullFilter, DEFAULT_ONE_EURO } from './oneEuroFilter';
 import {
   gestureReducer, runGesture,
@@ -13,7 +15,10 @@ import {
 import {
   CONVICTION_MIN, CONVICTION_MAX, clampConviction, convictionToConfidence,
 } from './decisionContract';
-import { createInitialRun, commitPendingDecision } from './runEngine';
+import {
+  createInitialRun, commitPendingDecision, commitDecisionCommand, canAffordAction,
+  type DecisionCommand,
+} from './runEngine';
 
 const STD = geometryFor('STANDARD');
 const openConfig: GestureConfig = { geometry: STD, checkpointSequence: 9 };
@@ -439,4 +444,188 @@ test('the governor applies identically through both doors', () => {
   assert.ok(commit && commit.type === 'COMMIT');
   assert.equal(commit.conviction, 75);
   assert.equal(clampConviction(CONVICTION_MAX, 1), 75);
+});
+
+// ─── The command boundary ─────────────────────────────────────────────────────
+// The test above proves the two doors agree once pending run state has been
+// constructed by hand. These prove they agree at the seam the application
+// actually commits through, so the guarantee covers the wiring and not just the
+// arithmetic.
+
+test('gesture and slider commands commit to identical run state', () => {
+  // Deliberately spans the cases where the two doors could diverge: the CP1
+  // governed range, a free stance, a stance that spends turnover, and the open
+  // conviction range once the governor lifts at CP5.
+  const script: DecisionCommand[] = [
+    { action: 'HOLD', conviction: 70 },              // CP1, governed
+    { action: 'REDUCE', conviction: 95 },            // CP2, governed, non-zero turnover
+    { action: 'HOLD', conviction: 50 },              // CP3, governed at the floor
+    { action: 'ROTATE_DEFENSIVE', conviction: 62 },  // CP4, last governed checkpoint
+    { action: 'RAISE_CASH', conviction: 88 },        // CP5, open range, non-zero turnover
+    { action: 'HOLD', conviction: 95 },              // CP6, open range at the ceiling
+  ];
+
+  // Door 1: the slider and keyboard build the command from pending UI state.
+  let viaSlider = createInitialRun();
+  for (const command of script) {
+    const outcome = commitDecisionCommand(viaSlider, command);
+    assert.ok(outcome, 'the slider command must commit');
+    viaSlider = outcome.run;
+  }
+
+  // Door 2: the pull emits its conviction from the state machine, and that
+  // value becomes the command. Nothing else about the path differs.
+  let viaGesture = createInitialRun();
+  for (const command of script) {
+    const config: GestureConfig = { geometry: STD, checkpointSequence: viaGesture.currentCheckpoint };
+    const distance = distanceForConviction(command.conviction, STD);
+    const { effects } = runGesture(
+      [
+        { type: 'GRIP_START', pointerId: 1, actionCode: command.action, affordable: true, timestamp: 0 },
+        { type: 'MOVE', pointerId: 1, distance, timestamp: 50 },
+        { type: 'RELEASE', pointerId: 1, timestamp: 120 },
+      ],
+      config,
+    );
+    const commit = effects.find(e => e.type === 'COMMIT');
+    assert.ok(commit && commit.type === 'COMMIT', 'the pull must commit');
+
+    const outcome = commitDecisionCommand(viaGesture, {
+      action: command.action,
+      conviction: commit.conviction,
+    });
+    assert.ok(outcome, 'the gesture command must commit');
+    viaGesture = outcome.run;
+  }
+
+  assert.deepEqual(viaGesture, viaSlider);
+  assert.equal(JSON.stringify(viaGesture), JSON.stringify(viaSlider));
+});
+
+test('the command clamps conviction with the checkpoint governor, whichever door sent it', () => {
+  // A door that forgot to clamp would commit 95 at CP1. The engine refuses.
+  const run = createInitialRun();
+  const outcome = commitDecisionCommand(run, { action: 'HOLD', conviction: 95 });
+  assert.ok(outcome);
+  assert.equal(outcome.run.decisions[0].confidence, convictionToConfidence(75));
+
+  const floored = commitDecisionCommand(run, { action: 'HOLD', conviction: 50 });
+  assert.ok(floored);
+  assert.equal(floored.run.decisions[0].confidence, convictionToConfidence(60));
+});
+
+test('an unauthored stance is rejected and records no decision', () => {
+  // The command is now the authoritative commit boundary, so the engine, not
+  // the screen, decides what is committable. A stance this checkpoint does not
+  // author has no branch: no authored flags, no alpha impact, no turnover
+  // price. Committing it would score against numbers nobody wrote.
+  const run = createInitialRun();
+  const cp = getCheckpoint(run.currentCheckpoint);
+  assert.ok(cp);
+  const offered = cp.availableActions.map(a => a.actionCode);
+  const unauthored = (['STAGED_BUY', 'STAGED_SELL', 'ADD_RISK', 'ROTATE_RISK'] as ActionCode[])
+    .find(a => !offered.includes(a));
+  assert.ok(unauthored, 'this checkpoint must leave some stance unauthored');
+
+  const before = JSON.stringify(run);
+  assert.equal(commitDecisionCommand(run, { action: unauthored, conviction: 70 }), null);
+  // Rejection is total: no decision recorded, and the input run is untouched.
+  assert.equal(run.decisions.length, 0);
+  assert.equal(JSON.stringify(run), before);
+});
+
+test('an authored but unaffordable stance is rejected and records no decision', () => {
+  const run = createInitialRun();
+  const cp = getCheckpoint(run.currentCheckpoint);
+  assert.ok(cp);
+  const priced = cp.availableActions.find(a => a.actionCode !== 'HOLD');
+  assert.ok(priced, 'this checkpoint must author a stance that costs turnover');
+
+  // Drain the budget so the authored stance is no longer payable.
+  const broke: RunState = {
+    ...run,
+    portfolio: { ...run.portfolio, turnoverUsed: run.turnoverBudget },
+  };
+  assert.equal(canAffordAction(broke, priced.actionCode, cp), false);
+
+  const before = JSON.stringify(broke);
+  assert.equal(commitDecisionCommand(broke, { action: priced.actionCode, conviction: 70 }), null);
+  assert.equal(broke.decisions.length, 0);
+  assert.equal(JSON.stringify(broke), before);
+
+  // HOLD is free, so it stays committable on an exhausted budget.
+  const held = commitDecisionCommand(broke, { action: 'HOLD', conviction: 70 });
+  assert.ok(held, 'HOLD must remain affordable');
+  assert.equal(held.run.decisions[0].actionCode, 'HOLD');
+});
+
+// ─── Clearance decides before the gesture owns the pointer ────────────────────
+
+test('a grip without full clearance is sent to the precise controls, not into a pull', () => {
+  // The failure this prevents: the player starts pulling, and the geometry
+  // caps conviction below the maximum in the direction they chose, which they
+  // can only discover once the movement is already underway.
+  const bounds: RegionBounds = { left: 0, top: 0, width: 600, height: 800 };
+
+  // Comfortably inside: a full draw fits in every working direction.
+  assert.equal(gripDisposition({ x: 300, y: 300 }, bounds, STD, true), 'PULL');
+
+  // Hard against the bottom edge: down cannot reach the hard stop.
+  assert.equal(gripDisposition({ x: 300, y: 790 }, bounds, STD, true), 'PRECISE_CONTROLS');
+
+  // Hard against the left edge: left cannot reach the hard stop.
+  assert.equal(gripDisposition({ x: 4, y: 300 }, bounds, STD, true), 'PRECISE_CONTROLS');
+});
+
+test('clearance is measured in region space, so an offset region behaves identically', () => {
+  // The bug this pins: mixing a viewport-space pointer with region-space
+  // dimensions. On an offset region that reads as far more clearance than
+  // exists, and the same grip would disagree with itself depending only on
+  // where the panel happens to sit on screen.
+  const atOrigin: RegionBounds = { left: 0, top: 0, width: 600, height: 500 };
+  const offset: RegionBounds = { left: 240, top: 120, width: 600, height: 500 };
+
+  // The same local grip point, expressed in each region's client coordinates.
+  const localGrips = [
+    { x: 300, y: 100 },  // roomy
+    { x: 300, y: 495 },  // against the bottom edge
+    { x: 2, y: 100 },    // against the left edge
+    { x: 598, y: 100 },  // against the right edge
+  ];
+
+  for (const local of localGrips) {
+    const a = gripDisposition(
+      { x: local.x + atOrigin.left, y: local.y + atOrigin.top }, atOrigin, STD, true,
+    );
+    const b = gripDisposition(
+      { x: local.x + offset.left, y: local.y + offset.top }, offset, STD, true,
+    );
+    assert.equal(a, b, `local grip ${local.x},${local.y} must not depend on region offset`);
+  }
+
+  // And concretely, the worked example: 300,100 in A is 540,220 in B.
+  assert.equal(gripDisposition({ x: 300, y: 100 }, atOrigin, STD, true), 'PULL');
+  assert.equal(gripDisposition({ x: 540, y: 220 }, offset, STD, true), 'PULL');
+
+  // Feeding B's region-local point as if it were client space is the mistake,
+  // and it must produce a different answer: that is why the API takes bounds.
+  assert.notEqual(
+    gripDisposition({ x: 300, y: 100 }, offset, STD, true),
+    gripDisposition({ x: 540, y: 220 }, offset, STD, true),
+  );
+});
+
+test('an unaffordable stance is UNAVAILABLE, never merely a fallback', () => {
+  // Invariant 10 at the helper level: a stance priced out by the budget must
+  // not reach a committable focused state, so it is a distinct disposition
+  // rather than sharing the precise-controls door.
+  const roomy: RegionBounds = { left: 0, top: 0, width: 1200, height: 1200 };
+  const cramped: RegionBounds = { left: 0, top: 0, width: 100, height: 100 };
+
+  assert.equal(gripDisposition({ x: 600, y: 400 }, roomy, STD, false), 'UNAVAILABLE');
+  assert.equal(gripDisposition({ x: 50, y: 50 }, cramped, STD, false), 'UNAVAILABLE');
+
+  // Affordability is checked first: clearance never upgrades or downgrades it.
+  assert.equal(gripDisposition({ x: 600, y: 400 }, roomy, STD, true), 'PULL');
+  assert.equal(gripDisposition({ x: 50, y: 50 }, cramped, STD, true), 'PRECISE_CONTROLS');
 });

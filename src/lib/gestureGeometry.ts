@@ -83,6 +83,54 @@ export function hasClearance(
 }
 
 /**
+ * The decision region in client coordinates.
+ *
+ * Carrying the offset alongside the size is what makes the clearance call
+ * impossible to get wrong: a caller holding only width and height is one step
+ * away from measuring a viewport-space pointer against region-space bounds,
+ * which reads as plenty of clearance on an offset region and none at the top
+ * left. The conversion belongs here, once.
+ */
+export interface RegionBounds {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * What a grip at this point is allowed to become.
+ *
+ * Warning at grip time and letting the pull start anyway is the wrong shape:
+ * the player discovers halfway down that the geometry cannot reach full draw,
+ * having already committed the movement. The decision is therefore made before
+ * the gesture owns the pointer.
+ *
+ *   affordable + clearance      PULL               the gesture may run
+ *   affordable + no clearance   PRECISE_CONTROLS   hand the stance to the slider
+ *   unaffordable                UNAVAILABLE        not committable by any door
+ *
+ * UNAVAILABLE is deliberately distinct from PRECISE_CONTROLS. A stance priced
+ * out by the turnover budget must not become pending, must not take focus and
+ * must not commit, so routing it to the precise controls would smuggle it into
+ * a committable state through the fallback. The card may still explain itself;
+ * that is all.
+ */
+export type GripDisposition = 'PULL' | 'PRECISE_CONTROLS' | 'UNAVAILABLE';
+
+export function gripDisposition(
+  clientPoint: { x: number; y: number },
+  bounds: RegionBounds,
+  geometry: PullGeometry,
+  affordable: boolean,
+): GripDisposition {
+  if (!affordable) return 'UNAVAILABLE';
+  const localOrigin = { x: clientPoint.x - bounds.left, y: clientPoint.y - bounds.top };
+  const region: Region = { width: bounds.width, height: bounds.height };
+  return hasClearance(localOrigin, region, geometry) ? 'PULL' : 'PRECISE_CONTROLS';
+}
+
+/**
  * Pick the device class once, from the usable decision region rather than raw
  * viewport height. Browser chrome, safe areas, landscape tablets and embedded
  * webviews all distort raw height, and the classification has to reflect the
