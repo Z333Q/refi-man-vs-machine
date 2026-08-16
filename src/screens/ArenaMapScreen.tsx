@@ -169,10 +169,13 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
                       {arena.label}
                     </div>
                   </div>
+                  {/* Steady, not blinking. A blink is the strongest attention
+                      signal on a screen, and it was pointing at a status label
+                      rather than at the control the player is meant to press:
+                      the eye went to the one thing that is not clickable.
+                      Motion marks the action, never the state. */}
                   {arena.state === 'active' && (
-                    <div className="font-mono text-xs text-phosphor animate-[cursorBlink_1s_steps(1,end)_infinite]">
-                      ACTIVE
-                    </div>
+                    <div className="font-mono text-xs text-phosphor">ACTIVE</div>
                   )}
                   {arena.state === 'locked' && (
                     <div className="font-mono text-xs text-phosphor-dim">LOCKED</div>
@@ -276,7 +279,11 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
             <div className="font-mono text-xs text-phosphor leading-5">{selected.lesson}</div>
           </div>
 
-          <div className="mt-auto space-y-2">
+          {/* Sticky to the bottom of this scrolling column. It previously sat
+              after the briefing content inside an overflow-y-auto panel, so on
+              a short viewport the primary action was below the scroll fold and
+              had to be hunted for. */}
+          <div className="mt-auto sticky bottom-0 -mx-6 -mb-6 px-6 pt-3 pb-24 bg-terminal-black border-t border-phosphor/15 space-y-2">
             {selected.state === 'active' || selected.state === 'available' ? (
               <button
                 onClick={() => onSelectArena(selected.id)}

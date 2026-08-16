@@ -157,12 +157,16 @@ export default function TitleScreen({ onEnter }: Props) {
         </div>
       </button>
 
-      {/* Persistent control bar — pointer + keyboard, does not bubble to start */}
+      {/* Persistent control bar: pointer + keyboard, does not bubble to start.
+          Sticky because the page is min-h-screen and the attract cards vary in
+          height, so on a short viewport the primary action was rendering below
+          the fold. The one button a first-time visitor must find cannot depend
+          on them scrolling to look for it. */}
       <div
-        className="border-t border-phosphor/20 px-4 py-3"
+        className="sticky bottom-0 z-20 border-t border-phosphor/20 bg-terminal-black px-4 py-3"
         onClick={e => e.stopPropagation()}
       >
-        <div className="max-w-3xl mx-auto flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="max-w-3xl mx-auto flex flex-col sm:flex-row sm:items-center gap-3 sm:pr-44">
           {/* Panel dots + prev/next */}
           <div className="flex items-center gap-3">
             <button
