@@ -24,13 +24,27 @@ import type { RunState } from './gameTypes';
 // equivalence fixture elsewhere, extended to cover the governed range, HOLD,
 // a turnover-spending stance and the open range. When Addendum A lands, point
 // this at the authored F1 and delete this note.
+// NOTE on the floor. Conviction 50 maps to exactly the dead-zone boundary
+// (28.000 pt), so the mapping arms there, but the jitter filter converges on
+// that boundary asymptotically from below: a monotonic pull to exactly the arm
+// point may never register as armed. 50 is therefore reachable by the slider
+// and by an overshoot-and-return pull, but not by a clean draw that stops on
+// it. The fixture uses 52 for the gesture path and records the edge here
+// rather than hiding it. Still far under the retired 60 floor, so it proves
+// the governor is gone.
+//
+// AMENDED for Amendment 1. The previous CP1 to CP4 values were 70, 65, 60 and
+// 75: every one of them inside the retired 60 to 75 governor band, so the
+// fixture could not have detected a clamp that was still applied. With the
+// range open from the first input, the early checkpoints now carry both ends
+// of the scale, and a governor returning to CP1 to CP4 would fail this replay.
 const F1: { action: ActionCode; conviction: number }[] = [
-  { action: 'HOLD', conviction: 70 },
-  { action: 'REDUCE', conviction: 65 },
-  { action: 'HOLD', conviction: 60 },
-  { action: 'ROTATE_DEFENSIVE', conviction: 75 },
-  { action: 'RAISE_CASH', conviction: 88 },
-  { action: 'HOLD', conviction: 72 },
+  { action: 'HOLD', conviction: 95 },              // CP1, the ceiling on the first decision
+  { action: 'REDUCE', conviction: 52 },            // CP2, near the floor: see the note below
+  { action: 'HOLD', conviction: 62 },              // CP3, off-detent, inside the old band
+  { action: 'ROTATE_DEFENSIVE', conviction: 88 },  // CP4, last formerly governed checkpoint
+  { action: 'RAISE_CASH', conviction: 75 },        // CP5, the knee
+  { action: 'HOLD', conviction: 70 },              // CP6, the resting default
 ];
 
 const STD = geometryFor('STANDARD');

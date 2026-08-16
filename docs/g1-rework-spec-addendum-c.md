@@ -51,9 +51,20 @@ On small screens (viewport height 667 pt or less) all distances scale by 0.85. T
 
 ### 2.2 The clamp is a governor, not a remap (CORRECTION to Addendum B §B1)
 
-> **SUPERSEDED by Amendment 1 (Part 3).** The governor is removed: the full 50
-> to 95 range is available from the first conviction input. The section is kept
-> because its reasoning still governs. The distinction it draws, between a
+> **RETIRED by Amendment 1 (Part 3), ratified as a founder ruling.** The
+> governor is removed. The full 50 to 95 range is available from the first
+> conviction input, and **Addendum C's above-knee effort ramp is now the sole
+> overconfidence brake**: reaching 95 costs more travel per point than any
+> value below the knee, and that physical cost is the only thing standing
+> between a player and maximum conviction.
+>
+> Why it was retired rather than tuned: under the compressed first run, CP1 to
+> CP4 are the entire first session, so a cap on them covered every make-or-break
+> minute with reduced agency, which inverts its purpose as a warm-up inside a
+> longer onboarding. The shipped copy already promised that the scale never
+> changes, and removing the governor is what makes that sentence true.
+>
+> The section is kept because its reasoning still governs. The distinction it draws, between a
 > governor on a permanent mapping and a remap of that mapping, remains binding
 > on any future clamp, and its argument is why Amendment 2 moves the knee
 > distance rather than compressing the range.
@@ -487,3 +498,73 @@ shipped, which makes it infrastructure debt rather than a feature request.
   documented stand-in with a code comment recording the substitution; vendoring
   §F gives that stand-in an expiry date rather than letting it become the
   definition by default.
+
+
+---
+
+# Addendum C, Part 5: ratification and open items
+
+## Amendment 1 is ratified
+
+Founder ruling. The governor is removed, the full 50 to 95 range is available
+from the first input, and the above-knee effort ramp is the sole overconfidence
+brake. All three compensating controls have shipped: the CP2 consequence tip,
+the PROVISIONAL tagging of conviction-derived dimensions, and the telemetry
+rollback trigger now that the sink records.
+
+Fixture F1's CP1 to CP4 values were amended to match. They previously read 70,
+65, 60 and 75, every one of them inside the retired 60 to 75 band, so the
+fixture could not have detected a clamp that was still being applied. The early
+checkpoints now carry both ends of the scale.
+
+## The floor is knife-edged through the gesture
+
+Recorded because it was found while amending F1, and because it is a property
+of the design rather than a defect to fix quietly.
+
+Conviction 50 maps to exactly the dead-zone boundary, 28.000 pt. The mapping
+arms there. The jitter filter, however, converges on that boundary
+asymptotically from below, so a clean monotonic draw that stops exactly on the
+arm point may never register as armed. 50 is reachable by the slider, and by an
+overshoot-and-return pull, but not reliably by a draw that lands on it.
+
+This is acceptable and is not being changed: the arm point is by definition the
+boundary between no pull and the minimum pull, and a player who means 50 is a
+player who barely means anything. It is written down so nobody later reads it
+as a filter bug.
+
+## What the 21.3 second measurement is, and is not
+
+The compressed first run was measured at **21.3 seconds from landing to a
+committed, scored decision**, on a cleared profile.
+
+That figure is a **developer-path benchmark**. It was produced by an operator
+who knows the keyboard shortcuts, on a local dev server, with no reading time.
+It demonstrates that the structural path is short. It does not demonstrate that
+a person can learn the game in that time.
+
+**Addendum B's gate remains open**: the moderated 20-second first-commit test,
+with the 15-word ceiling, run with real first-time players. Nothing in this
+work closes it, and the two numbers must not be conflated in any report.
+
+## Pre-G2 task: sweep screens for hardcoded player data
+
+Raised after `AlphaProfileScreen` was found rendering the specification's
+example dimension scores as though they were the player's own. The sweep is
+recorded here so it is completed before G2 rather than rediscovered.
+
+Findings from the first pass over `src/screens`:
+
+| Screen | Reads real state | Finding |
+|---|---|---|
+| `AlphaProfileScreen` | yes, now | Fixed. Was a static array of the §30 example scores. |
+| `AutopsyScreen` | **no** | `TIMELINE` is a hardcoded four-checkpoint run history with authored scores 72, 74, 76, 79. The autopsy is the player's own audit trail (§57 Run Record), so fabricated decisions there are a more serious version of the profile defect. **Routed and reachable.** |
+| `MarketTerminalScreen` | no | `POSITIONS` and `NEWS_ITEMS` are mock. Not routed in `App.tsx`; appears to be a superseded prototype. Confirm and delete rather than wire. |
+| `ArenaMapScreen` | no | Arena definitions are legitimate content, but `passPct: '18.4'` and per-arena decision counts read as live statistics. Either source them or label them as authored. |
+| `TutorialScreen` | yes | `MOCK_POSITIONS` and `PRACTICE_STANCES` are deliberately synthetic and documented as practice-only. No action. |
+| Boot / Help / Title / Landing / Taco / MachineBuilder | no | Static copy and configuration, not player data. No action. |
+
+The rule this establishes: **a screen may hold authored content, but it may
+never hold authored player data.** Anything that looks like a score, a
+dimension, a decision or a run outcome must come from state or be visibly
+labelled as an example.
