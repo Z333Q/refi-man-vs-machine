@@ -9,7 +9,7 @@ import {
   convictionToConfidence, confidenceToConviction, consultedRisk,
   isDetent, isLandmark,
   CONVICTION_MIN, CONVICTION_MAX, CONVICTION_STEP, CONVICTION_DETENT,
-  CONVICTION_DEFAULT, GOVERNOR_BOUNDS, GOVERNOR_LIFTS_AT_CHECKPOINT,
+  CONVICTION_DEFAULT, GOVERNOR_BOUNDS,
   THESIS_TIMEOUT_CODE, PANEL_MODULE,
 } from './decisionContract';
 
@@ -63,30 +63,32 @@ test('the control span is permanent at every checkpoint', () => {
   assert.deepEqual(convictionSpan(), { min: 50, max: 95 });
 });
 
-test('the governor caps the value without moving the span', () => {
-  for (let cp = 1; cp < GOVERNOR_LIFTS_AT_CHECKPOINT; cp++) {
-    assert.equal(isGovernorActive(cp), true, `CP${cp} should be governed`);
-    assert.deepEqual(convictionGovernor(cp), { min: 60, max: 75 });
-    // The span is untouched while the governor is on. This is the whole point:
-    // a governed checkpoint is the same road with a limiter, not a new road.
+test('AMENDMENT 1: no checkpoint is governed, the full range is open from the first input', () => {
+  // Inverted from the pre-amendment test, deliberately, rather than deleted.
+  // The old assertion is the regression: if a clamp ever returns on CP1 to CP4
+  // again, this fails and names the amendment it violates.
+  for (let cp = 1; cp <= 14; cp++) {
+    assert.equal(isGovernorActive(cp), false, `CP${cp} must not be governed`);
+    assert.deepEqual(convictionGovernor(cp), { min: 50, max: 95 }, `CP${cp}`);
     assert.deepEqual(convictionSpan(), { min: 50, max: 95 });
   }
-  for (let cp = GOVERNOR_LIFTS_AT_CHECKPOINT; cp <= 14; cp++) {
-    assert.equal(isGovernorActive(cp), false, `CP${cp} should be open`);
-    assert.deepEqual(convictionGovernor(cp), { min: 50, max: 95 });
-  }
 });
 
-test('the governor raises the floor as well as capping the ceiling', () => {
+test('AMENDMENT 1: the ends of the scale are committable at the very first input', () => {
+  // The calibration lesson is now consequence, not constraint: a player may
+  // go to 95 on their first decision and be wrong at double cost.
+  assert.equal(clampConviction(50, 1), 50);
+  assert.equal(clampConviction(95, 1), 95);
+  // The old bounds are retained as a record of what was superseded, and must
+  // no longer be applied anywhere.
   assert.equal(GOVERNOR_BOUNDS.min, 60);
   assert.equal(GOVERNOR_BOUNDS.max, 75);
-  assert.equal(clampConviction(50, 1), 60);
-  assert.equal(clampConviction(95, 1), 75);
+  assert.notDeepEqual(convictionGovernor(1), { ...GOVERNOR_BOUNDS });
 });
 
-test('lifting the governor does not change what a given value means', () => {
-  // The regression this guards: if the clamp were a remap, the same position
-  // on the control would mean 75 at CP4 and 95 at CP5. It must not.
+test('a given value means the same thing at every checkpoint', () => {
+  // Survives the amendment unchanged: this was always the deeper rule, and it
+  // is now true trivially rather than by careful clamp design.
   const governedMidpoint = clampConviction(70, 4);
   const openMidpoint = clampConviction(70, 5);
   assert.equal(governedMidpoint, openMidpoint, '70 must mean 70 on both sides of CP5');
@@ -136,13 +138,21 @@ test('conviction and confidence round-trip', () => {
   assert.equal(convictionToConfidence(70), 0.7);
 });
 
-test('a committed decision records the governed conviction, not the raw one', () => {
+test('AMENDMENT 1: a first-checkpoint commit records 95 when 95 was meant', () => {
   let run = createInitialRun();
-  // CP1 caps at 75; try to smuggle a 95 straight into run state.
   run = { ...run, pendingAction: 'HOLD', pendingConfidence: convictionToConfidence(95) };
   const outcome = commitPendingDecision(run);
   assert.ok(outcome);
-  assert.equal(confidenceToConviction(outcome.run.decisions[0].confidence ?? 0), 75);
+  assert.equal(confidenceToConviction(outcome.run.decisions[0].confidence ?? 0), 95);
+});
+
+test('the permanent span is still enforced: nothing outside 50 to 95 commits', () => {
+  // Removing the governor removed a clamp, not the scale. Out-of-range values
+  // are still refused, at every checkpoint.
+  for (const cp of [1, 5, 14]) {
+    assert.equal(clampConviction(20, cp), 50, `CP${cp} floor`);
+    assert.equal(clampConviction(140, cp), 95, `CP${cp} ceiling`);
+  }
 });
 
 test('conviction resets to the default at each new checkpoint', () => {

@@ -87,15 +87,45 @@ export function isLandmark(conviction: number): boolean {
 // intended: a governed checkpoint commits somewhere in 60 to 75.
 export const GOVERNOR_BOUNDS = { min: 60, max: 75 } as const;
 export const GOVERNOR_LIFTS_AT_CHECKPOINT = 5;
+// Retained for the amendment record. No longer rendered: nothing is limited.
 export const GOVERNOR_CAPTION = 'LIMITED TO 75. FULL RANGE OPENS AT CP5.';
+
+/** Shown at the first conviction input instead. Consequence, not constraint. */
+export const CONVICTION_CONSEQUENCE_TIP =
+  'CONVICTION SCALES THE SCORE BOTH WAYS. WRONG AT 95 COSTS DOUBLE.';
+
+/**
+ * Scored decisions required before conviction-derived profile dimensions stop
+ * being provisional. Amendment 1: early miscalibration should inform the
+ * player without permanently staining the dataset the archetype is built from.
+ */
+export const PROVISIONAL_UNTIL_DECISIONS = 12;
 
 /** The permanent span the control renders, identical at every checkpoint. */
 export function convictionSpan(): { min: number; max: number } {
   return { min: CONVICTION_MIN, max: CONVICTION_MAX };
 }
 
-export function isGovernorActive(checkpointSequence: number): boolean {
-  return checkpointSequence < GOVERNOR_LIFTS_AT_CHECKPOINT;
+/**
+ * REMOVED by Addendum C Amendment 1. Always false.
+ *
+ * The governor capped CP1 to CP4 at 60 to 75 while the player learned. Under
+ * the compressed first run those four checkpoints ARE the entire first
+ * session, so the cap would now cover 100% of the make-or-break minutes with
+ * reduced agency, which inverts its original purpose as a warm-up inside a
+ * longer onboarding. The shipped copy also promises that the scale never
+ * changes; removing the governor makes that sentence true.
+ *
+ * The calibration lesson is now consequence rather than constraint: the full
+ * range is available from the first input, and being wrong at 95 costs double.
+ * The compensating controls are the CP2 consequence tip, PROVISIONAL tagging
+ * of conviction-derived dimensions, and the telemetry rollback trigger.
+ *
+ * The function and its bounds are kept rather than deleted so the amendment is
+ * legible at the call sites and a future clamp has a shape to reuse.
+ */
+export function isGovernorActive(_checkpointSequence: number): boolean {
+  return false;
 }
 
 /** The bounds the committed value is clamped into at this checkpoint. */

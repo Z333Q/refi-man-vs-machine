@@ -204,11 +204,14 @@ function AppInner() {
         {screen === 'landing' && (
           <TitleScreen
             onEnter={() => {
-              if (!tutorialComplete) {
-                go('tutorial');
-              } else {
-                go('arena-map');
-              }
+              // Straight into the arena. The tutorial used to gate this, which
+              // put nine screens of reading and one explicitly unscored
+              // practice commit between a visitor and their first real
+              // decision: five to eight minutes to reach the thing the game is
+              // actually about. CP1 is already a guided checkpoint with its own
+              // coach, so it teaches by being played. The tutorial survives in
+              // full as a HELP reference for anyone who wants it.
+              go(tutorialComplete ? 'arena-map' : 'core-loop');
             }}
           />
         )}

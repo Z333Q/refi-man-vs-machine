@@ -215,6 +215,16 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     }
   }, [run?.phase, lastCheckpointScore, tipOnce, triggerEvent]);
 
+  // Amendment 1 compensating control: the governor is gone, so the calibration
+  // lesson has to arrive as consequence instead. Fires once, at the second
+  // checkpoint, where the player has already committed once and the number
+  // starts to mean something.
+  useEffect(() => {
+    if (run?.currentCheckpoint === 2 && run.phase === 'SIGNAL') {
+      tipOnce('conviction_consequence', () => triggerEvent('decision.conviction_available'));
+    }
+  }, [run?.currentCheckpoint, run?.phase, tipOnce, triggerEvent]);
+
   // Tip: covid arena enter
   useEffect(() => {
     if (run?.arenaId === 'covid_black_swan' && run.currentCheckpoint === 1 && run.phase === 'SIGNAL') {

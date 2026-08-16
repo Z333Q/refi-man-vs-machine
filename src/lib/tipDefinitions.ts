@@ -9,6 +9,7 @@ export type TipTriggerEvent =
   | 'tutorial.first_signal'
   | 'tutorial.portfolio_open'
   | 'tutorial.stance_selected'
+  | 'decision.conviction_available'
   | 'tutorial.review_ready'
   | 'tutorial.first_commit'
   | 'tutorial.machine_reveal'
@@ -116,6 +117,23 @@ export const TIP_LIBRARY: TipDef[] = [
     actions: [
       { label: 'CONTINUE', action: 'COMPLETE' },
     ],
+  },
+
+  {
+    code: 'CONVICTION_CONSEQUENCE',
+    type: 'DECISION',
+    title: 'HOW SURE ARE YOU?',
+    body: [
+      'CONVICTION SCALES THE SCORE BOTH WAYS.',
+      'WRONG AT 95 COSTS DOUBLE. RIGHT AT 95 PAYS DOUBLE.',
+      'THE SCALE IS ALWAYS 50 TO 95 AND NEVER CHANGES.',
+    ],
+    trigger: 'decision.conviction_available',
+    priority: 90,
+    blocking: false,
+    maxShowCount: 1,
+    requiredMode: 'FULL',
+    actions: [{ label: 'UNDERSTOOD', action: 'COMPLETE' }],
   },
 
   {
