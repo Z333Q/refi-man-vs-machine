@@ -152,7 +152,7 @@ export function TipProvider({ children }: { children: ReactNode }) {
 
     let state: TipState = 'DISMISSED';
     if (action === 'COMPLETE' || action === 'OPEN_PORTFOLIO' || action === 'OPEN_RISK' ||
-        action === 'OPEN_DRAFT' || action === 'OPEN_SIGNAL' || action === 'TRY_HOLD') {
+        action === 'OPEN_DECIDE' || action === 'OPEN_SIGNAL' || action === 'TRY_HOLD') {
       state = 'COMPLETED';
     } else if (action === 'SNOOZE') {
       state = 'SNOOZED';

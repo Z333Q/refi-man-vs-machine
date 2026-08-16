@@ -337,7 +337,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     setPendingAction(branch.actionCode);
     setCommitConfirm(false);
     setActivePanel('DECIDE');
-    tipOnce('stance_selected', () => triggerEvent('tutorial.position_selected'));
+    tipOnce('stance_selected', () => triggerEvent('tutorial.stance_selected'));
     if (branch.actionCode !== 'HOLD' && run && run.portfolio.drawdown < -0.10) {
       tipOnce('large_reduction', () => triggerEvent('arena.large_reduction_proposed'));
     }
@@ -379,7 +379,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     if (!run?.pendingAction) return;
     setCommitConfirm(true);
     setActivePanel('DECIDE');
-    tipOnce('draft_ready', () => triggerEvent('tutorial.draft_ready'));
+    tipOnce('review_ready', () => triggerEvent('tutorial.review_ready'));
   }, [run?.pendingAction, tipOnce, triggerEvent]);
 
   // The post-commit UI sequence, shared by both doors so the screen cannot end
