@@ -20,15 +20,44 @@ All distances are radial from the grip origin (the touch-down point on the card)
 |---|---|---|
 | Dead zone | 0 to 28 pt | Not armed. Release here is a tap, not a commit. |
 | Arm point | 28 pt | Conviction 50. Haptic arm-tick. Screen dims 20%. Meter appears. |
-| Working range | 28 to 150 pt | Conviction 50 to 85, linear, detent every 5 (roughly 17.4 pt per step). |
-| High-draw range | 150 to 195 pt | Conviction 85 to 95, expanded spacing (roughly 22.5 pt per step). |
+| Working range | 28 to 115 pt | Conviction 50 to 75, linear, detent every 5 (roughly 17.4 pt per step). AMENDED 2. |
+| High-draw range | 115 to 195 pt | Conviction 75 to 95, expanded spacing (roughly 20 pt per step). AMENDED 2. |
 | Full draw | 195 pt | Conviction 95. Hard stop. |
 
-The expanded spacing at the top is a safety property expressed as physics: 95 requires a full deliberate thumb extension (about 52 mm), so maximum conviction is something a player does on purpose, never something they drift into. The last two detents cost more distance per point, which means overconfidence is physically more work, exactly as it should be.
+The expanded spacing at the top is a safety property expressed as physics: 95 requires a full deliberate thumb extension (about 52 mm), so maximum conviction is something a player does on purpose, never something they drift into. Detents above the knee cost more distance per point, which means overconfidence is physically more work, exactly as it should be.
+
+**The effort-ramp invariant, stated so it cannot be lost again:**
+
+```text
+(fullDraw - knee) / (CONVICTION_MAX - kneeConviction)
+  MUST EXCEED
+(knee - deadZone) / (kneeConviction - CONVICTION_MIN)
+```
+
+In words: a point of conviction above the knee must cost more travel than a
+point below it. This is the whole reason the high-draw range exists, and it is
+not implied by any single constant. Moving `kneeConviction` alone inverts it,
+because the high zone then carries more conviction points across the same
+distance. A unit test asserts this inequality directly against the constants
+file, so the curve cannot silently invert again.
+
+Under the amended geometry: 87 pt over 25 points below the knee is 3.48 pt per
+point; 80 pt over 20 points above it is 4.0 pt per point. The invariant holds,
+and the working-range gradient is preserved to three decimal places against the
+original 122 pt over 35 points, so calibration learned below the knee survives
+the amendment untouched.
 
 On small screens (viewport height 667 pt or less) all distances scale by 0.85. This scale is a device-class constant fixed at first launch. It never varies by checkpoint, arena, screen, or session, for the reason in §4.
 
 ### 2.2 The clamp is a governor, not a remap (CORRECTION to Addendum B §B1)
+
+> **SUPERSEDED by Amendment 1 (Part 3).** The governor is removed: the full 50
+> to 95 range is available from the first conviction input. The section is kept
+> because its reasoning still governs. The distinction it draws, between a
+> governor on a permanent mapping and a remap of that mapping, remains binding
+> on any future clamp, and its argument is why Amendment 2 moves the knee
+> distance rather than compressing the range.
+
 
 Addendum B said the CP1 to CP4 conviction clamp "compresses the pull range accordingly." That is wrong and this section replaces it. If 60 to 75 filled the full draw distance during the tutorial checkpoints, then at CP5 the identical physical pull would suddenly mean 95, betraying the player's learned calibration at exactly the moment stakes rise. Instead, the global distance-to-conviction mapping is permanent from the first touch. During CP1 to CP4 the meter simply arms at 60 and stops at 75: pulling past the 75 detent hits a visible governor (a limiter block on the meter, a distinct dull thunk haptic unlike any detent tick, the band compresses instead of stretching). The caption reads `LIMITED TO 75. FULL RANGE OPENS AT CP5.` The player is learning the true geometry from checkpoint one while their exposure is capped. When the clamp lifts, nothing about the physics changes; the governor is removed and the road they could already feel keeps going.
 
@@ -42,9 +71,9 @@ To stop a sweaty-thumb micro-twitch in the final frames from moving 75 to 70, th
 
 **Touch-down (GRIP).** Within one frame (16 ms), the touched card lifts: scale 1.00 to 1.03, shadow deepens, the other cards dim to 40% opacity and desaturate. No haptic yet; grip is free and reversible.
 
-**Crossing the arm point.** The background dims a further 20%. The conviction meter materializes above the card (never below, never where a finger or palm can occlude it): a horizontal arc with the numeral in large tabular figures at its center, tick marks at every detent, landmark ticks visually heavier at 70, 85, and 95. Haptic: one medium arm-tick, unmistakably different from the detent ticks that follow.
+**Crossing the arm point.** The background dims a further 20%. The conviction meter materializes above the card (never below, never where a finger or palm can occlude it): a horizontal arc with the numeral in large tabular figures at its center, tick marks at every detent, landmark ticks visually heavier at 75 and 95 (AMENDED 2). Haptic: one medium arm-tick, unmistakably different from the detent ticks that follow.
 
-**During the pull.** A band renders from the card's near edge to the finger point: a slightly curved taut elastic, 3 px wide and dim mint at conviction 50, thickening to 6 px and reaching full brand mint intensity by 85. From 85 upward the band gains a fine high-frequency shimmer (a strained material, not a warning; it stays mint, never amber, because high conviction is not an error). The card itself strains toward the finger: it tilts up to 4 degrees along the pull vector and grows tension striations on its surface, two lines at 60, four at 75, six at 85 and above. Every detent crossing fires a light haptic tick within 10 ms of the crossing; 85 fires a double-tick announcing the high-draw zone; 95 fires the double-tick plus the hard-stop resistance. The numeral counts through every value; it never skips.
+**During the pull.** A band renders from the card's near edge to the finger point: a slightly curved taut elastic, 3 px wide and dim mint at conviction 50, thickening to 6 px and reaching full brand mint intensity by 85. From 85 upward the band gains a fine high-frequency shimmer (a strained material, not a warning; it stays mint, never amber, because high conviction is not an error). The card itself strains toward the finger: it tilts up to 4 degrees along the pull vector and grows tension striations on its surface, two lines at 60, four at 75, six at 85 and above. Every detent crossing fires a light haptic tick within 10 ms of the crossing; 75 fires a double-tick announcing the high-draw zone; 95 fires the double-tick plus the hard-stop resistance (AMENDED 2). The numeral counts through every value; it never skips.
 
 **Release at or beyond the arm point (COMMIT).** The commit registers at the touch-up event itself, zero delay; everything after is theater and never blocks game state. The band snaps back into the card with a spring (mass 1, stiffness 400, damping 28, roughly 200 ms with a single 4% overshoot). One crisp impact haptic, medium at conviction below 90, heavy at 90 and above. The released energy visibly goes somewhere: a single pulse of light travels from the card up into the run's progress bar, reading as your decision entering the tape. At 120 ms into the snapback, the thesis chips (Addendum B §B2) fade in beneath the settling card, so the "why" question arrives while the release still resonates. The reveal pipeline is already loading behind all of this.
 
@@ -60,7 +89,7 @@ The gesture is designed to be learned by the hand, not the eyes, and everything 
 
 **The geometry contract.** Distance-to-conviction mapping, dead-zone radius, detent spacing, and landmark positions never change. Not per checkpoint, not per arena, not per session, not by A/B test. This is the same contract an FPS player has with mouse sensitivity: calibration lives in the cerebellum, and changing the mapping even once destroys trust in the hand permanently. The CP1 to CP4 governor (§2.2) exists precisely so the tutorial does not violate this contract. Any future experiment that wants to touch these constants is vetoed by this paragraph.
 
-**Landmarks the thumb learns.** Three detents are physically distinct: 70 (the rest reference, a heavier tick, where the old default lived), 85 (the double-tick gate into the high-draw zone and the point where spacing widens), and 95 (the hard stop). Within a session players stop reading the numeral and start counting ticks past landmarks: three ticks past the heavy one is 85. That is the intended end state, and it is why the numeral never skips values and detents never mistime; the rhythm is the interface.
+**Landmarks the thumb learns.** AMENDED 2. Two detents are physically distinct: 75 (the double-tick gate into the high-draw zone and the point where spacing widens) and 95 (the hard stop). 70 is demoted to a normal detent tick: it remains the resting default value, but it is no longer a landmark, because a heavy tick five points below the gate would compete with the gate for the thumb's attention. 85 loses its double-tick for the same reason; it is now an ordinary detent inside the high-draw range. Within a session players stop reading the numeral and start counting ticks past landmarks: two ticks past the double-tick is 85. That is the intended end state, and it is why the numeral never skips values and detents never mistime; the rhythm is the interface.
 
 **Closing the calibration loop.** After release, a faint ghost tick remains on the meter at the committed value through the reveal, so the player's eye pairs that pull with that number with that outcome while all three are on screen together. On the next grip, a dim marker shows where the previous pull ended. Over a run this builds an internal scale: the hand starts to know what 80 feels like, and since the calibration score (Addendum A §C) rewards exactly that knowledge, the motor learning and the game's grading converge on the same skill. The gesture is not decoration on the calibration mechanic; it is the calibration mechanic made physical.
 
@@ -185,3 +214,276 @@ The pull is at its best on a tablet: the thumb has a comfortable arc, and the dr
 This keeps the keyboard exactly as expressive as the drag, which is invariant 7: the gesture is never the only door. The stance cards keep `1..4`, the thesis chips take `1..3`, `Enter` commits, and `Escape` backs out.
 
 The three-speed model is also why detents are landmarks rather than quantization (C.2). Shift-arrow lands on them; a plain arrow walks between them; both are real.
+
+---
+
+# Addendum C, Part 3: Amendments
+
+Amendments are recorded, never silent. Each states what it supersedes, what it
+changes, what stays frozen, and the reasoning, so a later reader can tell an
+intentional change from a regression. Two of the amendments below alter
+constants that §4 and §5 invariant 3 previously vetoed outright; that veto is
+narrowed by Amendment 2 rather than ignored.
+
+## Amendment 1: the conviction governor is removed
+
+**Supersedes:** §2.2 and C.1 (conviction governed to 60 to 75 through CP1 to
+CP4, full range at CP5).
+
+**Change:** the full conviction range, 50 to 95, is available from the first
+conviction input. Under the compressed first-run experience that is CP2.
+
+**Compensating controls:**
+
+1. The CP2 introduction tip states the mechanism as consequence, not warning:
+   `CONVICTION SCALES THE SCORE BOTH WAYS. WRONG AT 95 COSTS DOUBLE.`
+2. Conviction-derived profile dimensions (calibration, position sizing) are
+   tagged `PROVISIONAL` until 12 scored decisions, and the profile displays the
+   tag. Early miscalibration informs the player without permanently staining
+   the dataset the archetype is built from.
+3. Telemetry guard. Monitor first-run abandonment between CP2 and CP5, and the
+   conviction distribution of first-arena players. Rollback trigger: if
+   abandonment in that window rises more than 20% relative over 14 days, or if
+   median first-arena conviction exceeds 85, the governor question reopens with
+   data.
+
+**Rationale:** the calibration lesson is consequence, not constraint. The
+compressed first-run experience moved the governed window on top of the entire
+first session, so the governor would now cover 100% of the make-or-break
+minutes with reduced agency, which inverts its original purpose as a warm-up
+inside a longer onboarding. The shipped tutorial copy also already promises
+that "the scale itself never changes, so the calibration you build here is the
+calibration you keep." Removing the governor makes that sentence true.
+
+## Amendment 2: the knee moves to 75
+
+**Supersedes:** the §2.1 mapping constant `kneeConviction = 85` and the landmark
+detent at 70. Also formally withdraws the viewport-relative track geometry
+proposed in the Verb specification (track length as 38% of viewport height with
+a 260 to 420 px clamp); see the geometry ruling below.
+
+**Unchanged, and re-frozen:** the radial mapping; the dead zone at 28 pt; full
+draw at 195 pt; the STANDARD and COMPACT device classes at 0.85 scale; the
+detent cadence of every 5 points.
+
+**Changed:**
+
+1. `kneeConviction`: 85 becomes 75.
+2. `knee` distance: 150 pt becomes 115 pt. **This is not optional and does not
+   travel separately from change 1.** Moving the conviction alone would leave
+   20 conviction points to cross the same 45 pt of high-draw travel, making a
+   point at the top cost 2.25 pt against 4.88 pt in the working range. That
+   inverts the effort-ramp invariant in §2.1: reaching 95 would become easier
+   than it is today, which is the precise opposite of this amendment's purpose.
+   Easing cannot rescue it, because a curve redistributes effort within a zone
+   and cannot change the zone's total travel.
+
+   115 pt is not a round number chosen for tidiness. It is the distance at which
+   the working-range gradient is preserved: 87 pt over 25 points is 3.48 pt per
+   point against the original 122 pt over 35 points at 3.486. Calibration the
+   hand already learned below 75 is therefore untouched, while 75 becomes the
+   point where spacing widens and the top stays more expensive at 4.0 pt per
+   point.
+3. Landmark detents: 70, 85, 95 becomes 75 and 95 only. 70 is demoted to a
+   normal detent and remains the resting default value; 85 loses its double-tick
+   and becomes an ordinary detent inside the high-draw range. Two landmarks
+   rather than three, because a heavy tick five points below the gate competes
+   with the gate for the thumb's attention.
+4. `tMin = 350 ms`, the minimum engagement before a release may commit, enters
+   the same constants file with its own tests.
+5. The effort-ramp invariant of §2.1 is asserted by a unit test against the
+   constants file. The defect above was caught by reading the specification's
+   own worked numbers, which is not a control that scales; the test is.
+
+**Rationale:** 75 is the semantic boundary this game already shipped and taught.
+The governor capped learning play at 75, and the band vocabulary ends FIRM at
+75 and begins HEAVY at 76. The shipped curve makes 76 to 85 linear and cheap,
+which contradicts Amendment 1's compensating logic that effort replaces
+restriction above the normal range, and it mis-aims Amendment 1's rollback
+trigger, which watches median conviction against 85, the exact region the
+shipped curve makes effortless. Moving the knee aligns the hand, the label, and
+the scoring exposure on where normal ends.
+
+**Shipping condition (integrity, not preference):** Amendment 2's curve change
+does not ship until the events sink is live and recording. Both rollback
+triggers, Amendment 1's and this one, read from telemetry, and the governor's
+removal was justified partly on those guards. A safety mechanism that cannot
+fire is not a safety mechanism, so shipping the curve while the sink is down
+would silently convert a guarded change into an unguarded one.
+
+Note the asymmetry, because it decides merge order elsewhere: the sink blocks
+the curve, not the grammar. The verdict grammar's invariant is enforced by
+tests rather than telemetry, so it may ship while the sink is down. Any future
+change whose stated guard is a metric inherits this condition; any change whose
+guard is a test does not.
+
+**Telemetry addendum:** alongside Amendment 1's trigger, log the share of
+commits landing in the 76 to 95 band per checkpoint index. If the eased zone
+overcorrects and first-arena players cluster below a median of 65, the knee
+position reopens with data. The easing coefficients are declared tunable feel
+work; the knee-at-75 semantic is the amendment.
+
+## Geometry ruling: the mapping is physical, the drawing is not
+
+The distance-to-conviction mapping lives in physical points, 28 / 150 / 195 with
+the device-class scale as shipped. The track graphic may size itself to the
+viewport.
+
+Identical thumb travel must mean identical conviction on every device, or the
+sentence "the calibration you build here is the calibration you keep" is false,
+and that sentence is now doing double duty as the recorded justification for
+Amendment 1. A specification that breaks its own governing sentence loses.
+
+> The drawing stretches; the meaning must not.
+
+That line is repeated as a comment above the geometry block in the constants
+file, so the next person who reaches for a viewport unit meets it before they
+type.
+
+## Amendment 3: the constellation moves to consequence time
+
+**Supersedes:** the mount point implied by §36 and §37 of the main
+specification, where the Portfolio Constellation renders on the decision
+surface.
+
+**Change:** signature status is affirmed, not revoked; only the trigger and the
+stage move.
+
+1. **Decision time:** the constellation relocates into the Risk drawer,
+   inspectable on demand beside the risk metrics it contextualizes.
+2. **Consequence time:** on checkpoints where `correlationLevel >= 0.6`, it
+   renders behind the equity race during the resolution roll, playing §37's
+   Correlation Collapse as the market actually expresses it.
+
+**Rationale:** the block field owns the decision surface, and a treemap cannot
+render correlation. Deleting the only correlation surface in the same release
+where the Resolution Engine starts using `correlationLevel` for race texture
+would be incoherent. Correlation Collapse is a stronger signature visual when
+it fires at the moment of highest attention, triggered by the data, than as
+ambient decoration on a screen where the player is trying to decide. It also
+becomes more honest: the collapse now happens inside the SIMULATION-labelled
+roll, synchronised to the correlated shocks the path synthesiser generates from
+the same scalar.
+
+## Amendment 4: the five questions are a requirement, not a component
+
+**Supersedes:** §56 of the main specification, as previously implemented by the
+persistent FiveQuestionSpine strip.
+
+**Change:** the rule is restated from an implementation to a requirement. A
+first-session player must be able to answer the five questions from the active
+screen without opening Help. How the screen answers them is free.
+
+**Verification:** the lorem-ipsum protocol. After three checkpoints with all
+prose scrambled, the tester answers the five questions verbally. Pass requires
+at least four of five correct, and "what happens when I commit?" must be among
+the correct answers, because it is the hardest to carry pictorially and the one
+the strip existed for. If any question fails in two consecutive playtest rounds,
+a minimal single-line fallback for that question returns to the surface, one
+line rather than the five-cell strip, and it is exempt from the word budget as a
+fixed label.
+
+**Recorded risk:** before the first commit, "what happens when I commit?" is
+answered only by the CP1 demonstration and the face-down machine card. If
+testers miss it, the remediation order is: strengthen the demonstration, then
+the card's first appearance, and only then add a text fallback.
+
+## Working practice: a ruling ships with its test twin
+
+Two of the verdict grammar's tests are rulings converted into executable law:
+one sweeps every margin from -20 to +20 and asserts a loss never carries a
+nudge and a win never carries a criticism; the other asserts a one point loss
+is staged identically to a fifteen point loss, which is the rule 16 near-miss
+boundary expressed as an assertion rather than a paragraph.
+
+This is the house pattern. Every future ruling lands with its test twin
+wherever one is expressible, because a ruling that lives only in prose is a
+ruling that gets reverted in good faith by someone who never read the prose.
+
+The Verb specification's acceptance item 8, that no sound, animation or haptic
+differs between an eventual win and an eventual loss at the moment of release,
+is explicitly in scope for this treatment when the Resolution Engine PR lands.
+
+
+## Amendment 5: the pointer-path replay is a merge gate
+
+**Clarifies:** §6's acceptance criterion, which was written as a goal and has so
+far been treated as outstanding work rather than as a gate.
+
+The equivalence tests shipped with the gesture mount prove that the gesture and
+the slider agree at the command boundary. That is a real guarantee and it is not
+the one §6 asks for: it exercises the state machine, not the translation from
+pointer samples into machine events, which is where coalesced events, the jitter
+filter and touch-up sampling live. A defect in that translation would leave the
+existing tests green.
+
+**The gate:** no PR that changes gesture behaviour merges without a pointer-path
+replay of fixture F1 producing byte-identical run state to the same conviction
+sequence driven through the slider path.
+
+**Acceptable minimum:** synthetic PointerEvent-shaped samples driven through the
+existing node test runner. A real browser fixture is better and remains the
+long-term target, but it is not a precondition, and its absence has been used
+for long enough as a reason to defer the check entirely.
+
+---
+
+# Addendum C, Part 4: Process rules earned from Amendment 2
+
+## Rule 1: a ruling that touches constants ships with its worked table
+
+Amendment 2 was issued with correct semantics and a sign error in its own
+mechanism. It moved `kneeConviction` to 75 while freezing the geometry, which
+inverted the effort-ramp invariant it existed to strengthen: 122 pt for 25
+points below the knee against 45 pt for 20 points above it makes the top less
+than half the effort per point of the bottom. Hauling to 95 would have become
+physically cheaper than in the build the amendment was written to harden.
+
+It was invisible without dividing. The rationale read correctly, the constant
+change read correctly, and the defect only appeared when the numbers were worked
+against the shipped geometry.
+
+**The rule:** any ruling that changes a constant carries, in the ruling itself,
+the worked table of what the constant produces before and after, and states the
+invariant it must preserve as an inequality a test can hold.
+
+**The corollary, which is the part that generalises:** the invariant here is a
+ratio between two zones, so a boundary cannot move in one dimension alone.
+Freezing the geometry while moving the conviction was wrong in principle, not
+merely in outcome, because moving one boundary redefines both zones. When a
+constant participates in a relationship, the ruling must say which relationship
+and change every term that relationship depends on.
+
+**"Tunable" is not "unchecked."** Feel constants may be tuned freely inside the
+invariants that bind them. Declaring a constant tunable never removes an
+invariant; it only says where the freedom lies.
+
+## Rule 2: the engagement floor is validated from behaviour, not opinion
+
+`MIN_ENGAGEMENT_MS = 350` shipped without human validation, deliberately, with
+the telemetry needed to validate it. The review criterion, fixed now so it is
+not argued later:
+
+Look at the two seconds following each `FLICK` cancel.
+
+- Mostly followed by a deliberate commit of **the same stance at similar
+  conviction**: the floor is taxing real decisions and must come down.
+- Mostly followed by **nothing, or by a different stance**: those were
+  accidents, and the floor is earning its keep.
+
+The conviction carried on the flick telemetry is the input that makes this
+readable, which is why it is recorded rather than only the fact of the cancel.
+
+**Blocked on:** the events sink. Until it records, this criterion cannot be
+evaluated, exactly as Amendment 1's and Amendment 2's rollback triggers cannot
+fire. The sink now blocks three separate guards on work that has already
+shipped, which makes it infrastructure debt rather than a feature request.
+
+## Docs backlog
+
+- **Vendor Addendum A into the repo**, section F in particular. Fixture F1 is
+  referenced by §6's merge gate and by the pointer-path replay test, but the
+  authored sequence lives outside this repository. The replay currently uses a
+  documented stand-in with a code comment recording the substitution; vendoring
+  §F gives that stand-in an expiry date rather than letting it become the
+  definition by default.
