@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { useTips } from '../context/TipContext';
 import type { ActionBranch, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
+import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
   canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
   STARTING_CAPITAL, type DecisionCommand,
@@ -63,7 +64,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     currentCheckpointData,
   } = useGame();
 
-  const { run, lastCheckpointScore, moduleJustUnlocked, xpJustEarned } = state;
+  const { run, lastCheckpointScore, lastCheckpointFlags, moduleJustUnlocked, xpJustEarned } = state;
   const { triggerEvent } = useTips();
   const { emit: emitVisual } = useVisualEvents();
 
@@ -86,6 +87,9 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   // The post-commit thesis prompt. Shown between the release and the reveal so
   // the player explains an instinct already exposed (Addendum B B2, C C.5).
   const [thesisPrompt, setThesisPrompt] = useState(false);
+  // The sub-metrics and the authored teaching note live one tap deeper, so the
+  // result reads as one verdict rather than a verdict arguing with a lecture.
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   // ─── Gesture geometry ───────────────────────────────────────────────────────
   // The device class is decided once per run from the usable decision region,
@@ -545,6 +549,11 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
   // The conviction committed at the previous checkpoint, drawn as a faint
   // marker on the pull meter so the hand has a reference to move against.
+  // One verdict per checkpoint, derived from the score the player is looking at.
+  const verdict = lastCheckpointScore
+    ? deriveVerdict(lastCheckpointScore, lastCheckpointFlags)
+    : null;
+
   const previousDecision = run.decisions[run.decisions.length - 1];
   const previousConviction = previousDecision
     ? confidenceToConviction(previousDecision.confidence ?? 0)
@@ -1100,7 +1109,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
           )}
 
           {/* ── Resolve / Compare / Learn ── */}
-          {!thesisPrompt && (phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING') && lastCheckpointScore && (
+          {!thesisPrompt && (phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING') && lastCheckpointScore && verdict && (
             <div className="flex-1 overflow-y-auto p-6">
               {/* Machine pipeline: processing animation */}
               {phase === 'RESOLVING' && revealDelay === 0 && (
@@ -1158,46 +1167,64 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 text-xs mb-3">
-                  {[
-                    { label: 'RAER', val: lastCheckpointScore.raerScore },
-                    { label: 'DRAWDOWN', val: lastCheckpointScore.drawdownScore },
-                    { label: 'DOWNSIDE', val: lastCheckpointScore.downsideScore },
-                    { label: 'REGIME', val: lastCheckpointScore.regimeAdaptScore },
-                    { label: 'TURNOVER', val: lastCheckpointScore.turnoverScore },
-                    { label: 'CONSISTENCY', val: lastCheckpointScore.consistencyScore },
-                  ].map(({ label, val }) => (
-                    <div key={label}>
-                      <div className="text-phosphor-dim">{label}</div>
-                      <div className="text-phosphor font-bold">{val}</div>
-                    </div>
-                  ))}
+                {/* The verdict. One headline, and a nudge only where the
+                    result went the player's way. The sign of what is said
+                    always matches the sign of the score. */}
+                <div
+                  className={`text-sm font-bold tracking-wide mb-1 ${
+                    verdict.sign === 'UNDER_PAR' ? 'text-risk-red'
+                      : verdict.sign === 'AT_PAR' ? 'text-phosphor-mid'
+                      : 'text-paper-green'
+                  }`}
+                >
+                  {verdictStamp(verdict.sign, verdict.margin)}
                 </div>
+                <div className="text-phosphor-mid text-xs leading-relaxed">
+                  {verdict.headline}
+                </div>
+                {verdict.nudge && (
+                  <div className="text-phosphor-dim text-xs leading-relaxed mt-2 border-l border-phosphor/20 pl-2">
+                    {verdict.nudge}
+                  </div>
+                )}
 
                 {earnedProcessCredit && (
-                  <div className="text-paper-green text-xs tracking-wide mb-2">
+                  <div className="text-paper-green text-xs tracking-wide mt-2">
                     PROCESS: CONSULTED RISK BEFORE A REGIME CALL. +
                   </div>
                 )}
 
-                {lastCheckpointScore.delta > 0 ? (
-                  <div className="text-paper-green text-xs tracking-wide">▲ +{lastCheckpointScore.delta} VS MACHINE</div>
-                ) : lastCheckpointScore.delta < 0 ? (
-                  <div className="text-risk-red text-xs tracking-wide">▼ {lastCheckpointScore.delta} VS MACHINE</div>
-                ) : (
-                  <div className="text-phosphor-mid text-xs tracking-wide">= TIED WITH MACHINE</div>
-                )}
-              </div>
+                <button
+                  onClick={() => setShowBreakdown(v => !v)}
+                  aria-expanded={showBreakdown}
+                  className="mt-3 text-phosphor-dim text-xs tracking-widest hover:text-phosphor transition-colors"
+                >
+                  {showBreakdown ? 'HIDE BREAKDOWN' : 'HOW THIS WAS SCORED'}
+                </button>
 
-              {/* Teaching */}
-              <div
-                className="border border-phosphor/15 bg-terminal-deep/40 px-4 py-3 mb-4 transition-opacity duration-700"
-                style={{ opacity: revealDelay }}
-              >
-                <div className="text-phosphor-dim text-xs tracking-widest mb-1">PROCESS NOTE</div>
-                <div className="text-phosphor-mid text-xs leading-relaxed">{cp.teachingPoint}</div>
-                {cp.isHoldValid && lastDecision?.actionCode === 'HOLD' && cp.holdTeaching && (
-                  <div className="mt-2 text-paper-green text-xs">✓ {cp.holdTeaching}</div>
+                {showBreakdown && (
+                  <div className="mt-3 border-t border-phosphor/15 pt-3">
+                    <div className="grid grid-cols-3 gap-3 text-xs mb-3">
+                      {[
+                        { label: 'RAER', val: lastCheckpointScore.raerScore },
+                        { label: 'DRAWDOWN', val: lastCheckpointScore.drawdownScore },
+                        { label: 'DOWNSIDE', val: lastCheckpointScore.downsideScore },
+                        { label: 'REGIME', val: lastCheckpointScore.regimeAdaptScore },
+                        { label: 'TURNOVER', val: lastCheckpointScore.turnoverScore },
+                        { label: 'CONSISTENCY', val: lastCheckpointScore.consistencyScore },
+                      ].map(({ label, val }) => (
+                        <div key={label}>
+                          <div className="text-phosphor-dim">{label}</div>
+                          <div className="text-phosphor font-bold">{val}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-phosphor-dim text-xs tracking-widest mb-1">PROCESS NOTE</div>
+                    <div className="text-phosphor-mid text-xs leading-relaxed">{cp.teachingPoint}</div>
+                    {cp.isHoldValid && lastDecision?.actionCode === 'HOLD' && cp.holdTeaching && (
+                      <div className="mt-2 text-paper-green text-xs">✓ {cp.holdTeaching}</div>
+                    )}
+                  </div>
                 )}
               </div>
 

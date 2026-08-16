@@ -15,6 +15,7 @@ const TARGETS = [
   'src/lib/covidArena.ts',
   'src/lib/tipDefinitions.ts',
   'src/lib/dailyTape.ts',
+  'src/lib/verdict.ts',
   'src/screens/',
 ];
 

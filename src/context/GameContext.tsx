@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type {
   RunState, PlayerProfile, ActionCode, ThesisCode, ModuleCode, DimensionCode,
+  BehavioralFlag,
 } from '../lib/gameTypes';
 import { getCheckpoint } from '../lib/covidArena';
 import { scoreCheckpoint, computeXpAward, getDimensionUpdates } from '../lib/scoringEngine';
@@ -26,6 +27,9 @@ interface GameState {
   profile: PlayerProfile;
   run: RunState | null;
   lastCheckpointScore: ReturnType<typeof scoreCheckpoint> | null;
+  // Behavioural flags from the checkpoint just scored. The verdict grammar
+  // reads these to decide whether a winning result carries a forward nudge.
+  lastCheckpointFlags: BehavioralFlag[];
   moduleJustUnlocked: ModuleCode | null;
   xpJustEarned: number;
   loaded: boolean;
@@ -58,7 +62,7 @@ function reducer(state: GameState, action: GameAction): GameState {
       return { ...state, profile: action.profile, loaded: true };
 
     case 'START_RUN':
-      return { ...state, run: createInitialRun(), lastCheckpointScore: null };
+      return { ...state, run: createInitialRun(), lastCheckpointScore: null, lastCheckpointFlags: [] };
 
     case 'SET_RUN_PHASE':
       if (!state.run) return state;
@@ -111,6 +115,7 @@ function reducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         lastCheckpointScore: score,
+        lastCheckpointFlags: flags,
         xpJustEarned: xpEarned,
         moduleJustUnlocked: newModuleUnlocks[0] ?? null,
         profile: {
@@ -218,6 +223,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     profile: createDefaultProfile(getSessionId()),
     run: null,
     lastCheckpointScore: null,
+    lastCheckpointFlags: [],
     moduleJustUnlocked: null,
     xpJustEarned: 0,
     loaded: false,
