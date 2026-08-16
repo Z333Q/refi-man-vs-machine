@@ -132,7 +132,13 @@ export function restoreBuffer(storage: BufferStorage, events: EventEnvelope[]): 
 
 // ─── Sink configuration ───────────────────────────────────────────────────────
 
-export type SinkConfigStatus = 'OK' | 'MISSING' | 'PLACEHOLDER' | 'MALFORMED';
+export type SinkConfigStatus =
+  | 'OK'
+  | 'MISSING'
+  | 'PLACEHOLDER'
+  | 'MALFORMED'
+  /** A server-only key is configured for the browser. Serious: it ships in the bundle. */
+  | 'SECRET_KEY_IN_CLIENT';
 
 /**
  * Whether the configured sink can possibly work.
@@ -162,8 +168,26 @@ export function sinkConfigStatus(url: string | undefined, key: string | undefine
   const supabase = host.match(/^([a-z0-9-]+)\.supabase\.(co|in)$/i);
   if (supabase && !/^[a-z]{20}$/.test(supabase[1])) return 'PLACEHOLDER';
 
-  // The anon key is a JWT. A shape-correct string whose payload is not JSON is
-  // a stand-in, which is exactly what shipped.
+  // Supabase issues two key generations and both are in the wild:
+  //
+  //   sb_publishable_...  current, opaque, client-safe
+  //   sb_secret_...       current, opaque, SERVER ONLY
+  //   eyJ... (JWT)        legacy anon / service_role
+  //
+  // The client must only ever carry a publishable or anon key. A secret or
+  // service_role key configured here is not a warning, it is a disclosed
+  // credential: VITE_ variables are inlined into the bundle and readable by
+  // anyone who loads the page, and a service key bypasses every policy the
+  // RLS migration installs.
+  if (key.startsWith('sb_secret_')) return 'SECRET_KEY_IN_CLIENT';
+  if (key.startsWith('sb_publishable_')) {
+    // Opaque by design: nothing to decode, so length is the only signal that
+    // it is a real key rather than a truncated paste.
+    return key.length > 'sb_publishable_'.length + 8 ? 'OK' : 'MALFORMED';
+  }
+
+  // Legacy JWT. A shape-correct string whose payload is not JSON is a
+  // stand-in, which is exactly what shipped.
   const segments = key.split('.');
   if (segments.length !== 3) return 'MALFORMED';
   try {
@@ -171,6 +195,7 @@ export function sinkConfigStatus(url: string | undefined, key: string | undefine
     const json = atob(pad + '='.repeat((4 - (pad.length % 4)) % 4));
     const claims = JSON.parse(json);
     if (!claims || typeof claims !== 'object') return 'MALFORMED';
+    if ((claims as { role?: string }).role === 'service_role') return 'SECRET_KEY_IN_CLIENT';
   } catch {
     return 'PLACEHOLDER';
   }
@@ -184,5 +209,6 @@ export function describeSinkStatus(status: SinkConfigStatus): string {
     case 'MISSING': return 'Telemetry sink not configured: no URL or key. Events will queue locally.';
     case 'PLACEHOLDER': return 'Telemetry sink is a PLACEHOLDER, not a real project. Nothing will be recorded. Events will queue locally until a real sink is configured.';
     case 'MALFORMED': return 'Telemetry sink credentials are malformed. Events will queue locally.';
+    case 'SECRET_KEY_IN_CLIENT': return 'SECURITY: a server-only Supabase key is configured for the browser. It is inlined into the bundle and readable by anyone. Replace it with the publishable (anon) key and rotate the exposed key immediately.';
   }
 }
