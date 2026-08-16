@@ -16,7 +16,7 @@
 --
 -- Data note: prototype data is disposable per §4.1. Orphan rows that
 -- exist before this migration runs are backfilled to a fixed quarantine
--- owner (`00000000-0000-0000-0000-0000000badd1e`) so the CASCADE FKs
+-- owner (`00000000-0000-0000-0000-000000badd1e`) so the CASCADE FKs
 -- attach cleanly. That user does not authenticate; its rows are
 -- effectively read-locked and can be dropped by service-role tooling.
 
@@ -24,6 +24,12 @@ BEGIN;
 
 -- ─── Quarantine owner ────────────────────────────────────────────────────────
 -- A stable, sentinel UUID for orphan prototype rows. Not a real auth user;
+-- NOTE: the final group is exactly 12 hex digits (6 zeros + badd1e). An
+-- earlier revision carried 13 and was rejected by Postgres with 22P02
+-- invalid input syntax for type uuid, which aborted this whole migration:
+-- the handler below only catches insufficient_privilege, so a malformed
+-- literal is fatal rather than skipped. Validated by
+-- supabase/migrations.test.ts.
 -- Postgres FKs still resolve if we insert into auth.users with a fixed id
 -- (schema privileges permitting). If your instance doesn't allow direct
 -- inserts into auth.users, run this block via a service-role migration
@@ -33,7 +39,7 @@ DO $$
 BEGIN
   INSERT INTO auth.users (id, aud, role, email, created_at, updated_at, confirmation_sent_at)
   VALUES (
-    '00000000-0000-0000-0000-0000000badd1e',
+    '00000000-0000-0000-0000-000000badd1e',
     'authenticated',
     'authenticated',
     'prototype-quarantine@refi.trading',
@@ -71,7 +77,7 @@ BEGIN
   --    bypassed the default.
   EXECUTE format(
     'UPDATE %s SET owner_id = %L WHERE owner_id IS NULL',
-    tbl, '00000000-0000-0000-0000-0000000badd1e'
+    tbl, '00000000-0000-0000-0000-000000badd1e'
   );
 
   -- 3. Now enforce NOT NULL and the default. Default is auth.uid() so
