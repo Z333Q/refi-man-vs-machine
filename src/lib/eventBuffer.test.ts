@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  bufferEvent, drainBuffer, readBuffer, restoreBuffer, sinkConfigStatus,
+  bufferEvent, drainBuffer, readBuffer, restoreBuffer, sinkConfigStatus, describeSinkStatus,
   BUFFER_KEY, BUFFER_MAX, type BufferStorage, type EventEnvelope,
 } from './eventBuffer';
 
@@ -164,4 +164,44 @@ test('a key that is not a decodable JWT is not accepted', () => {
 test('a custom domain is not second-guessed', () => {
   // Self-hosted and proxied sinks are legitimate; only stand-in words are.
   assert.equal(sinkConfigStatus('https://events.refi.trading', REAL_KEY), 'OK');
+});
+
+
+// ─── Supabase's current key generation ────────────────────────────────────────
+
+test('a current publishable key is accepted', () => {
+  // sb_publishable_ keys are opaque, not JWTs. The first validation shipped
+  // only understood the legacy eyJ format and would have rejected every
+  // project created after the key change.
+  assert.equal(
+    sinkConfigStatus(`https://${REAL_REF}.supabase.co`, 'sb_publishable_AWr9dm7EFiLkNvcwggXI3g_CK0Ipnq2'),
+    'OK',
+  );
+});
+
+test('a truncated publishable key is malformed', () => {
+  assert.equal(sinkConfigStatus(`https://${REAL_REF}.supabase.co`, 'sb_publishable_abc'), 'MALFORMED');
+});
+
+test('a server-only key configured for the browser is reported as a disclosure', () => {
+  // VITE_ variables are inlined into the bundle, so this is not a warning
+  // about a misconfiguration: it is a credential that has been published.
+  assert.equal(
+    sinkConfigStatus(`https://${REAL_REF}.supabase.co`, 'sb_secret_abcdefghijklmnop'),
+    'SECRET_KEY_IN_CLIENT',
+  );
+});
+
+test('a legacy service_role JWT is caught the same way', () => {
+  const serviceJwt = 'aaa.' + btoa('{"role":"service_role","ref":"x"}').replace(/=/g, '') + '.bbb';
+  assert.equal(
+    sinkConfigStatus(`https://${REAL_REF}.supabase.co`, serviceJwt),
+    'SECRET_KEY_IN_CLIENT',
+  );
+});
+
+test('the secret-key message names the two actions that matter', () => {
+  const msg = describeSinkStatus('SECRET_KEY_IN_CLIENT');
+  assert.match(msg, /publishable/i);
+  assert.match(msg, /rotate/i);
 });
