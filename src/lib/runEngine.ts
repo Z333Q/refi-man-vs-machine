@@ -139,6 +139,23 @@ export function isHoldOnly(run: RunState, checkpoint?: CheckpointData): boolean 
 
 // ─── Portfolio advance ────────────────────────────────────────────────────────
 
+/**
+ * How much of the checkpoint's authored return a stance actually takes.
+ *
+ * Exported because the resolution race draws the same outcome it applies. If
+ * the renderer carried its own copy of this table the two would drift, and the
+ * curve would finish somewhere the score disagreed with. One table, both uses.
+ */
+export function actionReturnMultiplier(action: ActionCode): number {
+  return (
+    action === 'REDUCE' ? 0.6 :
+    action === 'RAISE_CASH' ? 0.3 :
+    action === 'ADD_RISK' ? 1.4 :
+    action === 'ROTATE_DEFENSIVE' ? 0.7 :
+    1.0
+  );
+}
+
 export function simulatePortfolioAdvance(
   portfolio: PortfolioState,
   action: ActionCode,
@@ -148,12 +165,7 @@ export function simulatePortfolioAdvance(
   if (!cp) return portfolio;
 
   const { returnBias, volatilityDelta, correlationLevel, positionReturns } = cp.portfolioEffect;
-  const actionMultiplier =
-    action === 'REDUCE' ? 0.6 :
-    action === 'RAISE_CASH' ? 0.3 :
-    action === 'ADD_RISK' ? 1.4 :
-    action === 'ROTATE_DEFENSIVE' ? 0.7 :
-    1.0;
+  const actionMultiplier = actionReturnMultiplier(action);
 
   const portfolioReturn = returnBias * actionMultiplier;
   const newValue = portfolio.value * (1 + portfolioReturn);

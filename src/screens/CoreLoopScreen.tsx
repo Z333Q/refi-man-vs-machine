@@ -6,7 +6,7 @@ import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
   canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
-  STARTING_CAPITAL, type DecisionCommand,
+  STARTING_CAPITAL, actionReturnMultiplier, type DecisionCommand,
 } from '../lib/runEngine';
 import {
   thesisLabel, thesisOptionsFor, stanceTitle,
@@ -19,7 +19,7 @@ import { classifyDevice, type DeviceClass, type RegionBounds } from '../lib/gest
 import PullToCommit from '../components/game/PullToCommit';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
-import MachinePipeline from '../components/game/MachinePipeline';
+import ResolutionRace from '../components/game/ResolutionRace';
 import MachineEvolution from '../components/game/MachineEvolution';
 import { useVisualEvents, visualRegistry } from '../components/game/VisualEventLayer';
 import { Spotlight } from '../components/onboarding/Spotlight';
@@ -554,6 +554,18 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     ? deriveVerdict(lastCheckpointScore, lastCheckpointFlags)
     : null;
 
+  // A stable seed for the resolution race. §54 authors a per-run `seed` on
+  // arena_runs; RunState does not carry one yet, so the race is seeded from the
+  // arena identity instead. Presentation only: it never reaches scoring, and
+  // the curves are pinned to authored endpoints regardless.
+  // Not memoised: this sits after the run guard, where a hook would be
+  // conditional, and an FNV hash of a short string is cheaper than the memo.
+  const raceSeed = (() => {
+    let h = 2166136261;
+    for (const ch of run.arenaId) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    return h >>> 0;
+  })();
+
   const previousDecision = run.decisions[run.decisions.length - 1];
   const previousConviction = previousDecision
     ? confidenceToConviction(previousDecision.confidence ?? 0)
@@ -585,6 +597,15 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     resolveRunResult(run, run.playerScore > run.machineScore ? 'MACHINE_BEATEN' : 'PASSED') === 'MACHINE_BEATEN';
 
   const lastDecision = run.decisions[run.decisions.length - 1];
+
+  // Endpoints for the race, derived from the same multiplier the engine
+  // applied, so the curve cannot finish where the score disagrees.
+  const racePlayerReturn = lastDecision
+    ? cp.portfolioEffect.returnBias * actionReturnMultiplier(lastDecision.actionCode)
+    : 0;
+  const raceMachineReturn =
+    cp.portfolioEffect.returnBias * actionReturnMultiplier(cp.machineDecision.actionCode);
+
   // The branch that was actually committed, for the post-commit thesis prompt.
   const selectedCommittedBranch = lastDecision
     ? branches.find(b => b.actionCode === lastDecision.actionCode) ?? null
@@ -1111,39 +1132,52 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
           {/* ── Resolve / Compare / Learn ── */}
           {!thesisPrompt && (phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING') && lastCheckpointScore && verdict && (
             <div className="flex-1 overflow-y-auto p-6">
-              {/* Machine pipeline: processing animation */}
-              {phase === 'RESOLVING' && revealDelay === 0 && (
-                <div className="mb-5 border border-phosphor/10 bg-terminal-deep/40 p-4">
-                  <MachinePipeline
-                    autoPlay
-                    autoPlayDurationMs={750}
+              {/* The race. Five beats: lock, resolve, flip, score, verdict.
+                  Replaces the instant text result: the payoff of a trading
+                  game is watching the market answer the call you locked. */}
+              {phase === 'RESOLVING' && revealDelay === 0 ? (
+                <div className="mb-5">
+                  <ResolutionRace
+                    playerReturn={racePlayerReturn}
+                    machineReturn={raceMachineReturn}
+                    volatilityDelta={cp.portfolioEffect.volatilityDelta}
+                    correlationLevel={cp.portfolioEffect.correlationLevel}
+                    seed={raceSeed}
+                    checkpointSequence={run.currentCheckpoint}
+                    playerAction={lastDecision?.actionCode ?? ''}
+                    machineAction={cp.machineDecision.actionCode}
+                    machineReason={cp.machineDecision.policyReason}
+                    wire={(cp.eventFeed ?? []).map(e => e.text)}
+                    score={lastCheckpointScore}
+                    verdict={verdict}
+                    par={cp.machinePar}
+                    reducedMotion={reducedMotion}
                     onComplete={() => setRevealDelay(1)}
                   />
                 </div>
+              ) : (
+                <div
+                  className="grid grid-cols-2 gap-4 mb-5 transition-opacity duration-500"
+                  style={{ opacity: revealDelay }}
+                >
+                  <div className="border border-phosphor/20 bg-terminal-deep/40 p-4">
+                    <div className="text-phosphor-dim text-xs tracking-widest mb-2">YOUR CALL</div>
+                    <div className="text-phosphor text-xl font-bold tracking-wide">
+                      {lastDecision?.actionCode}
+                    </div>
+                    <div className="text-phosphor-dim text-xs mt-1">
+                      {thesisLabel(lastDecision?.thesisCode)} · CONVICTION {confidenceToConviction(lastDecision?.confidence ?? 0)}
+                    </div>
+                  </div>
+                  <div className="border border-phosphor/15 bg-terminal-deep/30 p-4">
+                    <MachineReveal
+                      action={cp.machineDecision.actionCode}
+                      reasoning={cp.machineDecision.policyReason}
+                      durationMs={600}
+                    />
+                  </div>
+                </div>
               )}
-
-              {/* Your call vs machine reveal */}
-              <div
-                className="grid grid-cols-2 gap-4 mb-5 transition-opacity duration-500"
-                style={{ opacity: revealDelay }}
-              >
-                <div className="border border-phosphor/20 bg-terminal-deep/40 p-4">
-                  <div className="text-phosphor-dim text-xs tracking-widest mb-2">YOUR CALL</div>
-                  <div className="text-phosphor text-xl font-bold tracking-wide">
-                    {lastDecision?.actionCode}
-                  </div>
-                  <div className="text-phosphor-dim text-xs mt-1">
-                    {thesisLabel(lastDecision?.thesisCode)} · CONVICTION {confidenceToConviction(lastDecision?.confidence ?? 0)}
-                  </div>
-                </div>
-                <div className="border border-phosphor/15 bg-terminal-deep/30 p-4">
-                  <MachineReveal
-                    action={cp.machineDecision.actionCode}
-                    reasoning={cp.machineDecision.policyReason}
-                    durationMs={600}
-                  />
-                </div>
-              </div>
 
               {/* Score card */}
               <div
