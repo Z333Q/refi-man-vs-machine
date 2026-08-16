@@ -4,7 +4,7 @@ import type { ActionCode, RunState } from './gameTypes';
 import {
   geometryFor, classifyDevice, clearanceAt, hasClearance, radialDistance,
   convictionForDistance, distanceForConviction, gainAt, rubberBand, COMPACT_SCALE,
-  gripDisposition, type RegionBounds,
+  gripDisposition, MIN_ENGAGEMENT_MS, type RegionBounds,
 } from './gestureGeometry';
 import { getCheckpoint } from './covidArena';
 import { OneEuroFilter, MedianOf3, PullFilter, DEFAULT_ONE_EURO } from './oneEuroFilter';
@@ -13,7 +13,7 @@ import {
   type GestureEffect, type GestureEvent, type GestureConfig,
 } from './gestureMachine';
 import {
-  CONVICTION_MIN, CONVICTION_MAX, clampConviction, convictionToConfidence,
+  CONVICTION_MIN, CONVICTION_MAX, CONVICTION_DEFAULT, clampConviction, convictionToConfidence,
 } from './decisionContract';
 import {
   createInitialRun, commitPendingDecision, commitDecisionCommand, canAffordAction,
@@ -48,7 +48,7 @@ test('the mapping is continuous, so there is no jump at the arm point', () => {
 });
 
 test('the knee and the hard stop land on their authored convictions', () => {
-  assert.equal(convictionForDistance(STD.knee, STD), 85);
+  assert.equal(convictionForDistance(STD.knee, STD), 75);
   assert.equal(convictionForDistance(STD.fullDraw, STD), CONVICTION_MAX);
 });
 
@@ -72,27 +72,53 @@ test('distance and conviction round-trip through the knee', () => {
 });
 
 test('the high-draw range trades reach for resolution', () => {
-  // Points of distance per point of conviction. Per five-point detent that is
-  // 17.43 pt in the working range and 22.50 pt above the knee.
-  const working = gainAt(100, STD);
-  const highDraw = gainAt(170, STD);
-  assert.ok(Math.abs(working - 3.4857143) < 1e-6, `working gain ${working}`);
-  assert.ok(Math.abs(working * 5 - 17.428571) < 1e-5);
-  assert.ok(Math.abs(highDraw - 4.5) < 1e-9);
-  assert.ok(Math.abs(highDraw * 5 - 22.5) < 1e-9);
-  // 29% more distance per conviction point above the knee, which is finer
-  // control, not a harder target. See docs/g1-gesture-research.md section 4.
-  assert.ok(highDraw / working > 1.28 && highDraw / working < 1.30);
+  // Amendment 2 geometry. Points of distance per point of conviction: per
+  // five-point detent that is 17.4 pt in the working range and 20.0 pt above
+  // the knee. The working-range gradient is deliberately preserved from the
+  // pre-amendment curve (3.486), so calibration learned below the knee
+  // survives the amendment.
+  const working = gainAt(80, STD);
+  const highDraw = gainAt(160, STD);
+  assert.ok(Math.abs(working - 3.48) < 1e-9, `working gain ${working}`);
+  assert.ok(Math.abs(working * 5 - 17.4) < 1e-9);
+  assert.ok(Math.abs(highDraw - 4.0) < 1e-9);
+  assert.ok(Math.abs(highDraw * 5 - 20.0) < 1e-9);
+  assert.ok(highDraw / working > 1.14 && highDraw / working < 1.16);
 });
 
-test('reaching the hard stop costs 37% more travel than reaching the knee', () => {
+test('EFFORT RAMP: a point above the knee always costs more travel than one below', () => {
+  // The invariant Amendment 2 nearly broke, asserted directly against the
+  // constants rather than inferred from a worked example. Moving
+  // kneeConviction without moving the knee distance inverts this, and the
+  // inversion is invisible in every other test in this file.
+  for (const g of [geometryFor('STANDARD'), geometryFor('COMPACT')]) {
+    const below = (g.knee - g.deadZone) / (g.kneeConviction - CONVICTION_MIN);
+    const above = (g.fullDraw - g.knee) / (CONVICTION_MAX - g.kneeConviction);
+    assert.ok(
+      above > below,
+      `${g.deviceClass}: ${above.toFixed(3)} pt/point above the knee must exceed ${below.toFixed(3)} below it`,
+    );
+  }
+});
+
+test('the resting default is reachable and is not a landmark', () => {
+  // 70 was demoted by Amendment 2 but is still where the control rests, so it
+  // has to remain an ordinary, committable value on the scale.
+  const d = distanceForConviction(CONVICTION_DEFAULT, STD);
+  assert.ok(d > STD.deadZone && d < STD.knee, `default sits at ${d} pt`);
+  assert.equal(Math.round(convictionForDistance(d, STD) as number), CONVICTION_DEFAULT);
+});
+
+test('reaching the hard stop costs 92% more travel than reaching the knee', () => {
   // This is the true safety property. The addendum's claim that expanded
   // spacing makes the maximum harder to hit does not survive Fitts's law: the
   // wider targets almost exactly cancel the extra distance, and a hard stop is
   // a target of unbounded width. Travel cost is what actually holds.
+  // Amendment 2 strengthened this: the knee moved closer, so the hard stop is
+  // now 92% further than the knee rather than 37%.
   const toKnee = STD.knee - STD.deadZone;
   const toStop = STD.fullDraw - STD.deadZone;
-  assert.ok(Math.abs(toStop / toKnee - 1.3689) < 1e-3);
+  assert.ok(Math.abs(toStop / toKnee - 1.9195) < 1e-3, `ratio ${toStop / toKnee}`);
 });
 
 test('direction carries no meaning, only distance', () => {
@@ -118,7 +144,7 @@ test('compact scales every distance by one constant', () => {
   // The endpoints still mean the same convictions: the road is shorter, not
   // differently marked.
   assert.equal(convictionForDistance(compact.deadZone, compact), CONVICTION_MIN);
-  assert.equal(convictionForDistance(compact.knee, compact), 85);
+  assert.equal(convictionForDistance(compact.knee, compact), 75);
   assert.equal(convictionForDistance(compact.fullDraw, compact), CONVICTION_MAX);
 });
 
@@ -220,7 +246,9 @@ function grip(affordable = true): GestureEvent {
 function move(distance: number, timestamp = 100): GestureEvent {
   return { type: 'MOVE', pointerId: 1, distance, timestamp };
 }
-function release(timestamp = 200): GestureEvent {
+// Default release clears MIN_ENGAGEMENT_MS. Tests that mean to exercise the
+// flick guard pass an explicit early timestamp.
+function release(timestamp = 600): GestureEvent {
   return { type: 'RELEASE', pointerId: 1, timestamp };
 }
 
@@ -323,7 +351,7 @@ test('detents report once per crossing, with landmarks marked', () => {
   assert.deepEqual(values, [50, 55, 60, 65, 70, 75, 80, 85, 90, 95]);
   const landmarks = detents.filter(e => e.type === 'DETENT' && e.landmark)
     .map(e => (e.type === 'DETENT' ? e.conviction : 0));
-  assert.deepEqual(landmarks, [70, 85, 95]);
+  assert.deepEqual(landmarks, [75, 95]);
 });
 
 test('the hard stop reports once, however far past it the finger goes', () => {
@@ -415,7 +443,7 @@ test('the gesture path and the slider path produce identical run state', () => {
       [
         { type: 'GRIP_START', pointerId: 1, actionCode: step.action, affordable: true, timestamp: 0 },
         { type: 'MOVE', pointerId: 1, distance, timestamp: 50 },
-        { type: 'RELEASE', pointerId: 1, timestamp: 120 },
+        { type: 'RELEASE', pointerId: 1, timestamp: 600 },
       ],
       config,
     );
@@ -483,7 +511,7 @@ test('gesture and slider commands commit to identical run state', () => {
       [
         { type: 'GRIP_START', pointerId: 1, actionCode: command.action, affordable: true, timestamp: 0 },
         { type: 'MOVE', pointerId: 1, distance, timestamp: 50 },
-        { type: 'RELEASE', pointerId: 1, timestamp: 120 },
+        { type: 'RELEASE', pointerId: 1, timestamp: 600 },
       ],
       config,
     );
@@ -628,4 +656,55 @@ test('an unaffordable stance is UNAVAILABLE, never merely a fallback', () => {
   // Affordability is checked first: clearance never upgrades or downgrades it.
   assert.equal(gripDisposition({ x: 600, y: 400 }, roomy, STD, true), 'PULL');
   assert.equal(gripDisposition({ x: 50, y: 50 }, cramped, STD, true), 'PRECISE_CONTROLS');
+});
+
+
+// ─── The engagement floor (Addendum C Amendment 2) ────────────────────────────
+
+test('a release faster than the engagement floor never commits', () => {
+  // The gesture has no confirm dialog, so this floor is what stops a flick
+  // becoming an irreversible decision. Acceptance asks for 100 attempts out of
+  // 100; the machine is deterministic, so sweeping the whole sub-threshold
+  // range proves it more completely than repetition would.
+  for (let t = 0; t < MIN_ENGAGEMENT_MS; t += 5) {
+    const { effects } = runGesture(
+      [grip(), move(STD.fullDraw, Math.min(t, 1)), release(t)],
+      openConfig,
+    );
+    assert.equal(
+      effects.some(e => e.type === 'COMMIT'), false,
+      `released at ${t}ms and committed`,
+    );
+    const cancel = effects.find(e => e.type === 'CANCEL');
+    assert.ok(cancel && cancel.type === 'CANCEL' && cancel.reason === 'FLICK', `at ${t}ms`);
+  }
+});
+
+test('a release at or past the engagement floor commits normally', () => {
+  for (const t of [MIN_ENGAGEMENT_MS, MIN_ENGAGEMENT_MS + 1, 900, 5000]) {
+    const { effects } = runGesture([grip(), move(STD.knee, 10), release(t)], openConfig);
+    const commit = effects.find(e => e.type === 'COMMIT');
+    assert.ok(commit && commit.type === 'COMMIT', `released at ${t}ms and did not commit`);
+    assert.equal(commit.conviction, 75);
+  }
+});
+
+test('a flick reports itself, so the floor can be tuned from data not opinion', () => {
+  const { effects } = runGesture([grip(), move(STD.fullDraw, 1), release(120)], openConfig);
+  const tel = effects.find(e => e.type === 'TELEMETRY' && e.event === 'gesture.cancelled');
+  assert.ok(tel && tel.type === 'TELEMETRY');
+  assert.equal(tel.payload.reason, 'FLICK');
+  assert.equal(tel.payload.elapsedMs, 120);
+  // The conviction the flick would have committed is recorded, which is what
+  // tells us whether the floor is catching accidents or eating real decisions.
+  assert.equal(tel.payload.conviction, 95);
+});
+
+test('the flick guard does not fire on a slow pull that never armed', () => {
+  // A dead-zone release is timidity, not a flick, and keeps its own path to
+  // the precise controls however fast it happened.
+  const { effects } = runGesture([grip(), move(10, 5), release(50)], openConfig);
+  assert.equal(effects.some(e => e.type === 'COMMIT'), false);
+  assert.equal(effects.some(e => e.type === 'OPEN_FOCUSED_CONTROLS'), true);
+  assert.equal(effects.some(e => e.type === 'CANCEL' && e.reason === 'FLICK'), false);
 });

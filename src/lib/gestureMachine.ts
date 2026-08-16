@@ -1,4 +1,5 @@
 import type { ActionCode } from './gameTypes';
+import { MIN_ENGAGEMENT_MS } from './gestureGeometry';
 import { clampConviction, isDetent, isLandmark, CONVICTION_MAX } from './decisionContract';
 import { convictionForDistance, type PullGeometry } from './gestureGeometry';
 
@@ -23,7 +24,8 @@ export type CancelReason =
   | 'VISIBILITY_CHANGE'
   | 'ORIENTATION_CHANGE'
   | 'SECOND_POINTER_IGNORED'
-  | 'UNAFFORDABLE';
+  | 'UNAFFORDABLE'
+  | 'FLICK';
 
 export type GestureEvent =
   | { type: 'GRIP_START'; pointerId: number; actionCode: ActionCode; affordable: boolean; timestamp: number }
@@ -257,6 +259,31 @@ export function gestureReducer(
       // showing, with no delay and nothing to wait for.
       if (context.state === 'PULL' && context.conviction !== null) {
         const conviction = context.conviction;
+        const elapsed = context.startedAt === null ? Infinity : event.timestamp - context.startedAt;
+
+        // A flick is not a decision. The gesture has no confirm dialog, so
+        // deliberateness comes from the dead zone plus this floor: a pull
+        // released faster than a person can mean it springs back instead of
+        // committing something that cannot be undone. Addendum C Amendment 2.
+        if (elapsed < MIN_ENGAGEMENT_MS) {
+          return {
+            context: { ...initialGestureContext(), state: 'SETTLED' },
+            effects: [
+              { type: 'CANCEL', reason: 'FLICK' },
+              {
+                type: 'TELEMETRY',
+                event: 'gesture.cancelled',
+                payload: {
+                  reason: 'FLICK' satisfies CancelReason,
+                  actionCode: context.actionCode,
+                  conviction,
+                  elapsedMs: elapsed,
+                },
+              },
+            ],
+          };
+        }
+
         return {
           context: { ...initialGestureContext(), state: 'SETTLED' },
           effects: [

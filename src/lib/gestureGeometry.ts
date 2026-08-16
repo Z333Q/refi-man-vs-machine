@@ -30,12 +30,48 @@ export interface PullGeometry {
 // Note on units: 195 pt is about 32 mm on a current phone (roughly 154 pt per
 // inch of logical density), not the 52 mm the addendum annotates. The distances
 // are correct and the annotation is not; see research section 3.
+// Addendum C Amendment 2. The knee moved to conviction 75, and the knee
+// DISTANCE moved with it. Those two changes do not travel separately: leaving
+// the knee at 150 pt while the conviction moved to 75 would put 20 conviction
+// points across 45 pt of high-draw travel, making a point at the top cost
+// 2.25 pt against 4.88 pt in the working range. Reaching 95 would become
+// easier than it was, inverting the safety property in section 2.1.
+//
+// 115 pt is the distance that preserves the working-range gradient: 87 pt over
+// 25 points is 3.48 pt per point, against the original 122 pt over 35 points
+// at 3.486. Calibration the hand learned below 75 survives untouched, and the
+// high-draw range stays more expensive at 4.0 pt per point.
+//
+// THE EFFORT-RAMP INVARIANT, asserted by test in gesture.test.ts:
+//
+//   (fullDraw - knee) / (CONVICTION_MAX - kneeConviction)
+//     MUST EXCEED
+//   (knee - deadZone) / (kneeConviction - CONVICTION_MIN)
+//
+// A point above the knee must cost more travel than a point below it. No
+// single constant implies this; changing one of them alone can invert it.
 const STANDARD: Omit<PullGeometry, 'deviceClass'> = {
   deadZone: 28,
-  knee: 150,
+  knee: 115,
   fullDraw: 195,
-  kneeConviction: 85,
+  kneeConviction: 75,
 };
+
+// The drawing stretches; the meaning must not. The mapping above is in physical
+// points and is never expressed as a fraction of the viewport: identical thumb
+// travel has to mean identical conviction on every device, or the promise that
+// "the calibration you build here is the calibration you keep" is false. The
+// track graphic may size itself freely; these numbers may not.
+
+/**
+ * Minimum engagement in the pull before a release is allowed to commit.
+ *
+ * Addendum C Amendment 2. The gesture has no confirm dialog: the pull is the
+ * confirmation, and deliberateness comes from the dead zone plus this floor
+ * rather than from a second tap. A release faster than this is a flick, and a
+ * flick must never commit a decision that cannot be undone.
+ */
+export const MIN_ENGAGEMENT_MS = 350;
 
 // Addendum C section C.3. One scale, two classes, decided once per run.
 export const COMPACT_SCALE = 0.85;
