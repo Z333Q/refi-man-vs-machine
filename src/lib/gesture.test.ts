@@ -359,28 +359,25 @@ test('the hard stop reports once, however far past it the finger goes', () => {
   assert.equal(effectsOf(effects, 'HARD_STOP').length, 1);
 });
 
-test('the governor blocks distinctly and never ticks past its cap', () => {
+test('AMENDMENT 1: an early checkpoint ticks the whole scale and never reports a limiter', () => {
   const distances = [];
   for (let d = 28; d <= 195; d += 1) distances.push(d);
   const { effects } = runGesture([grip(), ...distances.map(d => move(d))], governedConfig);
 
   const detents = effectsOf(effects, 'DETENT').map(e => (e.type === 'DETENT' ? e.conviction : 0));
-  assert.deepEqual(detents, [60, 65, 70, 75], 'no detent above the cap');
+  assert.deepEqual(detents, [50, 55, 60, 65, 70, 75, 80, 85, 90, 95], 'CP1 now ticks the full scale');
 
-  const blocked = effectsOf(effects, 'GOVERNOR_BLOCKED');
-  assert.equal(blocked.length, 1, 'the limiter reports once');
-  assert.equal(blocked[0].type === 'GOVERNOR_BLOCKED' && blocked[0].conviction, 75);
-  assert.equal(effectsOf(effects, 'HARD_STOP').length, 0, 'the governor is hit before the wall');
+  // The limiter is gone: a first-checkpoint pull reaches the wall, not a cap.
+  assert.equal(effectsOf(effects, 'GOVERNOR_BLOCKED').length, 0, 'no limiter at CP1');
+  assert.equal(effectsOf(effects, 'HARD_STOP').length, 1, 'the hard stop is reachable at CP1');
 });
 
-test('the governor caps the value without moving the geometry', () => {
-  // The identical physical pull is the identical distance on both sides of the
-  // lift. Only the value it is allowed to report changes.
-  const distance = 195;
-  const raw = convictionForDistance(distance, STD) as number;
+test('AMENDMENT 1: a full draw means 95 at every checkpoint, including the first', () => {
+  const raw = convictionForDistance(195, STD) as number;
   assert.equal(Math.round(raw), 95);
-  assert.equal(clampConviction(raw, 1), 75);
-  assert.equal(clampConviction(raw, 5), 95);
+  for (const cp of [1, 2, 4, 5, 14]) {
+    assert.equal(clampConviction(raw, cp), 95, `CP${cp}`);
+  }
 });
 
 test('a committed gesture reports the value that was showing', () => {
@@ -464,14 +461,14 @@ test('the gesture path and the slider path produce identical run state', () => {
   assert.equal(JSON.stringify(viaGesture), JSON.stringify(viaSlider));
 });
 
-test('the governor applies identically through both doors', () => {
-  // At CP1 a full-draw pull and a slider driven to 95 must both record 75.
+test('both doors agree at the first checkpoint, now at the top of the scale', () => {
+  // At CP1 a full-draw pull and a slider driven to 95 must both record 95.
   const config: GestureConfig = { geometry: STD, checkpointSequence: 1 };
   const { effects } = runGesture([grip(), move(STD.fullDraw), release()], config);
   const commit = effects.find(e => e.type === 'COMMIT');
   assert.ok(commit && commit.type === 'COMMIT');
-  assert.equal(commit.conviction, 75);
-  assert.equal(clampConviction(CONVICTION_MAX, 1), 75);
+  assert.equal(commit.conviction, CONVICTION_MAX);
+  assert.equal(clampConviction(CONVICTION_MAX, 1), CONVICTION_MAX);
 });
 
 // ─── The command boundary ─────────────────────────────────────────────────────
@@ -530,16 +527,20 @@ test('gesture and slider commands commit to identical run state', () => {
   assert.equal(JSON.stringify(viaGesture), JSON.stringify(viaSlider));
 });
 
-test('the command clamps conviction with the checkpoint governor, whichever door sent it', () => {
-  // A door that forgot to clamp would commit 95 at CP1. The engine refuses.
+test('the command still clamps to the permanent span, whichever door sent it', () => {
+  // The governor is gone; the scale is not. Out-of-range values are refused.
   const run = createInitialRun();
-  const outcome = commitDecisionCommand(run, { action: 'HOLD', conviction: 95 });
-  assert.ok(outcome);
-  assert.equal(outcome.run.decisions[0].confidence, convictionToConfidence(75));
+  const top = commitDecisionCommand(run, { action: 'HOLD', conviction: 95 });
+  assert.ok(top);
+  assert.equal(top.run.decisions[0].confidence, convictionToConfidence(95));
 
-  const floored = commitDecisionCommand(run, { action: 'HOLD', conviction: 50 });
-  assert.ok(floored);
-  assert.equal(floored.run.decisions[0].confidence, convictionToConfidence(60));
+  const over = commitDecisionCommand(run, { action: 'HOLD', conviction: 130 });
+  assert.ok(over);
+  assert.equal(over.run.decisions[0].confidence, convictionToConfidence(95));
+
+  const under = commitDecisionCommand(run, { action: 'HOLD', conviction: 10 });
+  assert.ok(under);
+  assert.equal(under.run.decisions[0].confidence, convictionToConfidence(50));
 });
 
 test('an unauthored stance is rejected and records no decision', () => {
