@@ -56,9 +56,15 @@ export const CONVICTION_STEP = 1;
 // gesture) fire haptics; they do not quantize the value.
 export const CONVICTION_DETENT = 5;
 
-// The three landmarks the hand learns: the rest reference, the gate into the
-// high-draw range, and the hard stop.
-export const CONVICTION_LANDMARKS = [70, 85, 95] as const;
+// The landmarks the hand learns. Addendum C Amendment 2 reduced these to two:
+// the gate into the high-draw range, and the hard stop.
+//
+// 70 was demoted to an ordinary detent. It remains CONVICTION_DEFAULT, the
+// value the control rests at, but a heavy tick five points below the gate
+// competes with the gate for the thumb's attention, and the gate is the
+// landmark that matters. 85 lost its double-tick for the same reason; it is now
+// an ordinary detent inside the high-draw range.
+export const CONVICTION_LANDMARKS = [75, 95] as const;
 
 export function isDetent(conviction: number): boolean {
   return conviction % CONVICTION_DETENT === 0;

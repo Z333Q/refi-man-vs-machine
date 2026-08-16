@@ -111,10 +111,14 @@ test('detents and landmarks are labels on the scale, not values of it', () => {
   assert.equal(CONVICTION_DETENT, 5);
   assert.equal(isDetent(70), true);
   assert.equal(isDetent(72), false);
-  assert.equal(isLandmark(70), true);
-  assert.equal(isLandmark(85), true);
+  // Amendment 2: two landmarks, the gate and the hard stop. 70 stays the
+  // resting default and an ordinary detent; 85 lost its double-tick.
+  assert.equal(isLandmark(75), true);
   assert.equal(isLandmark(95), true);
-  assert.equal(isLandmark(75), false);
+  assert.equal(isLandmark(70), false);
+  assert.equal(isLandmark(85), false);
+  // The default is still a real, committable value on the scale.
+  assert.equal(isDetent(CONVICTION_DEFAULT), true);
 });
 
 test('the default conviction sits inside every checkpoint governor', () => {

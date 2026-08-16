@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionBranch } from '../../lib/gameTypes';
 import { stanceLine, stanceTitle, convictionGovernor, isLandmark } from '../../lib/decisionContract';
 import {
-  geometryFor, radialDistance, rubberBand,
+  geometryFor, rubberBand,
   gripDisposition, type DeviceClass, type PullGeometry, type RegionBounds,
 } from '../../lib/gestureGeometry';
-import { PullFilter } from '../../lib/oneEuroFilter';
+import { PullSession, type PointerSample } from '../../lib/pointerSession';
 import {
   gestureReducer, initialGestureContext,
   type GestureContext, type GestureEffect, type GestureEvent,
@@ -43,6 +43,11 @@ interface Props {
   previousConviction?: number | null;
 }
 
+/** Narrow a React or native pointer event to the fields the session needs. */
+function toSample(e: { pointerId: number; clientX: number; clientY: number; timeStamp: number }): PointerSample {
+  return { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY, timeStamp: e.timeStamp };
+}
+
 export default function PullToCommit({
   branch, index, affordable, turnoverCost, checkpointSequence, selected,
   reducedMotion, muted, deviceClass, regionBounds,
@@ -50,9 +55,9 @@ export default function PullToCommit({
 }: Props) {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const contextRef = useRef<GestureContext>(initialGestureContext());
-  const originRef = useRef<{ x: number; y: number } | null>(null);
-  const filterRef = useRef(new PullFilter());
-  const rawDistanceRef = useRef(0);
+  // Origin capture, coalesced-sample consumption and the jitter filter live in
+  // PullSession so the pointer path is reachable from a test (Addendum C §6).
+  const sessionRef = useRef(new PullSession());
 
   const [conviction, setConviction] = useState<number | null>(null);
   const [pullVector, setPullVector] = useState<{ x: number; y: number } | null>(null);
@@ -154,64 +159,41 @@ export default function PullToCommit({
       return;
     }
 
-    originRef.current = { x: e.clientX, y: e.clientY };
-    filterRef.current.reset();
-    rawDistanceRef.current = 0;
-
     // Pointer capture keeps the gesture alive once the finger leaves the card,
     // and turns a screen-edge exit into a clean cancel rather than a lost
     // pointer.
     try { cardRef.current?.setPointerCapture(e.pointerId); } catch { /* older engines */ }
 
-    dispatch({
-      type: 'GRIP_START',
-      pointerId: e.pointerId,
-      actionCode: branch.actionCode,
-      affordable,
-      timestamp: e.timeStamp,
-    });
+    dispatch(sessionRef.current.down(toSample(e), branch.actionCode, affordable));
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const origin = originRef.current;
-    if (!origin) return;
+    if (!sessionRef.current.engaged) return;
     if (contextRef.current.state !== 'GRIP' && contextRef.current.state !== 'PULL') return;
 
-    // Touch sampling commonly runs at double the refresh rate, so the samples
-    // the browser merged into this event are real data. Consuming only the
-    // dispatched event throws half of them away.
     const native = e.nativeEvent;
-    const samples = typeof native.getCoalescedEvents === 'function'
-      ? native.getCoalescedEvents()
-      : [native];
+    const coalesced = typeof native.getCoalescedEvents === 'function'
+      ? native.getCoalescedEvents().map(toSample)
+      : [];
 
-    let filtered = 0;
-    let last = { x: e.clientX, y: e.clientY };
-    for (const sample of samples.length ? samples : [native]) {
-      const point = { x: sample.clientX, y: sample.clientY };
-      last = point;
-      filtered = filterRef.current.filter(
-        radialDistance(origin, point),
-        sample.timeStamp / 1000,
-      );
-    }
+    const dispatched = toSample(e);
+    const event = sessionRef.current.move(coalesced, dispatched);
+    if (!event) return;
 
-    rawDistanceRef.current = radialDistance(origin, last);
-    setPullVector({ x: last.x - origin.x, y: last.y - origin.y });
-    dispatch({ type: 'MOVE', pointerId: e.pointerId, distance: filtered, timestamp: e.timeStamp });
+    const origin = sessionRef.current.gripOrigin;
+    if (origin) setPullVector({ x: e.clientX - origin.x, y: e.clientY - origin.y });
+    dispatch(event);
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    dispatch({ type: 'RELEASE', pointerId: e.pointerId, timestamp: e.timeStamp });
-    originRef.current = null;
+    dispatch(sessionRef.current.up(toSample(e)));
     setPullVector(null);
     setClearanceWarning(false);
     try { cardRef.current?.releasePointerCapture(e.pointerId); } catch { /* already released */ }
   };
 
   const onPointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
-    dispatch({ type: 'POINTER_CANCEL', pointerId: e.pointerId });
-    originRef.current = null;
+    dispatch(sessionRef.current.cancel(toSample(e)));
     setPullVector(null);
     setClearanceWarning(false);
   };
@@ -244,7 +226,7 @@ export default function PullToCommit({
   const striations = !armed ? 0 : conviction >= 85 ? 6 : conviction >= 75 ? 4 : 2;
 
   // Past the hard stop the band compresses instead of stretching.
-  const rawPull = rawDistanceRef.current;
+  const rawPull = sessionRef.current.rawDistance;
   const overshoot = Math.max(0, rawPull - geometry.fullDraw);
   const bandLength = armed
     ? Math.min(rawPull, geometry.fullDraw) + rubberBand(overshoot, geometry.fullDraw)
