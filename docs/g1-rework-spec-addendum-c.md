@@ -185,3 +185,145 @@ The pull is at its best on a tablet: the thumb has a comfortable arc, and the dr
 This keeps the keyboard exactly as expressive as the drag, which is invariant 7: the gesture is never the only door. The stance cards keep `1..4`, the thesis chips take `1..3`, `Enter` commits, and `Escape` backs out.
 
 The three-speed model is also why detents are landmarks rather than quantization (C.2). Shift-arrow lands on them; a plain arrow walks between them; both are real.
+
+---
+
+# Addendum C, Part 3: Amendments
+
+Amendments are recorded, never silent. Each states what it supersedes, what it
+changes, what stays frozen, and the reasoning, so a later reader can tell an
+intentional change from a regression. Two of the amendments below alter
+constants that §4 and §5 invariant 3 previously vetoed outright; that veto is
+narrowed by Amendment 2 rather than ignored.
+
+## Amendment 1: the conviction governor is removed
+
+**Supersedes:** §2.2 and C.1 (conviction governed to 60 to 75 through CP1 to
+CP4, full range at CP5).
+
+**Change:** the full conviction range, 50 to 95, is available from the first
+conviction input. Under the compressed first-run experience that is CP2.
+
+**Compensating controls:**
+
+1. The CP2 introduction tip states the mechanism as consequence, not warning:
+   `CONVICTION SCALES THE SCORE BOTH WAYS. WRONG AT 95 COSTS DOUBLE.`
+2. Conviction-derived profile dimensions (calibration, position sizing) are
+   tagged `PROVISIONAL` until 12 scored decisions, and the profile displays the
+   tag. Early miscalibration informs the player without permanently staining
+   the dataset the archetype is built from.
+3. Telemetry guard. Monitor first-run abandonment between CP2 and CP5, and the
+   conviction distribution of first-arena players. Rollback trigger: if
+   abandonment in that window rises more than 20% relative over 14 days, or if
+   median first-arena conviction exceeds 85, the governor question reopens with
+   data.
+
+**Rationale:** the calibration lesson is consequence, not constraint. The
+compressed first-run experience moved the governed window on top of the entire
+first session, so the governor would now cover 100% of the make-or-break
+minutes with reduced agency, which inverts its original purpose as a warm-up
+inside a longer onboarding. The shipped tutorial copy also already promises
+that "the scale itself never changes, so the calibration you build here is the
+calibration you keep." Removing the governor makes that sentence true.
+
+## Amendment 2: the knee moves to 75
+
+**Supersedes:** the §2.1 mapping constant `kneeConviction = 85` and the landmark
+detent at 70. Also formally withdraws the viewport-relative track geometry
+proposed in the Verb specification (track length as 38% of viewport height with
+a 260 to 420 px clamp); see the geometry ruling below.
+
+**Unchanged, and re-frozen:** the radial mapping; the physical geometry, dead
+zone 28 pt, knee 150 pt, full draw 195 pt; the STANDARD and COMPACT device
+classes at 0.85 scale; the detent cadence of every 5 points.
+
+**Changed:**
+
+1. `kneeConviction`: 85 becomes 75. Linear 50 to 75 from the dead zone to the
+   knee; eased 75 to 95 from the knee to full draw, each point above 75 costing
+   more travel than the last.
+2. Landmark detents: 70, 85, 95 becomes 75, 85, 95. The 5-point cadence ticks
+   are unchanged everywhere; landmarks are only the stronger haptic and visual
+   tick.
+3. `tMin = 350 ms`, the minimum engagement before a release may commit, enters
+   the same constants file with its own tests.
+
+**Rationale:** 75 is the semantic boundary this game already shipped and taught.
+The governor capped learning play at 75, and the band vocabulary ends FIRM at
+75 and begins HEAVY at 76. The shipped curve makes 76 to 85 linear and cheap,
+which contradicts Amendment 1's compensating logic that effort replaces
+restriction above the normal range, and it mis-aims Amendment 1's rollback
+trigger, which watches median conviction against 85, the exact region the
+shipped curve makes effortless. Moving the knee aligns the hand, the label, and
+the scoring exposure on where normal ends.
+
+**Telemetry addendum:** alongside Amendment 1's trigger, log the share of
+commits landing in the 76 to 95 band per checkpoint index. If the eased zone
+overcorrects and first-arena players cluster below a median of 65, the knee
+position reopens with data. The easing coefficients are declared tunable feel
+work; the knee-at-75 semantic is the amendment.
+
+## Geometry ruling: the mapping is physical, the drawing is not
+
+The distance-to-conviction mapping lives in physical points, 28 / 150 / 195 with
+the device-class scale as shipped. The track graphic may size itself to the
+viewport.
+
+Identical thumb travel must mean identical conviction on every device, or the
+sentence "the calibration you build here is the calibration you keep" is false,
+and that sentence is now doing double duty as the recorded justification for
+Amendment 1. A specification that breaks its own governing sentence loses.
+
+> The drawing stretches; the meaning must not.
+
+That line is repeated as a comment above the geometry block in the constants
+file, so the next person who reaches for a viewport unit meets it before they
+type.
+
+## Amendment 3: the constellation moves to consequence time
+
+**Supersedes:** the mount point implied by §36 and §37 of the main
+specification, where the Portfolio Constellation renders on the decision
+surface.
+
+**Change:** signature status is affirmed, not revoked; only the trigger and the
+stage move.
+
+1. **Decision time:** the constellation relocates into the Risk drawer,
+   inspectable on demand beside the risk metrics it contextualizes.
+2. **Consequence time:** on checkpoints where `correlationLevel >= 0.6`, it
+   renders behind the equity race during the resolution roll, playing §37's
+   Correlation Collapse as the market actually expresses it.
+
+**Rationale:** the block field owns the decision surface, and a treemap cannot
+render correlation. Deleting the only correlation surface in the same release
+where the Resolution Engine starts using `correlationLevel` for race texture
+would be incoherent. Correlation Collapse is a stronger signature visual when
+it fires at the moment of highest attention, triggered by the data, than as
+ambient decoration on a screen where the player is trying to decide. It also
+becomes more honest: the collapse now happens inside the SIMULATION-labelled
+roll, synchronised to the correlated shocks the path synthesiser generates from
+the same scalar.
+
+## Amendment 4: the five questions are a requirement, not a component
+
+**Supersedes:** §56 of the main specification, as previously implemented by the
+persistent FiveQuestionSpine strip.
+
+**Change:** the rule is restated from an implementation to a requirement. A
+first-session player must be able to answer the five questions from the active
+screen without opening Help. How the screen answers them is free.
+
+**Verification:** the lorem-ipsum protocol. After three checkpoints with all
+prose scrambled, the tester answers the five questions verbally. Pass requires
+at least four of five correct, and "what happens when I commit?" must be among
+the correct answers, because it is the hardest to carry pictorially and the one
+the strip existed for. If any question fails in two consecutive playtest rounds,
+a minimal single-line fallback for that question returns to the surface, one
+line rather than the five-cell strip, and it is exempt from the word budget as a
+fixed label.
+
+**Recorded risk:** before the first commit, "what happens when I commit?" is
+answered only by the CP1 demonstration and the face-down machine card. If
+testers miss it, the remediation order is: strengthen the demonstration, then
+the card's first appearance, and only then add a text fallback.

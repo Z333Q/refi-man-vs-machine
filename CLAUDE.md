@@ -3188,6 +3188,50 @@ Do not build: mandatory gameplay before formal onboarding; game-only client acce
 
 ---
 
+# 61A. Rule 16 in Practice: the Reconciled List
+
+Rule 16 bars casino mechanics. It does not bar drama. The boundary that decides
+every case, and the sentence to quote in review:
+
+```text
+INFORMATION ABOUT THE RESULT IS ALWAYS ALLOWED.
+DRAMATIZATION OF ALMOST WINNING IS NOT.
+```
+
+Suspense before the reveal is legitimate theater. Reinforcement schedules after
+the reveal are the casino.
+
+## Permitted
+
+| Device | Why it is clean |
+|---|---|
+| Face-down machine card, mid-roll flip | Suspense before the reveal, not a reward schedule. |
+| Score assembly, dominant metric filling last | Information about the result, and more legible than a reel. |
+| Crowd distribution bars after commit | Social proof. Carries no reward. |
+| Foley: key clacks, commit stamp, tape ticks | Rewards the act. Identical at conviction 50 and 95, and identical on eventual wins and losses. |
+| Landmark checkpoints | Extended staging plus historical annotation on pivotal dates. XP stays flat and uniform; the drama is history's real magnitude. |
+| Process Streak | Consecutive checkpoints at or above par, displayed as a discipline record. No multiplier. HOLD credits it identically to any stance, so nothing rewards trade frequency (rule 6). |
+| Daily Tape streak and Tape Insurance | Counts consecutive days with a submitted call. HOLD is full credit. Rewards attendance, never trading. Insurance is earned from completed acts, capped at 2. |
+| Medals: PAR, MACHINE, CLEAN | Fixed criteria, deterministic outcomes, flat one-time XP, no mid-act progress bars. CLEAN is earned by restraint and cannot be earned by activity, which makes it rule 6's medal. |
+
+## Barred
+
+| Device | Why it is barred |
+|---|---|
+| Near-miss flicker, pause or "so close" copy | A documented gambling-retention device attached to a simulated trading loss. The margin is stated as plain fact instead, and a one point loss reads exactly like a fifteen point loss. |
+| Jackpot checkpoints, payout language | Variable reward on deterministic historical data. Replaced by Landmark checkpoints. |
+| Slot-reel odometer on P&L | Curves draw continuously and settle without spin. |
+| XP multipliers on any streak | Reinforcement schedule. Per-checkpoint XP stays flat. |
+| Escalating win audio | Sound must never encode outcome. |
+| Live jeopardy meters ("1 trade from losing CLEAN") | Manufactured urgency. Criteria are learned on the act card, not through live threat. |
+
+Any proposal that adds a reward schedule, an urgency device, or an activity
+incentive is rejected by this section rather than debated. Any proposal that
+adds interface as difficulty is rejected by the interface freeze law: difficulty
+lives in content, never in new panels or controls.
+
+---
+
 # 62. Accessibility
 
 Every animation must support reduced motion. When reduced motion is enabled, replace the animated correlation collapse with:
