@@ -7,6 +7,7 @@ import {
   type TipDef, type TipState, type GuidanceMode, type TipTriggerEvent, type TipAction,
 } from '../lib/tipDefinitions';
 import { supabase, getSessionId } from '../lib/supabase';
+import { isTipGateOpen, type TipGameState } from './tipGate';
 
 // ─── Context types ────────────────────────────────────────────────────────────
 
@@ -14,11 +15,21 @@ interface TipContextValue {
   activeTip: TipDef | null;
   guidanceMode: GuidanceMode;
   seenCodes: Set<string>;
+  /** What the loop is currently showing. Decides whether a tip may open. */
+  gameState: TipGameState;
   triggerEvent: (event: TipTriggerEvent) => void;
   handleTipAction: (action: TipAction['action']) => void;
+  /**
+   * Told by the screen that owns the loop, because only it knows whether an
+   * animation is mid-flight or a timed prompt is open. Screens must report
+   * IDLE on unmount, or the gate would stay shut after the run screen closes.
+   */
+  reportGameState: (state: TipGameState) => void;
   setGuidanceMode: (mode: GuidanceMode) => void;
   resetTips: () => void;
 }
+
+export type { TipGameState } from './tipGate';
 
 const TipContext = createContext<TipContextValue | null>(null);
 
@@ -27,12 +38,6 @@ export function useTips(): TipContextValue {
   if (!ctx) throw new Error('useTips must be used within TipProvider');
   return ctx;
 }
-
-// ─── Blocked game states for tip display ─────────────────────────────────────
-
-type GameState = 'IDLE' | 'DECISION_REQUIRED' | 'MARKET_ADVANCING' | 'MACHINE_REVEAL' | 'RESULT_COMPUTING' | 'COMPLETE';
-
-const BLOCKED_GAME_STATES: GameState[] = ['MARKET_ADVANCING', 'MACHINE_REVEAL', 'RESULT_COMPUTING'];
 
 // ─── Local storage helpers ────────────────────────────────────────────────────
 
@@ -102,7 +107,9 @@ export function TipProvider({ children }: { children: ReactNode }) {
   const [seenCodes, setSeenCodes] = useState<Set<string>>(loadSeenFromStorage);
   const [guidanceMode, setGuidanceModeState] = useState<GuidanceMode>(loadModeFromStorage);
   const [activeTip, setActiveTip] = useState<TipDef | null>(null);
-  const [gameState] = useState<GameState>('IDLE');
+  // Reported by whichever screen owns the loop. Kept here rather than read from
+  // the game context so the tip system stays mountable on its own.
+  const [gameState, setGameState] = useState<TipGameState>('IDLE');
 
   // Queue of eligible tips waiting to be shown (one at a time)
   const pendingQueue = useRef<TipDef[]>([]);
@@ -110,7 +117,7 @@ export function TipProvider({ children }: { children: ReactNode }) {
   // Attempt to show the next queued tip
   const showNextQueued = useCallback(() => {
     if (activeTip) return;
-    if (BLOCKED_GAME_STATES.includes(gameState)) return;
+    if (!isTipGateOpen(gameState)) return;
 
     const queue = pendingQueue.current;
     if (queue.length === 0) return;
@@ -194,21 +201,27 @@ export function TipProvider({ children }: { children: ReactNode }) {
     pendingQueue.current = [];
   }, []);
 
-  // Show next queued tip when active clears
+  // Show next queued tip when the active one clears, and again when the gate
+  // lifts. Gating only delays a tip; a tip triggered mid-animation waits in the
+  // queue and arrives when the moment is readable. Without the gameState
+  // dependency the block would be indistinguishable from a drop, because
+  // nothing else re-runs once the animation ends.
   useEffect(() => {
     if (!activeTip && pendingQueue.current.length > 0) {
       const t = setTimeout(showNextQueued, 300);
       return () => clearTimeout(t);
     }
-  }, [activeTip, showNextQueued]);
+  }, [activeTip, gameState, showNextQueued]);
 
   return (
     <TipContext.Provider value={{
       activeTip,
       guidanceMode,
       seenCodes,
+      gameState,
       triggerEvent,
       handleTipAction,
+      reportGameState: setGameState,
       setGuidanceMode,
       resetTips,
     }}>

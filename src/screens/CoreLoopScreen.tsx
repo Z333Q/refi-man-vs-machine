@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
-import { useTips } from '../context/TipContext';
+import { useTips, type TipGameState } from '../context/TipContext';
 import type { ActionBranch, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
@@ -72,7 +72,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   } = useGame();
 
   const { run, lastCheckpointScore, lastCheckpointFlags, moduleJustUnlocked, xpJustEarned } = state;
-  const { triggerEvent } = useTips();
+  const { triggerEvent, reportGameState } = useTips();
   const { emit: emitVisual } = useVisualEvents();
 
   // ─── Tip tracking refs (prevent duplicate triggers) ──────────────────────────
@@ -335,11 +335,37 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     if (moduleJustUnlocked === 'STAGED_EXECUTION') {
       triggerEvent('arena.staged_execution_unlocked');
     }
-    if (moduleJustUnlocked) {
-      const t = setTimeout(() => clearModuleUnlock(), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [moduleJustUnlocked, clearModuleUnlock, triggerEvent]);
+    // No timer. The unlock used to clear itself after 3000ms, and because it is
+    // raised by the commit, those three seconds were spent underneath the
+    // resolution animation: the one moment in a run where a module arrives was
+    // announced and withdrawn while the player was watching something else.
+    //
+    // It now stands until the player leaves the checkpoint that earned it, or
+    // dismisses it. Clearing on advance is handled by the reducer, which owns
+    // the checkpoint boundary.
+  }, [moduleJustUnlocked, triggerEvent]);
+
+  // Tell the tip system what is on screen, so it can hold a tip back rather
+  // than open one over an animation or over the timed thesis prompt (§11).
+  //
+  // Derived from the presentation, not the run phase: the engine leaves the
+  // run in RESOLVING for the whole resolve-and-score stretch, and only this
+  // screen knows whether the race is still running or the result is sitting
+  // there readable.
+  useEffect(() => {
+    const state: TipGameState =
+      thesisPrompt ? 'THESIS_PROMPT'
+      : run?.phase === 'RESOLVING' && revealDelay === 0 ? 'MARKET_ADVANCING'
+      : run?.phase === 'RESOLVING' ? 'MACHINE_REVEAL'
+      : run?.phase === 'COMPLETE' ? 'COMPLETE'
+      : run ? 'DECISION_REQUIRED'
+      : 'IDLE';
+    reportGameState(state);
+  }, [thesisPrompt, run?.phase, revealDelay, run, reportGameState]);
+
+  // Leaving the run screen must reopen the gate, or a tip queued during a
+  // resolution would be stuck behind a state nothing is going to change.
+  useEffect(() => () => reportGameState('IDLE'), [reportGameState]);
 
   // RESOLVING: MachinePipeline drives reveal via onComplete → setRevealDelay(1)
   // COMPARING/LEARNING: show content immediately
@@ -821,10 +847,31 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         />
       </div>
 
-      {/* Module unlock toast */}
+      {/* Module unlock. Persistent, not a toast: it holds until the player
+          leaves the checkpoint or dismisses it, because it is announcing a
+          permanent change to the terminal they are playing with. */}
       {moduleJustUnlocked && (
-        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-50 bg-terminal-deep border border-paper-green/60 px-6 py-3 text-xs tracking-widest text-paper-green animate-boot-fade">
-          ▲ MODULE UNLOCKED: {moduleJustUnlocked.replace(/_/g, ' ')}
+        <div
+          role="status"
+          className="fixed top-10 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-2rem)] bg-terminal-deep border border-paper-green/60 px-4 sm:px-6 py-3 animate-boot-fade"
+        >
+          <div className="flex items-center gap-4">
+            <div className="min-w-0">
+              <div className="text-xs tracking-widest text-paper-green truncate">
+                ▲ MODULE UNLOCKED: {moduleJustUnlocked.replace(/_/g, ' ')}
+              </div>
+              <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">
+                ADDED TO YOUR TERMINAL
+              </div>
+            </div>
+            <button
+              onClick={clearModuleUnlock}
+              aria-label="DISMISS MODULE UNLOCK"
+              className="text-phosphor-dim text-xs hover:text-phosphor transition-colors flex-shrink-0"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
