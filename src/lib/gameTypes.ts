@@ -54,6 +54,7 @@ export type ModuleCode =
   | 'PORTFOLIO_SUMMARY'     // Always unlocked
   | 'SECTOR_EXPOSURE'       // Always unlocked
   | 'NEWS_FEED'             // Always unlocked
+  | 'BLOCK_FIELD'           // Unlock 0: After Background Noise (CP1 to CP3)
   | 'CORRELATION_MATRIX'    // Unlock 1: After COVID Phase 2
   | 'DRAWDOWN_MAP'          // Unlock 2: After first crisis complete
   | 'REGIME_SCANNER'        // Unlock 3: After Recovery arena

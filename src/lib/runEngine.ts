@@ -146,6 +146,18 @@ export function isHoldOnly(run: RunState, checkpoint?: CheckpointData): boolean 
  * the renderer carried its own copy of this table the two would drift, and the
  * curve would finish somewhere the score disagreed with. One table, both uses.
  */
+/**
+ * How much of the portfolio a stance moves into or out of cash.
+ *
+ * Exported for the same reason as the return multiplier: the block field's
+ * stance preview shows what a stance would do, and a preview drawn from a
+ * second copy of this table would drift from what committing actually does.
+ * A preview that lies is worse than no preview.
+ */
+export function stanceCashDelta(action: ActionCode): number {
+  return action === 'RAISE_CASH' ? 0.10 : action === 'ADD_RISK' ? -0.05 : action === 'REDUCE' ? 0.05 : 0;
+}
+
 export function actionReturnMultiplier(action: ActionCode): number {
   return (
     action === 'REDUCE' ? 0.6 :
@@ -172,7 +184,7 @@ export function simulatePortfolioAdvance(
   const peakValue = Math.max(portfolio.peakValue, newValue);
   const newDrawdown = Math.min(0, (newValue - peakValue) / peakValue);
   const newVolatility = Math.max(0.08, portfolio.volatility + volatilityDelta);
-  const cashDelta = action === 'RAISE_CASH' ? 0.10 : action === 'ADD_RISK' ? -0.05 : action === 'REDUCE' ? 0.05 : 0;
+  const cashDelta = stanceCashDelta(action);
   const newCash = Math.max(0.05, Math.min(0.60, portfolio.cashWeight + cashDelta));
   const newTurnover = portfolio.turnoverUsed + turnoverCostFor(action, cp);
 
