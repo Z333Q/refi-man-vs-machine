@@ -1,7 +1,7 @@
 import type { ActionCode } from './gameTypes';
 import { MIN_ENGAGEMENT_MS } from './gestureGeometry';
 import { clampConviction, isDetent, isLandmark, CONVICTION_MAX } from './decisionContract';
-import { convictionForDistance, type PullGeometry } from './gestureGeometry';
+import { convictionForDistanceArmed, type PullGeometry } from './gestureGeometry';
 
 // ─── Pull state machine ───────────────────────────────────────────────────────
 // Pure. Events in, state and effects out. No DOM, no timers, no rendering, so
@@ -168,7 +168,10 @@ export function gestureReducer(
       if (context.state !== 'GRIP' && context.state !== 'PULL') return { context, effects: [] };
       if (event.pointerId !== context.pointerId) return { context, effects: [] };
 
-      const raw = convictionForDistance(event.distance, geometry);
+      // Hysteresis: once armed, the pull stays armed down to the disarm
+      // threshold and reads the floor in between. This is what makes the
+      // bottom of the scale reachable by a draw that stops on it.
+      const raw = convictionForDistanceArmed(event.distance, geometry, context.state === 'PULL');
       const effects: GestureEffect[] = [];
 
       // Back inside the dead zone: disarm. Re-gripping costs nothing, because

@@ -48,6 +48,20 @@ When working in this repository:
 18. Prefer deterministic simulation, replayability, auditability, explicit versioning, and inspectable rules.
 19. Before changing benchmark logic, review the benchmark reconciliation section in this document.
 20. Before changing conversion flows, review the optional onboarding architecture section.
+21. **A screen may hold authored content. It may never hold authored player
+    data.** Anything shaped like a score, a dimension, a decision, a run outcome
+    or a pass rate must be read from state or be visibly labelled as an example.
+    This shipped twice: `AlphaProfileScreen` rendered §30's example dimension
+    scores as though they were the player's own, and `AutopsyScreen` still
+    renders a fabricated run history on the screen that is meant to be the
+    player's audit trail. Both passed every other gate, because nothing else
+    reads a screen and asks whether its numbers are earned. Enforced by
+    `npm run player-data-gate`, which allows a justified exception via a
+    `// player-data-gate: allow <reason>` comment above the declaration.
+22. **A statistic is a performance claim.** A pass rate, a win rate or a
+    benchmark figure rendered without a source is a claim about real outcomes,
+    and §58 governs it whether or not it was meant seriously. Source it from
+    telemetry or a versioned `BenchmarkSnapshot`, or do not render it.
 
 ---
 

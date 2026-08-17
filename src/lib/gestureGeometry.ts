@@ -73,6 +73,41 @@ const STANDARD: Omit<PullGeometry, 'deviceClass'> = {
  */
 export const MIN_ENGAGEMENT_MS = 350;
 
+/**
+ * Hysteresis on the arm point. Arm at the dead zone, disarm only below this.
+ *
+ * Without it the arm point is a knife edge and the bottom of the scale is not
+ * reachable by pull: conviction 50 maps to exactly the dead-zone boundary, and
+ * the jitter filter converges on that boundary asymptotically from below, so a
+ * draw that stops on 50 can hover a hundredth of a point under it and never
+ * arm. That breaks invariant 2, which requires the value shown to be the value
+ * committed and, before that, requires the shown value to exist at all.
+ *
+ * A Schmitt trigger fixes it without touching the mapping: crossing 28 arms,
+ * and only falling under 24 disarms. Between the two the pull stays armed and
+ * reads the floor. Deliberately asymmetric, because arming should take intent
+ * and disarming should take a decision.
+ */
+export const DISARM_DISTANCE = 24;
+
+/**
+ * The conviction a distance reports given whether the pull is already armed.
+ *
+ * Armed, anything at or above the disarm threshold still reports, clamped up to
+ * the floor of the scale. Unarmed, the dead zone is absolute.
+ */
+export function convictionForDistanceArmed(
+  distance: number,
+  geometry: PullGeometry,
+  armed: boolean,
+): number | null {
+  const direct = convictionForDistance(distance, geometry);
+  if (direct !== null) return direct;
+  if (!armed) return null;
+  const disarmAt = DISARM_DISTANCE * (geometry.deadZone / STANDARD.deadZone);
+  return distance >= disarmAt ? CONVICTION_MIN : null;
+}
+
 // Addendum C section C.3. One scale, two classes, decided once per run.
 export const COMPACT_SCALE = 0.85;
 

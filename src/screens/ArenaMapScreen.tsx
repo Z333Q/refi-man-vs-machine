@@ -13,7 +13,10 @@ interface ArenaNode {
   label: string;
   state: NodeState;
   difficulty: number;
-  passPct: string | null;
+  // REMOVED. A pass rate is a performance claim: '18.4' was authored, not
+  // measured, and rendered as though it described real players. It returns
+  // when the telemetry aggregate exists to source it (step 06.5).
+  // passPct: string | null;
   machine: string;
   decisions: number;
   riskLimit: string;
@@ -28,7 +31,6 @@ const ARENAS: ArenaNode[] = [
     label: 'TUTORIAL',
     state: 'passed',
     difficulty: 3,
-    passPct: '84.2',
     machine: 'REFI RULES v1.0',
     decisions: 3,
     riskLimit: '-15% DD',
@@ -41,7 +43,6 @@ const ARENAS: ArenaNode[] = [
     label: 'COVID BLACK SWAN',
     state: 'active',
     difficulty: 7,
-    passPct: '18.4',
     machine: 'REFI CRISIS v1.4',
     decisions: 22,
     riskLimit: '-20% DD',
@@ -54,7 +55,6 @@ const ARENAS: ArenaNode[] = [
     label: 'RECOVERY TRAP',
     state: 'locked',
     difficulty: 6,
-    passPct: null,
     machine: 'REFI CRISIS v1.4',
     decisions: 18,
     riskLimit: '-18% DD',
@@ -67,7 +67,6 @@ const ARENAS: ArenaNode[] = [
     label: 'INFLATION SHIFT',
     state: 'locked',
     difficulty: 7,
-    passPct: null,
     machine: 'REFI ALPHA v2.1',
     decisions: 20,
     riskLimit: '-18% DD',
@@ -80,7 +79,6 @@ const ARENAS: ArenaNode[] = [
     label: 'BANKING STRESS',
     state: 'locked',
     difficulty: 8,
-    passPct: null,
     machine: 'REFI ENSEMBLE v1.0',
     decisions: 16,
     riskLimit: '-15% DD',
@@ -257,7 +255,7 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
             <div className="flex justify-between items-center py-2 border-b border-phosphor/10">
               <span className="text-phosphor-dim">PLAYER PASS</span>
               <span className="text-phosphor">
-                {selected.passPct ? `${selected.passPct}%` : 'CALIBRATING'}
+                CALIBRATING
               </span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-phosphor/10">

@@ -126,9 +126,30 @@ export class MedianOf3 {
 }
 
 /** The pipeline the gesture reads: impulse rejection, then jitter smoothing. */
+/**
+ * Distance below which a held finger is treated as having arrived.
+ *
+ * A one-euro filter approaches its input asymptotically and never reaches it:
+ * a finger held on the arm point settles at 27.95 pt against a 28 pt target and
+ * stays there. That residue is far below anything a finger, a screen or a
+ * person can express, but it is not below the thresholds the gesture compares
+ * against, so it made the bottom of the scale unreachable by a clean draw.
+ *
+ * Snapping to the input inside this band makes a held pull settle exactly where
+ * the finger stopped, at every value, not only at the floor. It is a
+ * correctness fix rather than a feel tweak: without it the committed value can
+ * differ from the value the finger is expressing by an amount that rounds to a
+ * whole conviction point near a boundary.
+ */
+// 0.5 pt is roughly 0.08 mm of thumb travel and about one seventh of a single
+// conviction point in the working range, so snapping here cannot move a
+// committed integer.
+export const SETTLE_EPSILON_PT = 0.5;
+
 export class PullFilter {
   private readonly median = new MedianOf3();
   private readonly smooth: OneEuroFilter;
+  private last = 0;
 
   constructor(config: OneEuroConfig = DEFAULT_ONE_EURO) {
     this.smooth = new OneEuroFilter(config);
@@ -137,9 +158,14 @@ export class PullFilter {
   reset(): void {
     this.median.reset();
     this.smooth.reset();
+    this.last = 0;
   }
 
   filter(value: number, timestamp: number): number {
-    return this.smooth.filter(this.median.push(value), timestamp);
+    const target = this.median.push(value);
+    const smoothed = this.smooth.filter(target, timestamp);
+    // Arrived, for any purpose a hand can distinguish.
+    this.last = Math.abs(target - smoothed) < SETTLE_EPSILON_PT ? target : smoothed;
+    return this.last;
   }
 }
