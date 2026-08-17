@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CheckpointScore } from '../../lib/gameTypes';
 import { synthesizeTapePath } from '../../lib/tapePath';
 import { verdictStamp, type Verdict, type ScoreComponentCode } from '../../lib/verdict';
+import { convictionMultiplier } from '../../lib/scoringEngine';
 
 // ─── The resolution race ──────────────────────────────────────────────────────
 // The beat the game is named after: you locked your call, now the tape decides.
@@ -42,6 +43,9 @@ interface Props {
   /** Headlines from the checkpoint, ticked across during the race. */
   wire: string[];
 
+  /** The conviction committed with the stance, 50 to 95. Shapes the throw. */
+  conviction: number;
+
   score: CheckpointScore;
   verdict: Verdict;
   par: number;
@@ -60,6 +64,30 @@ const BEAT_MS: Record<Exclude<Beat, 'DONE'>, number> = {
 /** The machine's card turns partway through the race, not at the end of it. */
 const FLIP_AT = 0.55;
 
+/**
+ * How the curve leaves the gate.
+ *
+ * The pull gesture is a draw: the further you haul the stance card, the higher
+ * the conviction. Release used to end the motion, and a chart then appeared
+ * from a standing start, so the draw and the flight read as two separate
+ * screens rather than one throw. This is the continuity: the harder the draw,
+ * the harder the line leaves.
+ *
+ * Only the pacing responds. The curve still arrives at exactly the authored
+ * return, on the same 3.6s beat, because the market did not move further
+ * because the player felt more strongly about it. Conviction changes what the
+ * checkpoint is worth, not what happened (§58).
+ *
+ * At CONVICTION_MIN the exponent is ~0.78 (a gentle lob), at the resting
+ * default it is ~1.0 (linear, unchanged from before this existed), and at
+ * CONVICTION_MAX ~1.36 (a hard snap out that settles into the tape).
+ */
+export function launchEase(t: number, conviction: number): number {
+  const drawn = Math.max(0, Math.min(1, (conviction - 50) / 45));
+  const exponent = 0.78 + drawn * 0.58;
+  return Math.pow(Math.max(0, Math.min(1, t)), 1 / exponent);
+}
+
 const METRIC_LABEL: Record<ScoreComponentCode, string> = {
   RAER: 'RAER',
   DRAWDOWN: 'DRAWDOWN',
@@ -71,7 +99,7 @@ const METRIC_LABEL: Record<ScoreComponentCode, string> = {
 
 export default function ResolutionRace({
   playerReturn, machineReturn, volatilityDelta, correlationLevel, seed, checkpointSequence,
-  playerAction, machineAction, machineReason, wire,
+  playerAction, machineAction, machineReason, wire, conviction,
   score, verdict, par, reducedMotion, onComplete,
 }: Props) {
   const [beat, setBeat] = useState<Beat>('LOCK');
@@ -158,7 +186,9 @@ export default function ResolutionRace({
 
   const W = 640, H = 180, PAD = 8;
   const n = path.player.length;
-  const shown = reducedMotion ? n : Math.max(2, Math.ceil(progress * n));
+  // The throw. Reduced motion renders complete, so the easing never applies.
+  const thrown = reducedMotion ? 1 : launchEase(progress, conviction);
+  const shown = reducedMotion ? n : Math.max(2, Math.ceil(thrown * n));
 
   const bounds = useMemo(() => {
     const all = [...path.player, ...path.machine, 0];
@@ -172,6 +202,30 @@ export default function ResolutionRace({
     const y = H - PAD - ((v - bounds.lo) / bounds.span) * (H - PAD * 2);
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(' ');
+
+  // The reachable range at the committed conviction, in score space.
+  //
+  // The engine scales the checkpoint's distance from par by the conviction
+  // multiplier, so the widest honest claim about a maximal stance is par plus
+  // or minus the multiplier applied to the largest process gap. Drawn against a
+  // fixed half-width so par sits at the centre and the band grows outward from
+  // it: the geometry of the strip is the multiplier, made visible.
+  const stakes = useMemo(() => {
+    const multiplier = convictionMultiplier(conviction / 100);
+    const HALF = 50; // the strip spans par +/- 50 points, clipped to 0..100
+    const reach = Math.min(HALF, HALF * (multiplier / 2));
+    const floor = Math.max(0, Math.round(par - reach));
+    const ceiling = Math.min(100, Math.round(par + reach));
+    const toPct = (v: number) => 50 + ((v - par) / HALF) * 50;
+    return {
+      multiplier,
+      floor,
+      ceiling,
+      leftPct: Math.max(0, toPct(floor)),
+      widthPct: Math.min(100, toPct(ceiling)) - Math.max(0, toPct(floor)),
+      landedPct: Math.max(0, Math.min(100, toPct(score.totalScore))),
+    };
+  }, [conviction, par, score.totalScore]);
 
   const flipped = reducedMotion ? beat !== 'LOCK' : progress >= FLIP_AT || beat === 'SCORE' || beat === 'LINE';
   const showScore = beat === 'SCORE' || beat === 'LINE';
@@ -253,6 +307,59 @@ export default function ResolutionRace({
           <div className="flex items-baseline justify-between mb-2">
             <span className="text-phosphor-dim text-xs tracking-widest">CHECKPOINT SCORE</span>
             <span className="text-phosphor-dim text-xs tracking-widest tabular-nums">PAR {par}</span>
+          </div>
+
+          {/* What the draw bought.
+              The market did not move further because the player pulled harder,
+              so the curve above cannot widen with conviction without lying.
+              What conviction genuinely changed is how far this checkpoint could
+              land from par, and that is a statement about the player's own
+              input, not about the tape. It is drawn here, in score space, where
+              the axis actually means what the band is measuring.
+              Both directions are shown at equal weight: a wide band is not a
+              promise, it is exposure. */}
+          <div className="mb-3">
+            <div className="flex items-baseline justify-between mb-1">
+              <span className="text-phosphor-dim text-xs tracking-widest">
+                AT CONVICTION {Math.round(conviction)}
+              </span>
+              <span className="text-phosphor-dim text-xs tracking-widest tabular-nums">
+                {stakes.multiplier.toFixed(1)}x FROM PAR
+              </span>
+            </div>
+            <div
+              className="relative h-6 border border-phosphor/15 bg-terminal-black"
+              role="img"
+              aria-label={
+                `At conviction ${Math.round(conviction)} this checkpoint could land `
+                + `between ${stakes.floor} and ${stakes.ceiling}, against par ${par}. `
+                + `Scored ${score.totalScore}.`
+              }
+            >
+              {/* The reachable band, symmetric around par. */}
+              <div
+                className="absolute inset-y-0 bg-phosphor/10 border-x border-phosphor/25"
+                style={{ left: `${stakes.leftPct}%`, width: `${stakes.widthPct}%` }}
+              />
+              {/* Par, always at the same place, so the band visibly breathes
+                  around a fixed point as conviction changes. */}
+              <div className="absolute inset-y-0 w-px bg-phosphor/45" style={{ left: '50%' }} />
+              {/* Where it actually landed. */}
+              <div
+                className={`absolute inset-y-0 w-0.5 ${
+                  score.totalScore >= par ? 'bg-phosphor' : 'bg-alert-amber'
+                }`}
+                style={{
+                  left: `${stakes.landedPct}%`,
+                  transition: reducedMotion ? 'none' : 'left 420ms ease-out 200ms',
+                }}
+              />
+            </div>
+            <div className="flex justify-between mt-1 text-phosphor-dim/70 text-xs tabular-nums">
+              <span>{stakes.floor}</span>
+              <span className="text-phosphor-dim">PAR {par}</span>
+              <span>{stakes.ceiling}</span>
+            </div>
           </div>
           <div className="space-y-1.5">
             {metrics.map((m, i) => {
