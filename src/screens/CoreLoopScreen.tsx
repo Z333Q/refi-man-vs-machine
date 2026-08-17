@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
-import { useTips } from '../context/TipContext';
+import { useTips, type TipGameState } from '../context/TipContext';
 import type { ActionBranch, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
@@ -72,7 +72,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   } = useGame();
 
   const { run, lastCheckpointScore, lastCheckpointFlags, moduleJustUnlocked, xpJustEarned } = state;
-  const { triggerEvent } = useTips();
+  const { triggerEvent, reportGameState } = useTips();
   const { emit: emitVisual } = useVisualEvents();
 
   // ─── Tip tracking refs (prevent duplicate triggers) ──────────────────────────
@@ -340,6 +340,28 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
       return () => clearTimeout(t);
     }
   }, [moduleJustUnlocked, clearModuleUnlock, triggerEvent]);
+
+  // Tell the tip system what is on screen, so it can hold a tip back rather
+  // than open one over an animation or over the timed thesis prompt (§11).
+  //
+  // Derived from the presentation, not the run phase: the engine leaves the
+  // run in RESOLVING for the whole resolve-and-score stretch, and only this
+  // screen knows whether the race is still running or the result is sitting
+  // there readable.
+  useEffect(() => {
+    const state: TipGameState =
+      thesisPrompt ? 'THESIS_PROMPT'
+      : run?.phase === 'RESOLVING' && revealDelay === 0 ? 'MARKET_ADVANCING'
+      : run?.phase === 'RESOLVING' ? 'MACHINE_REVEAL'
+      : run?.phase === 'COMPLETE' ? 'COMPLETE'
+      : run ? 'DECISION_REQUIRED'
+      : 'IDLE';
+    reportGameState(state);
+  }, [thesisPrompt, run?.phase, revealDelay, run, reportGameState]);
+
+  // Leaving the run screen must reopen the gate, or a tip queued during a
+  // resolution would be stuck behind a state nothing is going to change.
+  useEffect(() => () => reportGameState('IDLE'), [reportGameState]);
 
   // RESOLVING: MachinePipeline drives reveal via onComplete → setRevealDelay(1)
   // COMPARING/LEARNING: show content immediately
