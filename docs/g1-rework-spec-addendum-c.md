@@ -646,3 +646,75 @@ raised to blocking for the G1 exit:
 - The CP1 ghost-hand demonstration moves from nice-to-have to required.
 - The desktop pull track needs a visible affordance. Discoverability failed its
   first field test on the person most motivated to pass it.
+
+---
+
+## Part 7 — Amendment 7: mobile first
+
+**Status:** ruled by the founder, partially implemented, **open on a spec conflict.**
+
+### The ruling
+
+> "this should be a mobile first experience"
+
+This inverts the working stance. Everything shipped to date treats the desktop
+three-pane terminal as the design and the phone as a degradation to be patched
+(`hidden lg:flex`, narrower grids). Mobile first means 390pt is the design and
+the desktop rails are the enhancement.
+
+It is the coherent call, for a reason that has nothing to do with traffic
+share: the game's core verb is a **drag**. The pull gesture, its dead zone, its
+knee, its detents and its effort ramp are a touch interaction. The phone is the
+only platform where the core verb is the natural input, and it was the one
+platform where the game did not run.
+
+### What is already done
+
+- Rails are desktop only; the core loop renders and is operable at 390pt.
+- Every wide grid declares a narrow arrangement.
+- `viewport-gate.mjs` prevents the specific regression.
+
+That is **triage, not a mobile-first product.** It makes the phone work. It does
+not make the phone the design target.
+
+### What mobile first additionally requires
+
+1. **The breakpoint default inverts.** Base classes describe the phone; `sm:`
+   and `lg:` add desktop. Today the base classes describe the desktop and `lg:`
+   hides things. Mechanical, large, and low risk.
+2. **Tap targets.** No audit has been done. The spec asserts touch equivalence
+   (rule 17, §62) and nothing enforces a minimum target size.
+3. **The pull gets a visible affordance and a first-run demonstration.** Filed
+   in Amendment 6 and unchanged by this: a core verb nobody discovers is not a
+   core verb.
+4. **The precise-controls fallback stops being the default path.** On a phone
+   the slider is the accessible alternative; the drag is the interaction.
+5. **Every screen re-verified by rendering, not by gate.** Only the core loop
+   has been looked at. Arena map, briefing, autopsy, profile, builder, ladder,
+   daily tape, TACO have been static-checked only, which this session has twice
+   shown to be insufficient.
+
+### The conflict this creates, unresolved
+
+CLAUDE.md §32.1 sets the art direction as "a classified financial market
+terminal from 1987", with **Bloomberg-terminal density** as a named influence,
+and §63 assumes a laptop. Density across simultaneous panes is a wide-screen
+idea. A phone shows one pane at a time.
+
+The two can be reconciled, but not silently, and §0 rule 1 forbids resolving it
+by implementation. Three candidate readings, for the founder to rule on:
+
+- **A. Density is per-pane.** The terminal feel comes from type, palette,
+  tabular data and information rate inside one pane. The phone shows one dense
+  pane at a time; the desktop shows three. Cheapest, preserves the look, and is
+  what the current tab structure already implies.
+- **B. Density is desktop only.** The phone gets a deliberately sparser
+  companion layout. Honest about the constraint, but produces two designs to
+  maintain and weakens §56 on the smaller one.
+- **C. Amend §32.** Restate the art direction so the phone is its primary
+  expression. Most coherent with the ruling, most invasive, touches a binding
+  document.
+
+**Recommendation: A.** It is consistent with what has already shipped, it keeps
+§32 intact, and it needs no second design. Recorded as a recommendation only;
+no §32 text changes until the founder rules.
