@@ -645,7 +645,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   const earnedProcessCredit = Boolean(lastDecision?.behavioralFlags.includes('GOOD_PROCESS')) && cp.isRegimeChange;
 
   // Risk-adjusted standing, reconstructed from the decision record each render.
-  const riskAdjusted = runRiskAdjusted(run);
+  const riskAdjusted = runRiskAdjusted(run.decisions);
 
   const PANEL_TABS: { id: ActivePanel; label: string; key: string }[] = [
     { id: 'SIGNAL', label: 'SIGNAL', key: 'S' },

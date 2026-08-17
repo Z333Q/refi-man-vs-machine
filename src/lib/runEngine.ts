@@ -70,9 +70,19 @@ export function createInitialPortfolio(): PortfolioState {
   };
 }
 
-export function createInitialRun(): RunState {
+/**
+ * The seed a run gets when the caller does not choose one.
+ *
+ * Fixed, not random: the engine may not read an RNG or a clock, and every test
+ * that opens a run without caring about the seed must still get byte-identical
+ * state. Real runs are opened by the React layer, which injects a live seed.
+ */
+export const DEFAULT_RUN_SEED = 0;
+
+export function createInitialRun(seed: number = DEFAULT_RUN_SEED): RunState {
   return {
     id: null,
+    seed,
     arenaId: 'covid_black_swan',
     machineId: 'refi_rules',
     currentCheckpoint: 1,
@@ -462,11 +472,23 @@ function sharpeOf(returns: number[]): number | null {
   return mean / sd;
 }
 
-export function runRiskAdjusted(run: RunState): RunRiskAdjusted {
+/**
+ * The decision fields this needs, and no more.
+ *
+ * Structural rather than `RunState`, so the same function serves the live run
+ * and a stored Run Record without either having to impersonate the other.
+ */
+export interface ReturnSeriesInput {
+  checkpointSequence: number;
+  actionCode: ActionCode;
+  machineActionCode: ActionCode;
+}
+
+export function runRiskAdjusted(decisions: readonly ReturnSeriesInput[]): RunRiskAdjusted {
   const playerReturns: number[] = [];
   const machineReturns: number[] = [];
 
-  for (const d of run.decisions) {
+  for (const d of decisions) {
     const cp = getCheckpoint(d.checkpointSequence);
     if (!cp) continue;
     const bias = cp.portfolioEffect.returnBias;
