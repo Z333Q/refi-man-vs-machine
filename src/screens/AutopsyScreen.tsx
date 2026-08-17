@@ -16,6 +16,43 @@ const TIMELINE = [
   { cp: 'CP07', action: 'REDUCE FIN.', quality: 'MEDIUM', result: '+0.8', score: 73 },
 ];
 
+// The head-to-head summary. Sharpe is derived from the return and volatility
+// already on the card rather than authored separately, so the row can never
+// disagree with the two numbers above it — and it is emphasised because it is
+// the row that carries the argument: the human won on return and still lost.
+interface RunSummary {
+  returnPct: number;
+  maxDrawdownPct: number;
+  volatilityPct: number;
+  turnoverPct: number;
+  tradeCount: number;
+  refiScore: number;
+}
+
+const HUMAN_RUN: RunSummary = {
+  returnPct: 12.4, maxDrawdownPct: -14.2, volatilityPct: 22.8,
+  turnoverPct: 38.4, tradeCount: 16, refiScore: 73,
+};
+
+const MACHINE_RUN: RunSummary = {
+  returnPct: 10.1, maxDrawdownPct: -9.8, volatilityPct: 17.2,
+  turnoverPct: 18.6, tradeCount: 7, refiScore: 82,
+};
+
+function rowsFor(r: RunSummary): { label: string; value: string; emphasis?: boolean }[] {
+  const sign = r.returnPct >= 0 ? '+' : '';
+  return [
+    { label: 'RETURN', value: `${sign}${r.returnPct.toFixed(1)}%` },
+    { label: 'MAX DD', value: `${r.maxDrawdownPct.toFixed(1)}%` },
+    { label: 'VOLATILITY', value: `${r.volatilityPct.toFixed(1)}%` },
+    // Return per unit of risk taken to get it. Risk-free rate 0.
+    { label: 'SHARPE', value: (r.returnPct / r.volatilityPct).toFixed(2), emphasis: true },
+    { label: 'TURNOVER', value: `${r.turnoverPct.toFixed(1)}%` },
+    { label: 'TRADE COUNT', value: String(r.tradeCount) },
+    { label: 'REFI SCORE', value: String(r.refiScore) },
+  ];
+}
+
 export default function AutopsyScreen({ onContinue }: Props) {
   const [tab, setTab] = useState<Tab>('timeline');
 
@@ -174,17 +211,10 @@ export default function AutopsyScreen({ onContinue }: Props) {
               <div className="terminal-panel p-4 space-y-3">
                 <div className="text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-2">YOU</div>
                 <div className="space-y-2">
-                  {[
-                    { label: 'RETURN', value: '+12.4%' },
-                    { label: 'MAX DD', value: '-14.2%' },
-                    { label: 'VOLATILITY', value: '22.8%' },
-                    { label: 'TURNOVER', value: '38.4%' },
-                    { label: 'TRADE COUNT', value: '16' },
-                    { label: 'REFI SCORE', value: '73' },
-                  ].map(row => (
+                  {rowsFor(HUMAN_RUN).map(row => (
                     <div key={row.label} className="flex justify-between">
-                      <span className="text-phosphor-dim">{row.label}</span>
-                      <span className="text-phosphor">{row.value}</span>
+                      <span className={row.emphasis ? 'text-phosphor' : 'text-phosphor-dim'}>{row.label}</span>
+                      <span className={row.emphasis ? 'text-phosphor-hot font-bold' : 'text-phosphor'}>{row.value}</span>
                     </div>
                   ))}
                 </div>
@@ -192,17 +222,10 @@ export default function AutopsyScreen({ onContinue }: Props) {
               <div className="terminal-panel p-4 space-y-3">
                 <div className="text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-2">MACHINE</div>
                 <div className="space-y-2">
-                  {[
-                    { label: 'RETURN', value: '+10.1%' },
-                    { label: 'MAX DD', value: '-9.8%' },
-                    { label: 'VOLATILITY', value: '17.2%' },
-                    { label: 'TURNOVER', value: '18.6%' },
-                    { label: 'TRADE COUNT', value: '7' },
-                    { label: 'REFI SCORE', value: '82' },
-                  ].map(row => (
+                  {rowsFor(MACHINE_RUN).map(row => (
                     <div key={row.label} className="flex justify-between">
-                      <span className="text-phosphor-dim">{row.label}</span>
-                      <span className="text-phosphor">{row.value}</span>
+                      <span className={row.emphasis ? 'text-phosphor' : 'text-phosphor-dim'}>{row.label}</span>
+                      <span className={row.emphasis ? 'text-phosphor-hot font-bold' : 'text-phosphor'}>{row.value}</span>
                     </div>
                   ))}
                 </div>
@@ -216,6 +239,11 @@ export default function AutopsyScreen({ onContinue }: Props) {
               <div className="space-y-3 font-mono text-sm text-phosphor leading-7">
                 <div>YOU PICKED BETTER ENTRY POINTS.</div>
                 <div>THE MACHINE MANAGED EXPOSURE BETTER.</div>
+                <div className="text-phosphor-mid text-xs mt-2">
+                  YOU EARNED MORE RETURN. THE MACHINE EARNED MORE RETURN PER
+                  UNIT OF RISK. SHARPE {(MACHINE_RUN.returnPct / MACHINE_RUN.volatilityPct).toFixed(2)}
+                  {' '}VS {(HUMAN_RUN.returnPct / HUMAN_RUN.volatilityPct).toFixed(2)}.
+                </div>
                 <div className="text-phosphor-mid text-xs mt-2">
                   YOUR GOOD DECISIONS ADDED 11.2 SCORE POINTS.
                   <br />
