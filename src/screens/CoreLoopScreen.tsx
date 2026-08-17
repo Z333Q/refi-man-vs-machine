@@ -6,7 +6,7 @@ import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
   canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
-  STARTING_CAPITAL, actionReturnMultiplier, type DecisionCommand,
+  STARTING_CAPITAL, actionReturnMultiplier, runRiskAdjusted, type DecisionCommand,
 } from '../lib/runEngine';
 import {
   thesisLabel, thesisOptionsFor, stanceTitle,
@@ -42,6 +42,11 @@ const MAGNITUDE_CLASSES = {
   high: 'opacity-100',
   extreme: 'opacity-100 animate-pulse',
 };
+
+/** Sharpe needs two resolved checkpoints before it means anything. */
+function fmtSharpe(v: number | null): string {
+  return v === null ? '--' : v.toFixed(2);
+}
 
 interface Props {
   onComplete: () => void;
@@ -87,6 +92,11 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   // The post-commit thesis prompt. Shown between the release and the reveal so
   // the player explains an instinct already exposed (Addendum B B2, C C.5).
   const [thesisPrompt, setThesisPrompt] = useState(false);
+  // Whole seconds left before the prompt auto-skips, so the window is visible
+  // on the surface rather than expiring under the player's hand.
+  const [thesisSecondsLeft, setThesisSecondsLeft] = useState(
+    Math.ceil(THESIS_TIMEOUT_MS / 1000),
+  );
   // The sub-metrics and the authored teaching note live one tap deeper, so the
   // result reads as one verdict rather than a verdict arguing with a lecture.
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -324,13 +334,25 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
   // The thesis prompt never blocks the reveal. On timeout the decision records
   // THESIS_UNSTATED, which is a real behavioral signal rather than a gap.
+  //
+  // The countdown is ticked in whole seconds and rendered, because an unstated
+  // thesis has to be a choice the player declined to make. A prompt that
+  // vanished mid-read records a behaviour the player never had, and that lands
+  // in the Alpha Profile as fact.
   useEffect(() => {
-    if (!thesisPrompt) return;
+    if (!thesisPrompt) {
+      setThesisSecondsLeft(Math.ceil(THESIS_TIMEOUT_MS / 1000));
+      return;
+    }
+    const deadline = Date.now() + THESIS_TIMEOUT_MS;
+    const tick = setInterval(() => {
+      setThesisSecondsLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    }, 250);
     const t = setTimeout(() => {
       attachThesis(THESIS_TIMEOUT_CODE);
       setThesisPrompt(false);
     }, THESIS_TIMEOUT_MS);
-    return () => clearTimeout(t);
+    return () => { clearInterval(tick); clearTimeout(t); };
   }, [thesisPrompt, attachThesis]);
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
@@ -622,6 +644,9 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     : null;
   const earnedProcessCredit = Boolean(lastDecision?.behavioralFlags.includes('GOOD_PROCESS')) && cp.isRegimeChange;
 
+  // Risk-adjusted standing, reconstructed from the decision record each render.
+  const riskAdjusted = runRiskAdjusted(run);
+
   const PANEL_TABS: { id: ActivePanel; label: string; key: string }[] = [
     { id: 'SIGNAL', label: 'SIGNAL', key: 'S' },
     { id: 'PORTFOLIO', label: 'PORTFOLIO', key: 'P' },
@@ -665,8 +690,25 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
             <span className="text-phosphor-dim text-xs">·</span>
             <span className="text-phosphor-mid text-xs">MCH {run.machineScore}</span>
           </div>
-          <div className={`text-xs font-bold tabular-nums ${portfolioGain >= 0 ? 'text-paper-green' : 'text-risk-red'}`}>
-            {portfolioGain >= 0 ? '+' : ''}{portfolioGain.toFixed(2)}%
+          {/* Return and risk-adjusted return, side by side. The game's whole
+              argument is that the second one is the real scoreboard, so it is
+              never further away than the first. */}
+          <div className="flex items-center gap-2" title="RETURN VS RISK TAKEN TO GET IT">
+            <span className={`text-xs font-bold tabular-nums ${portfolioGain >= 0 ? 'text-paper-green' : 'text-risk-red'}`}>
+              {portfolioGain >= 0 ? '+' : ''}{portfolioGain.toFixed(2)}%
+            </span>
+            <span className="text-phosphor-dim text-xs">·</span>
+            <span className="text-phosphor-dim text-xs tracking-widest">SHARPE</span>
+            <span className={`text-xs font-bold tabular-nums ${
+              riskAdjusted.playerSharpe === null ? 'text-phosphor-dim'
+                : riskAdjusted.machineSharpe !== null && riskAdjusted.playerSharpe >= riskAdjusted.machineSharpe
+                  ? 'text-paper-green' : 'text-risk-red'
+            }`}>
+              {fmtSharpe(riskAdjusted.playerSharpe)}
+            </span>
+            <span className="text-phosphor-mid text-xs tabular-nums">
+              / MCH {fmtSharpe(riskAdjusted.machineSharpe)}
+            </span>
           </div>
           {onHelp && (
             <button onClick={onHelp} className="text-phosphor-dim text-xs hover:text-phosphor transition-colors">
@@ -884,6 +926,44 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                 {/* RISK panel: read-only investigation */}
                 {activePanel === 'RISK' && (
                   <div className="p-5 space-y-4">
+                    {/* The head-to-head the run is actually scored on. Return
+                        alone flatters whoever took the most risk, so it is
+                        never shown here without the Sharpe beside it. */}
+                    <div className="terminal-panel p-4">
+                      <div className="flex items-baseline justify-between mb-3">
+                        <span className="text-phosphor-dim text-xs tracking-widest">RISK-ADJUSTED · YOU VS MACHINE</span>
+                        <span className="text-phosphor-dim/70 text-xs tracking-widest">
+                          {riskAdjusted.samples} CHECKPOINT{riskAdjusted.samples === 1 ? '' : 'S'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-xs">
+                        <div />
+                        <div className="text-phosphor-dim tracking-widest text-right">YOU</div>
+                        <div className="text-phosphor-dim tracking-widest text-right">MACHINE</div>
+
+                        <div className="text-phosphor-dim">RETURN</div>
+                        <div className="text-phosphor font-bold tabular-nums text-right">
+                          {(riskAdjusted.playerReturn * 100).toFixed(2)}%
+                        </div>
+                        <div className="text-phosphor-mid font-bold tabular-nums text-right">
+                          {(riskAdjusted.machineReturn * 100).toFixed(2)}%
+                        </div>
+
+                        <div className="text-phosphor-dim">SHARPE</div>
+                        <div className="text-phosphor font-bold tabular-nums text-right">
+                          {fmtSharpe(riskAdjusted.playerSharpe)}
+                        </div>
+                        <div className="text-phosphor-mid font-bold tabular-nums text-right">
+                          {fmtSharpe(riskAdjusted.machineSharpe)}
+                        </div>
+                      </div>
+                      <div className="text-phosphor-dim/70 text-xs leading-snug mt-3 border-t border-phosphor/10 pt-2">
+                        SHARPE IS RETURN PER UNIT OF RISK TAKEN. PER-CHECKPOINT,
+                        RISK-FREE RATE 0, NOT ANNUALISED. THIS IS A RUN
+                        STATISTIC, NOT A REFI BENCHMARK FIGURE.
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: 'PORTFOLIO VALUE', value: `$${Math.round(portfolio.value).toLocaleString()}`, warn: false },
@@ -1136,6 +1216,30 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
               >
                 SKIP →
               </button>
+
+              {/* The auto-skip is disclosed, never sprung. Text carries the
+                  state as well as the bar, so the meter is not the only
+                  channel (§62). */}
+              <div className="mt-4 w-56" aria-live="polite">
+                <div className="text-phosphor-dim/70 text-xs tracking-widest text-center mb-1.5">
+                  RECORDS AS THESIS UNSTATED IN {thesisSecondsLeft}s
+                </div>
+                <div
+                  className="h-0.5 bg-phosphor/10"
+                  role="meter"
+                  aria-label="TIME LEFT TO STATE A THESIS"
+                  aria-valuenow={thesisSecondsLeft}
+                  aria-valuemin={0}
+                  aria-valuemax={Math.ceil(THESIS_TIMEOUT_MS / 1000)}
+                >
+                  <div
+                    className="h-full bg-phosphor/40 transition-[width] duration-300 ease-linear"
+                    style={{
+                      width: `${(thesisSecondsLeft / Math.ceil(THESIS_TIMEOUT_MS / 1000)) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           )}
 

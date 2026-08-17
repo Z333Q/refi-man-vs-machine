@@ -417,3 +417,70 @@ export function advanceRunCheckpoint(run: RunState): RunState {
     pendingConfidence: convictionToConfidence(CONVICTION_DEFAULT),
   };
 }
+
+// ─── Risk-adjusted run statistics ─────────────────────────────────────────────
+
+/**
+ * The player's and the machine's run so far, in risk-adjusted terms.
+ *
+ * The whole thesis of the game is that return alone is the wrong scoreboard —
+ * the machine wins by taking less risk for a similar result. That argument was
+ * only ever made after the fact, in the autopsy. Sharpe belongs on the surface
+ * during the run, where the player can still act on it.
+ *
+ * Derived, never stored: every checkpoint's return for both sides is a pure
+ * function of the authored `returnBias` and the stance taken, and both stances
+ * are already on the decision record. So this reconstructs the series rather
+ * than duplicating state that could drift from the engine, and stays inside the
+ * determinism gate.
+ *
+ * Deliberately NOT annualised. Checkpoints are irregular slices of a historical
+ * window, and scaling them by an invented periods-per-year would manufacture a
+ * headline number that looks like the benchmark figures in §26 without any of
+ * their provenance. This is a per-checkpoint ratio at a zero risk-free rate,
+ * and the UI is required to label it as one.
+ */
+export interface RunRiskAdjusted {
+  /** Checkpoints resolved so far. Sharpe needs at least two. */
+  samples: number;
+  playerReturn: number;
+  machineReturn: number;
+  /** Per-checkpoint Sharpe, rf = 0. Null until the series can support one. */
+  playerSharpe: number | null;
+  machineSharpe: number | null;
+}
+
+function sharpeOf(returns: number[]): number | null {
+  if (returns.length < 2) return null;
+  const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+  // Sample standard deviation: the series is a sample of the run's behaviour,
+  // not the whole population of checkpoints the arena could have produced.
+  const variance =
+    returns.reduce((a, r) => a + (r - mean) ** 2, 0) / (returns.length - 1);
+  const sd = Math.sqrt(variance);
+  if (sd === 0) return null;
+  return mean / sd;
+}
+
+export function runRiskAdjusted(run: RunState): RunRiskAdjusted {
+  const playerReturns: number[] = [];
+  const machineReturns: number[] = [];
+
+  for (const d of run.decisions) {
+    const cp = getCheckpoint(d.checkpointSequence);
+    if (!cp) continue;
+    const bias = cp.portfolioEffect.returnBias;
+    playerReturns.push(bias * actionReturnMultiplier(d.actionCode));
+    machineReturns.push(bias * actionReturnMultiplier(d.machineActionCode));
+  }
+
+  const compound = (rs: number[]) => rs.reduce((acc, r) => acc * (1 + r), 1) - 1;
+
+  return {
+    samples: playerReturns.length,
+    playerReturn: compound(playerReturns),
+    machineReturn: compound(machineReturns),
+    playerSharpe: sharpeOf(playerReturns),
+    machineSharpe: sharpeOf(machineReturns),
+  };
+}

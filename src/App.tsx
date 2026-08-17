@@ -156,6 +156,18 @@ function AppInner() {
   }
 
   const isFullscreen = FULLSCREEN_SCREENS.includes(screen);
+  const bridgeVisible = !isFullscreen && screen !== 'landing' && !showHelp;
+
+  // What the fixed chrome occupies, declared once. The screens inside shrink by
+  // exactly this, so a screen's own footer CTA can never land under the nav bar
+  // or the onboarding bridge. NAV_BAR_H matches the nav's h-8; BRIDGE_H clears
+  // the bridge's collapsed row plus its bottom-4 offset.
+  const NAV_BAR_H = '2rem';
+  const BRIDGE_H = '3.5rem';
+  const chromeStyle = {
+    '--chrome-top': isFullscreen ? '0px' : NAV_BAR_H,
+    '--chrome-bottom': bridgeVisible ? BRIDGE_H : '0px',
+  } as React.CSSProperties;
 
   return (
     <div className="min-h-screen bg-terminal-black">
@@ -168,7 +180,7 @@ function AppInner() {
       {/* Never-trap onboarding bridge (§4.1): save-progress + optional exits
           into formal ReFi onboarding. Hidden on the attract screen and during
           fullscreen decision views. */}
-      {!isFullscreen && screen !== 'landing' && !showHelp && <OnboardingBridge />}
+      {bridgeVisible && <OnboardingBridge />}
 
       {/* Dev nav bar */}
       {!isFullscreen && (
@@ -200,7 +212,7 @@ function AppInner() {
         </div>
       )}
 
-      <div className={!isFullscreen ? 'pt-8' : ''}>
+      <div className="app-chrome" style={chromeStyle}>
         {screen === 'landing' && (
           <TitleScreen
             onEnter={() => {
