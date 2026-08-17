@@ -203,7 +203,7 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
             <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-3">
               MACHINE BEAT RATE
             </div>
-            <div className="grid grid-cols-4 gap-4 font-mono text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs">
               {[
                 { label: 'TOTAL ARENAS', value: '3' },
                 { label: 'MACHINE BEATEN', value: '1' },

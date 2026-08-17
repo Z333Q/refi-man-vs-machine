@@ -110,7 +110,7 @@ export default function CheckpointScoreScreen({ onContinue, onViewAutopsy, resul
               <div className="space-y-3">
                 <div className="font-mono text-sm text-phosphor-mid leading-6">YOUR MARKET VIEW WAS OFTEN RIGHT.</div>
                 <div className="font-mono text-sm text-phosphor leading-6">THE MACHINE WAS MORE CONSISTENT.</div>
-                <div className="grid grid-cols-3 gap-3 mt-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
                   {[
                     { label: 'PRIMARY GAP', value: 'RE-ENTRY DISCIPLINE' },
                     { label: 'SECONDARY GAP', value: 'TURNOVER' },

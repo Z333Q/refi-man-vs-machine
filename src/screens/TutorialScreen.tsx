@@ -393,7 +393,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                 </div>
                 <div className="text-phosphor text-lg font-bold mb-3 leading-snug">{PRACTICE_SIGNAL.title}</div>
                 <div className="text-phosphor-mid text-xs leading-relaxed mb-5">{PRACTICE_SIGNAL.body}</div>
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {PRACTICE_SIGNAL.signals.map(sig => (
                     <div key={sig.label} className="border border-phosphor/15 p-3 text-center">
                       <div className="text-phosphor-dim text-xs mb-1">{sig.label}</div>

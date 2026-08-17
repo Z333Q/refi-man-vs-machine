@@ -568,3 +568,235 @@ The rule this establishes: **a screen may hold authored content, but it may
 never hold authored player data.** Anything that looks like a score, a
 dimension, a decision or a run outcome must come from state or be visibly
 labelled as an example.
+
+---
+
+## Part 6 — Amendment 6: the draw shapes the throw
+
+**Status:** implemented. **Supersedes:** nothing. **Extends:** #25 (Resolution Engine v2).
+
+### Finding
+
+The pull gesture is a draw and the resolution race is the flight, but nothing
+carried between them. The curve left the gate at the same speed whether the
+player hedged at 50 or hauled the card to 95, so the two halves of the core verb
+read as two separate screens: a gesture, then a chart.
+
+The finding arrived from the founder describing the resolution race as a new
+idea, unprompted, four PRs after it shipped. Treat that n=1 as data. If the
+person most motivated to find the game's core verb defaults to the keyboard
+fallback and never discovers it, players will.
+
+### What conviction may and may not drive
+
+The market did not move further because the player felt more strongly about it.
+Widening the curve with conviction would be a fabricated performance claim
+(§58), and outcome-differentiated staging is barred by rule 16 and §61A.
+
+The line is drawn as follows.
+
+| Property | Driven by conviction | Why |
+|---|---|---|
+| Launch pacing | **Yes** | An echo of the input, expressed at release, before any outcome exists. |
+| Reachable score range | **Yes** | Literally the conviction multiplier. A statement about the player's own input, drawn in score space where the axis means what the band measures. |
+| Authored endpoint of either curve | No | Market data. |
+| Race duration, beat order, beat length | No | Identical staging for every outcome. |
+| Sound, flourish, near-miss framing | No | Rule 16. |
+
+### Implementation
+
+`launchEase(t, conviction)` maps wall-clock race progress to draw progress with
+an exponent from 0.78 at `CONVICTION_MIN` to 1.36 at `CONVICTION_MAX`, passing
+through 1.0 (unchanged, linear) at `CONVICTION_DEFAULT`. Reduced motion renders
+complete and never applies it.
+
+The stakes strip renders in the SCORE beat: par fixed at centre, the reachable
+band growing outward from it with the multiplier, and a marker where the
+checkpoint actually landed. Labelled numerically as well as by position, per
+§62.
+
+**Invariants, as tests** (`launchArc.test.ts`):
+
+1. `launchEase(0, c) = 0` and `launchEase(1, c) = 1` for every `c`. The curve
+   always arrives, whatever the draw.
+2. At `CONVICTION_DEFAULT` the easing is within 0.02 of linear across the flight.
+   A player who never touches the meter sees the animation that shipped in #25.
+3. Early in the flight, distance covered is strictly monotonic in conviction.
+4. The curve never runs backwards and never leaves the unit range.
+5. Conviction outside the published scale clamps rather than extrapolates.
+
+### Open: the cut
+
+This amendment makes the throw energetic. It does **not** remove the cut. Release
+still stamps, and the race then begins as a new scene, where the reference
+(Angry Birds) never cuts: the camera follows the projectile from the sling into
+the world in one unbroken motion, and the continuity is where the felt moment
+lives.
+
+The remaining change is that the pull track's snap-back animates directly into
+the first pixels of the equity curve, with no modal transition between them.
+That is a staging change to `PullToCommit` and `CoreLoopScreen`, not to this
+component, and it is filed as a separate step rather than absorbed here.
+
+### Also open: discoverability
+
+Amendment 6 is worthless to a player who never pulls. Two follow-ups, both
+raised to blocking for the G1 exit:
+
+- The CP1 ghost-hand demonstration moves from nice-to-have to required.
+- The desktop pull track needs a visible affordance. Discoverability failed its
+  first field test on the person most motivated to pass it.
+
+---
+
+## Part 7 — Amendment 7: mobile first
+
+**Status:** ruled by the founder, partially implemented, **open on a spec conflict.**
+
+### The ruling
+
+> "this should be a mobile first experience"
+
+This inverts the working stance. Everything shipped to date treats the desktop
+three-pane terminal as the design and the phone as a degradation to be patched
+(`hidden lg:flex`, narrower grids). Mobile first means 390pt is the design and
+the desktop rails are the enhancement.
+
+It is the coherent call, for a reason that has nothing to do with traffic
+share: the game's core verb is a **drag**. The pull gesture, its dead zone, its
+knee, its detents and its effort ramp are a touch interaction. The phone is the
+only platform where the core verb is the natural input, and it was the one
+platform where the game did not run.
+
+### What is already done
+
+- Rails are desktop only; the core loop renders and is operable at 390pt.
+- Every wide grid declares a narrow arrangement.
+- `viewport-gate.mjs` prevents the specific regression.
+
+That is **triage, not a mobile-first product.** It makes the phone work. It does
+not make the phone the design target.
+
+### What mobile first additionally requires
+
+1. **The breakpoint default inverts.** Base classes describe the phone; `sm:`
+   and `lg:` add desktop. Today the base classes describe the desktop and `lg:`
+   hides things. Mechanical, large, and low risk.
+2. **Tap targets.** No audit has been done. The spec asserts touch equivalence
+   (rule 17, §62) and nothing enforces a minimum target size.
+3. **The pull gets a visible affordance and a first-run demonstration.** Filed
+   in Amendment 6 and unchanged by this: a core verb nobody discovers is not a
+   core verb.
+4. **The precise-controls fallback stops being the default path.** On a phone
+   the slider is the accessible alternative; the drag is the interaction.
+5. **Every screen re-verified by rendering, not by gate.** Only the core loop
+   has been looked at. Arena map, briefing, autopsy, profile, builder, ladder,
+   daily tape, TACO have been static-checked only, which this session has twice
+   shown to be insufficient.
+
+### The conflict this creates, unresolved
+
+CLAUDE.md §32.1 sets the art direction as "a classified financial market
+terminal from 1987", with **Bloomberg-terminal density** as a named influence,
+and §63 assumes a laptop. Density across simultaneous panes is a wide-screen
+idea. A phone shows one pane at a time.
+
+The two can be reconciled, but not silently, and §0 rule 1 forbids resolving it
+by implementation. Three candidate readings, for the founder to rule on:
+
+- **A. Density is per-pane.** The terminal feel comes from type, palette,
+  tabular data and information rate inside one pane. The phone shows one dense
+  pane at a time; the desktop shows three. Cheapest, preserves the look, and is
+  what the current tab structure already implies.
+- **B. Density is desktop only.** The phone gets a deliberately sparser
+  companion layout. Honest about the constraint, but produces two designs to
+  maintain and weakens §56 on the smaller one.
+- **C. Amend §32.** Restate the art direction so the phone is its primary
+  expression. Most coherent with the ruling, most invasive, touches a binding
+  document.
+
+**Recommendation: A.** It is consistent with what has already shipped, it keeps
+§32 intact, and it needs no second design. Recorded as a recommendation only;
+no §32 text changes until the founder rules.
+
+---
+
+## Part 8 — Amendment 8: the pull was unreachable on a phone
+
+**Status:** implemented, **awaiting ratification** (it amends a ratified invariant).
+
+### Finding
+
+Reported from a phone: "it's just a slider." Correct, and not a rendering fault.
+The pull was refusing to arm, by design, almost everywhere.
+
+`gripDisposition` required `clearanceAt(origin, region) >= fullDraw`, where
+clearance was the **smallest** distance to a boundary across the working arc:
+
+    min(origin.x, width - origin.x, height - origin.y)
+
+Requiring room to the left AND the right simultaneously puts a hard floor on
+the region width of twice the full draw:
+
+    2 x COMPACT fullDraw = 2 x 165.8 = 331.5pt
+
+A 390pt phone offers a 354pt stance region. It clears that floor by 22pt, so
+the pullable area was a 22pt vertical slit down the middle of the region,
+narrower than a fingertip. Measured across the region at 2pt resolution:
+
+| Region | Class | Full draw | PULL | PRECISE_CONTROLS |
+|---|---|---|---|---|
+| phone 390, before | COMPACT | 165.8pt | **3.8%** | 96.2% |
+| phone 390, after | COMPACT | 165.8pt | **100%** | 0% |
+| phone 360, after | COMPACT | 165.8pt | 99.7% | 0.3% |
+| desktop 900, before and after | STANDARD | 195.0pt | 100% | 0% |
+
+Desktop carries roughly 900pt of width and always passed, which is why nothing
+surfaced this. The game's core verb has been unreachable on the platform where
+it is the natural input since the gesture was built.
+
+### The correction
+
+Availability asks whether the finger has room in **some** direction, not in
+every direction at once. A pull needs one way out, not three.
+
+    clearanceAt      = max(left, right, down)     availability
+    seatingClearanceAt = min(left, right, down)   sizing
+
+The split is deliberate. Correcting availability with a single measure also
+flips a phone from COMPACT to STANDARD, growing required thumb travel from
+165.8pt to 195pt on the smallest screens, which inverts the purpose of the
+compact class. Sizing keeps the conservative measure; only availability moves.
+
+**Invariant, as an inequality:** a grip may pull when
+
+    max(x, W - x, H - y) >= fullDraw
+
+and the geometry class is chosen from
+
+    min(W/2, H - deadZone) >= STANDARD.fullDraw  ->  STANDARD, else COMPACT
+
+### Accepted residual
+
+The amended test previously read: *"the player starts pulling, and the geometry
+caps conviction below the maximum in the direction they chose, which they can
+only discover once the movement is already underway."*
+
+That concern is real and this change does not remove it. With best-direction
+clearance, a player gripping near an edge can pull toward the cramped side and
+cap early.
+
+It is accepted deliberately. The alternative is the behaviour being replaced,
+where 96.2% of a phone's stance region could not pull at all. **Capping in one
+direction is a worse pull; no pull is no core verb.**
+
+**Follow-up, open:** the affordance should coax toward the direction that has
+room, so the cramped direction is never the obvious one. Until then the
+residual stands and is recorded here rather than hidden in a passing test.
+
+### Bearing on Amendments 6 and 7
+
+Amendment 6 gave the draw a consequence and a throw. Amendment 7 made the phone
+render. Neither was reachable: on the platform the gesture is designed for, the
+gesture did not exist. The CP1 ghost-hand demonstration and the desktop pull
+affordance stay open, but they were never the reason nobody found the pull.

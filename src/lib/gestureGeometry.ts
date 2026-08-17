@@ -97,17 +97,62 @@ export interface Region {
 /**
  * Guaranteed pull clearance from a grip origin.
  *
- * The pull is direction-agnostic, so every direction in the working arc has to
- * be able to reach full draw. If the finger runs out of screen first, the
- * reachable conviction silently caps below the maximum in that direction,
- * which breaks the geometry contract invisibly and by direction. The working
- * arc is the lower half plane (down, left, right), because the affordance
- * coaxes the thumb downward and upward pulls are never required.
+ * Clearance from a grip point, per direction in the working arc.
  *
- * Conservative: the smallest distance to a boundary across that arc.
+ * The working arc is the lower half plane (down, left, right), because the
+ * affordance coaxes the thumb downward and upward pulls are never required.
+ *
+ * This used to return the SMALLEST of the three, on the reasoning that a
+ * direction-agnostic pull must be able to reach full draw whichever way the
+ * finger goes. The reasoning holds; the predicate built on it did not. Needing
+ * room to the left AND the right simultaneously means the region has to be at
+ * least twice the full draw wide before a single pullable point exists:
+ *
+ *     2 x COMPACT full draw = 331.5pt
+ *
+ * A 390pt phone offers a 354pt stance region. It clears that bound by 22pt, so
+ * the pullable area on a phone was a 22pt vertical slit down the middle of the
+ * region, narrower than a fingertip. Measured across the region, 96.2% of grip
+ * points resolved to PRECISE_CONTROLS. The pull was not hard to find on a
+ * phone; it was unreachable, and had been since it was built. Desktop carries
+ * roughly 900pt of width, so it always passed there and nothing showed.
+ *
+ * The correct question is whether the finger has room in SOME direction, not
+ * in every direction at once. A pull needs one way out, not three.
  */
+export function clearanceByDirection(
+  origin: { x: number; y: number },
+  region: Region,
+): { left: number; right: number; down: number } {
+  return {
+    left: Math.max(0, origin.x),
+    right: Math.max(0, region.width - origin.x),
+    down: Math.max(0, region.height - origin.y),
+  };
+}
+
+/** The most room available in any single direction of the working arc. */
 export function clearanceAt(origin: { x: number; y: number }, region: Region): number {
-  return Math.max(0, Math.min(origin.x, region.width - origin.x, region.height - origin.y));
+  const c = clearanceByDirection(origin, region);
+  return Math.max(c.left, c.right, c.down);
+}
+
+/**
+ * The old all-directions measure, kept for sizing rather than availability.
+ *
+ * These are two different questions and conflating them is what broke the
+ * phone. "Can this grip pull at all" needs one way out. "How large should the
+ * geometry be here" is an ergonomic question about a cramped space, and the
+ * conservative answer is the right one: a region that is tight in any direction
+ * should shrink the draw, not lengthen it.
+ *
+ * Without this split, correcting availability also flips a phone from COMPACT
+ * to STANDARD, growing the required thumb travel from 165.8pt to 195pt on the
+ * smallest screens, which is the opposite of what the compact class is for.
+ */
+export function seatingClearanceAt(origin: { x: number; y: number }, region: Region): number {
+  const c = clearanceByDirection(origin, region);
+  return Math.max(0, Math.min(c.left, c.right, c.down));
 }
 
 export function hasClearance(
@@ -177,8 +222,10 @@ export function gripDisposition(
  */
 export function classifyDevice(region: Region): DeviceClass {
   const standard = geometryFor('STANDARD');
-  // The most forgiving placement is the horizontal centre, high in the region.
-  const bestCase = clearanceAt({ x: region.width / 2, y: standard.deadZone }, region);
+  // The most forgiving placement is the horizontal centre, high in the region:
+  // it maximises the downward run while keeping both lateral options open.
+  // Sizing uses the conservative measure on purpose; see seatingClearanceAt.
+  const bestCase = seatingClearanceAt({ x: region.width / 2, y: standard.deadZone }, region);
   return bestCase >= standard.fullDraw ? 'STANDARD' : 'COMPACT';
 }
 

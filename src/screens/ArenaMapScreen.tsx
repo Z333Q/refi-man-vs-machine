@@ -216,7 +216,7 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
           {/* Legend */}
           <div className="mt-12 terminal-panel p-4">
             <div className="font-mono text-xs text-phosphor-dim mb-3 tracking-widest">NODE STATES</div>
-            <div className="grid grid-cols-3 gap-2 font-mono text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-xs">
               {[
                 { sym: '○', label: 'LOCKED', cls: 'node-locked' },
                 { sym: '◌', label: 'AVAILABLE', cls: 'node-available' },

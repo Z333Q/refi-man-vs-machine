@@ -33,9 +33,27 @@ export default function MachineEvolution({ activeModules, justUnlocked, compact 
   const activeSet = new Set(activeModules);
 
   if (compact) {
+    // The rack is 8px squares, which is fine as an at-a-glance density read and
+    // useless as an unlock notification: the player is told a module arrived
+    // and has no way to see which. The header carries the count and the newest
+    // module's name so the unlock has somewhere to land.
+    const newest = justUnlocked
+      ? MODULE_DEFS.find(m => m.code === justUnlocked)
+      : undefined;
+
     return (
       <div className="font-mono">
-        <div className="text-phosphor-dim text-xs tracking-widest mb-2">MODULES</div>
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-phosphor-dim text-xs tracking-widest">MODULES</span>
+          <span className="text-phosphor-dim text-xs tabular-nums">
+            {activeModules.length}/{MODULE_DEFS.length}
+          </span>
+        </div>
+        {newest && (
+          <div className="text-paper-green text-xs tracking-widest mb-2 leading-snug">
+            ▲ {newest.label}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1">
           {MODULE_DEFS.map(m => {
             const installed = activeSet.has(m.code);

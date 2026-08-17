@@ -56,13 +56,29 @@ type GameAction =
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
+/** Union of two module lists, order-stable and duplicate-free. */
+function mergeModules(current: ModuleCode[], incoming: ModuleCode[]): ModuleCode[] {
+  const seen = new Set(current);
+  return [...current, ...incoming.filter(m => !seen.has(m))];
+}
+
 function reducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'LOAD_PROFILE':
       return { ...state, profile: action.profile, loaded: true };
 
-    case 'START_RUN':
-      return { ...state, run: createInitialRun(), lastCheckpointScore: null, lastCheckpointFlags: [] };
+    case 'START_RUN': {
+      // A run opens with the base terminal plus everything the player has
+      // already earned. Without this a returning player's unlocked modules
+      // silently disappear the moment a new run starts.
+      const base = createInitialRun();
+      return {
+        ...state,
+        run: { ...base, activeModules: mergeModules(base.activeModules, state.profile.unlockedModules) },
+        lastCheckpointScore: null,
+        lastCheckpointFlags: [],
+      };
+    }
 
     case 'SET_RUN_PHASE':
       if (!state.run) return state;
@@ -125,7 +141,13 @@ function reducer(state: GameState, action: GameAction): GameState {
           dimensions: newDimensions,
           unlockedModules: newUnlocked,
         },
-        run: outcome.run,
+        // A module the player just earned has to become part of the run they
+        // earned it in. Unlocks used to land only on the profile, so the
+        // terminal's module rack never changed and the unlock the toast
+        // announced was nowhere to be found.
+        run: newModuleUnlocks.length > 0
+          ? { ...outcome.run, activeModules: mergeModules(outcome.run.activeModules, newModuleUnlocks) }
+          : outcome.run,
       };
     }
 

@@ -40,6 +40,9 @@ jobs:
         run: npm run label-gate
       - name: Benchmark provenance gate (§3.4 gate 2)
         run: npm run provenance-gate
+
+      - name: Viewport gate
+        run: npm run viewport-gate
       - name: Em-dash gate
         run: npm run em-dash-gate
       - name: Build

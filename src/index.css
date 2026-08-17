@@ -290,6 +290,30 @@
   box-shadow: 0 0 0 9999px rgba(5, 8, 6, 0.82);
 }
 
+/* ── App chrome gutters ───────────────────────────────────────────────────────
+   The nav bar and the onboarding bridge are both fixed, so a screen laid out
+   to fill the viewport puts its own footer CTA underneath them — which is how
+   [ CONTINUE ] ended up stacked on top of ✓ PROGRESS SAVED at the bottom right
+   of every screen that has a footer.
+
+   Rather than teaching each screen the chrome's dimensions, the shell declares
+   how much room it occupies and shortens the screens inside it by exactly
+   that. Screens keep saying "fill the viewport"; this decides what the viewport
+   means for them. The two-class selector outranks Tailwind's own
+   .min-h-screen, and .terminal-screen carries its min-height in @layer
+   components, which this sits outside of. */
+.app-chrome {
+  --chrome-top: 0px;
+  --chrome-bottom: 0px;
+  padding-top: var(--chrome-top);
+  padding-bottom: var(--chrome-bottom);
+}
+
+.app-chrome .min-h-screen,
+.app-chrome .terminal-screen {
+  min-height: calc(100vh - var(--chrome-top) - var(--chrome-bottom));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .terminal-screen {
     background: #050806;

@@ -231,8 +231,18 @@ export function thesisOptionsFor(branch: ActionBranch): { code: ThesisCode; labe
   return codes.map(code => ({ code, label: thesisLabel(code) }));
 }
 
-/** Recorded when the player commits and lets the thesis prompt time out. */
-export const THESIS_TIMEOUT_MS = 5000;
+/**
+ * Recorded when the player commits and lets the thesis prompt time out.
+ *
+ * The window has to be long enough to read the stance line, read "WHY?", read
+ * the chips and pick one. At 5s a first-time player was still reading when the
+ * prompt vanished and THESIS_UNSTATED was recorded against them — the profile
+ * then reports a behaviour the player never had. The prompt must also never
+ * expire silently: the surface renders a visible depleting meter so the auto
+ * skip is announced, not sprung (§61 forbids countdown-pressure selling, not an
+ * honest disclosure of a window that already exists).
+ */
+export const THESIS_TIMEOUT_MS = 15000;
 export const THESIS_TIMEOUT_CODE: ThesisCode = 'THESIS_UNSTATED';
 
 // ─── Desktop and tablet input parity ──────────────────────────────────────────

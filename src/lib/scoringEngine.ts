@@ -1,6 +1,7 @@
 import type {
   ActionCode, CheckpointData, DecisionQuality, CheckpointScore, BehavioralFlag, DimensionCode,
 } from './gameTypes';
+import { CONVICTION_MIN, CONVICTION_MAX, CONVICTION_DEFAULT } from './decisionContract';
 
 // ─── Sigmoid utility ──────────────────────────────────────────────────────────
 function sigmoid(x: number): number {
@@ -94,6 +95,24 @@ function computeTurnoverScore(
   return clamp(score, 0, 100);
 }
 
+/**
+ * How far conviction multiplies the checkpoint's distance from par.
+ *
+ *   50  ->  x0.2   hedged. a small win, and a small loss
+ *   70  ->  x1.0   the resting default, unscaled
+ *   95  ->  x2.0   wrong at 95 costs double, right at 95 pays double
+ *
+ * Anchored at CONVICTION_DEFAULT so the value the control rests at is the
+ * neutral one: a player who never touches the meter is neither rewarded nor
+ * punished for it. Linear, because the effort of reaching a value is already
+ * non-linear in the geometry and compounding the two would make the top of the
+ * scale punitive rather than expensive.
+ */
+export function convictionMultiplier(confidence: number): number {
+  const conviction = clamp(confidence * 100, CONVICTION_MIN, CONVICTION_MAX);
+  return 1 + (conviction - CONVICTION_DEFAULT) / 25;
+}
+
 function computeConsistencyScore(
   action: ActionCode,
   flags: BehavioralFlag[],
@@ -109,7 +128,13 @@ function computeConsistencyScore(
     if (consistencyFlags.includes(f)) score += 8;
   });
 
-  if (confidence < 0.4 && action !== 'HOLD') score -= 10;
+  // NOTE: a `confidence < 0.4` branch used to live here and could never fire.
+  // The scale floor is CONVICTION_MIN 50, so confidence is never below 0.50.
+  // Removed rather than left as decoration.
+  //
+  // High conviction on a HOLD is still a consistency question: claiming near
+  // certainty about doing nothing is a different statement from claiming it
+  // about a move.
   if (confidence > 0.8 && action === 'HOLD') score -= 8;
 
   return clamp(score, 0, 100);
@@ -179,17 +204,37 @@ export function scoreCheckpoint(params: {
   const consistencyScore = computeConsistencyScore(action, flags, confidence);
   const positionSizingScore = computePositionSizingScore(action, flags, confidence);
 
-  const totalScore = Math.round(
+  // §29.1, seven weighted components. Position sizing is deliberately absent
+  // from the checkpoint score; it is a profile dimension, not a score term.
+  const processScore =
     0.25 * raerScore +
     0.20 * drawdownScore +
     0.10 * downsideScore +
     0.10 * recoveryScore +
     0.15 * regimeAdaptScore +
     0.10 * turnoverScore +
-    0.10 * consistencyScore
-  );
+    0.10 * consistencyScore;
 
   const machineScore = getMachinePar(checkpoint);
+
+  // Conviction scales the distance from par, symmetrically.
+  //
+  // Before this, conviction did almost nothing: measured across the whole 50 to
+  // 95 range it moved the total by one point, in one case, and by nothing at
+  // all for REDUCE or RAISE_CASH. The control had an elaborate physical model
+  // behind it, an effort ramp that deliberately makes the top of the scale
+  // expensive to reach, and no consequence at the other end of that effort. We
+  // had priced a thing that was not for sale.
+  //
+  // It also made the game's own copy false. Addendum C Amendment 1 removed the
+  // conviction governor on the argument that the calibration lesson is
+  // consequence rather than constraint, and the CP2 tip told the player that
+  // being wrong at 95 costs double. Neither was true of the engine.
+  //
+  // Now it is. Conviction is a bet on your own judgment: it multiplies how far
+  // the checkpoint lands from par, in whichever direction it was already going.
+  const scaled = machineScore + (processScore - machineScore) * convictionMultiplier(confidence);
+  const totalScore = Math.round(clamp(scaled, 0, 100));
   const delta = totalScore - machineScore;
 
   const quality: DecisionQuality =

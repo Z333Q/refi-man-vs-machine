@@ -231,7 +231,7 @@ export default function MarketTerminalScreen({ onAdvance, onBack }: Props) {
       {/* Main grid */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top data row */}
-        <div className="grid grid-cols-3 border-b border-phosphor/20 flex-shrink-0">
+        <div className="grid grid-cols-2 sm:grid-cols-3 border-b border-phosphor/20 flex-shrink-0">
           {/* Market */}
           <div className="border-r border-phosphor/20 p-4">
             <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-3">MARKET</div>

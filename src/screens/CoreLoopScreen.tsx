@@ -6,12 +6,12 @@ import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
   canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
-  STARTING_CAPITAL, actionReturnMultiplier, type DecisionCommand,
+  STARTING_CAPITAL, actionReturnMultiplier, runRiskAdjusted, type DecisionCommand,
 } from '../lib/runEngine';
 import {
   thesisLabel, thesisOptionsFor, stanceTitle,
   convictionSpan, convictionGovernor, isGovernorActive, clampConviction,
-  convictionToConfidence, confidenceToConviction, isDetent, isLandmark,
+  convictionToConfidence, confidenceToConviction, isDetent, isLandmark, CONVICTION_DEFAULT,
   CONVICTION_KEY_STEP, CONVICTION_KEY_STEP_COARSE,
   GOVERNOR_CAPTION, PANEL_MODULE, THESIS_TIMEOUT_MS, THESIS_TIMEOUT_CODE,
 } from '../lib/decisionContract';
@@ -42,6 +42,11 @@ const MAGNITUDE_CLASSES = {
   high: 'opacity-100',
   extreme: 'opacity-100 animate-pulse',
 };
+
+/** Sharpe needs two resolved checkpoints before it means anything. */
+function fmtSharpe(v: number | null): string {
+  return v === null ? '--' : v.toFixed(2);
+}
 
 interface Props {
   onComplete: () => void;
@@ -87,6 +92,11 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   // The post-commit thesis prompt. Shown between the release and the reveal so
   // the player explains an instinct already exposed (Addendum B B2, C C.5).
   const [thesisPrompt, setThesisPrompt] = useState(false);
+  // Whole seconds left before the prompt auto-skips, so the window is visible
+  // on the surface rather than expiring under the player's hand.
+  const [thesisSecondsLeft, setThesisSecondsLeft] = useState(
+    Math.ceil(THESIS_TIMEOUT_MS / 1000),
+  );
   // The sub-metrics and the authored teaching note live one tap deeper, so the
   // result reads as one verdict rather than a verdict arguing with a lecture.
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -324,13 +334,25 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
   // The thesis prompt never blocks the reveal. On timeout the decision records
   // THESIS_UNSTATED, which is a real behavioral signal rather than a gap.
+  //
+  // The countdown is ticked in whole seconds and rendered, because an unstated
+  // thesis has to be a choice the player declined to make. A prompt that
+  // vanished mid-read records a behaviour the player never had, and that lands
+  // in the Alpha Profile as fact.
   useEffect(() => {
-    if (!thesisPrompt) return;
+    if (!thesisPrompt) {
+      setThesisSecondsLeft(Math.ceil(THESIS_TIMEOUT_MS / 1000));
+      return;
+    }
+    const deadline = Date.now() + THESIS_TIMEOUT_MS;
+    const tick = setInterval(() => {
+      setThesisSecondsLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    }, 250);
     const t = setTimeout(() => {
       attachThesis(THESIS_TIMEOUT_CODE);
       setThesisPrompt(false);
     }, THESIS_TIMEOUT_MS);
-    return () => clearTimeout(t);
+    return () => { clearInterval(tick); clearTimeout(t); };
   }, [thesisPrompt, attachThesis]);
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
@@ -622,6 +644,9 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     : null;
   const earnedProcessCredit = Boolean(lastDecision?.behavioralFlags.includes('GOOD_PROCESS')) && cp.isRegimeChange;
 
+  // Risk-adjusted standing, reconstructed from the decision record each render.
+  const riskAdjusted = runRiskAdjusted(run);
+
   const PANEL_TABS: { id: ActivePanel; label: string; key: string }[] = [
     { id: 'SIGNAL', label: 'SIGNAL', key: 'S' },
     { id: 'PORTFOLIO', label: 'PORTFOLIO', key: 'P' },
@@ -633,18 +658,20 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     <div className="min-h-screen bg-terminal-black terminal-screen flex flex-col font-mono">
 
       {/* ── Top bar ── */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-3 px-3 sm:px-4 py-2 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
             onClick={onBack}
             className="text-phosphor-dim text-xs hover:text-phosphor transition-colors tracking-widest"
           >
             ← ABORT
           </button>
+          <div className="hidden sm:block h-4 w-px bg-phosphor/20" />
+          <span className="hidden sm:inline text-phosphor-dim text-xs tracking-widest whitespace-nowrap">
+            COVID BLACK SWAN
+          </span>
           <div className="h-4 w-px bg-phosphor/20" />
-          <span className="text-phosphor-dim text-xs tracking-widest">COVID BLACK SWAN</span>
-          <div className="h-4 w-px bg-phosphor/20" />
-          <span className="text-phosphor text-xs tracking-widest">
+          <span className="text-phosphor text-xs tracking-widest whitespace-nowrap tabular-nums">
             CP {String(run.currentCheckpoint).padStart(2, '0')} / {String(run.totalCheckpoints).padStart(2, '0')}
           </span>
           <div className="hidden lg:flex items-center gap-4">
@@ -657,19 +684,50 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap tabular-nums">
             <span className={`text-xs font-bold ${run.playerScore >= run.machineScore ? 'text-paper-green' : 'text-risk-red'}`}>
               YOU {run.playerScore}
             </span>
-            <span className="text-phosphor-dim text-xs">·</span>
+            <span className="hidden sm:inline text-phosphor-dim text-xs">·</span>
             <span className="text-phosphor-mid text-xs">MCH {run.machineScore}</span>
           </div>
-          <div className={`text-xs font-bold tabular-nums ${portfolioGain >= 0 ? 'text-paper-green' : 'text-risk-red'}`}>
-            {portfolioGain >= 0 ? '+' : ''}{portfolioGain.toFixed(2)}%
+          {/* Return and risk-adjusted return, side by side. The game's whole
+              argument is that the second one is the real scoreboard, so it is
+              never further away than the first.
+
+              The bar is budgeted to 360pt, so below sm this shrinks to the
+              player's own figure under a two-letter label. The machine's
+              Sharpe is not dropped, only moved: the risk panel carries the
+              full head-to-head at every width. */}
+          <div
+            className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap tabular-nums"
+            title="RETURN VS RISK TAKEN TO GET IT"
+          >
+            <span className={`text-xs font-bold ${portfolioGain >= 0 ? 'text-paper-green' : 'text-risk-red'}`}>
+              {portfolioGain >= 0 ? '+' : ''}{portfolioGain.toFixed(2)}%
+            </span>
+            <span className="text-phosphor-dim text-xs">·</span>
+            <span className="text-phosphor-dim text-xs tracking-widest">
+              <span className="sm:hidden">SH</span>
+              <span className="hidden sm:inline">SHARPE</span>
+            </span>
+            <span className={`text-xs font-bold ${
+              riskAdjusted.playerSharpe === null ? 'text-phosphor-dim'
+                : riskAdjusted.machineSharpe !== null && riskAdjusted.playerSharpe >= riskAdjusted.machineSharpe
+                  ? 'text-paper-green' : 'text-risk-red'
+            }`}>
+              {fmtSharpe(riskAdjusted.playerSharpe)}
+            </span>
+            <span className="hidden sm:inline text-phosphor-mid text-xs">
+              / MCH {fmtSharpe(riskAdjusted.machineSharpe)}
+            </span>
           </div>
           {onHelp && (
-            <button onClick={onHelp} className="text-phosphor-dim text-xs hover:text-phosphor transition-colors">
+            <button
+              onClick={onHelp}
+              className="text-phosphor-dim text-xs hover:text-phosphor transition-colors whitespace-nowrap pl-1"
+            >
               ? HELP
             </button>
           )}
@@ -694,8 +752,14 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
       {/* ── Main area ── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ── Left: signal sidebar ── */}
-        <div className="w-64 flex-shrink-0 border-r border-phosphor/10 flex flex-col">
+        {/* ── Left: signal sidebar ──
+             Desktop only. Below lg the rails would consume 464px of a 390px
+             viewport without shrinking, collapsing the centre pane (which holds
+             every interactive control) to nothing behind an overflow-hidden
+             parent. The signal headline and body are step 1 of the checkpoint
+             loop, so they are re-rendered above the tabs on small screens
+             rather than dropped. */}
+        <div className="hidden lg:flex w-64 flex-shrink-0 border-r border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest mb-1">
               {cp.phase.replace(/_/g, ' ')} · {cp.crisisDay}
@@ -778,8 +842,25 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
           {decisionPhase && (
             <>
-              {/* Panel tabs */}
-              <div className="flex border-b border-phosphor/15 flex-shrink-0">
+              {/* The READ step, for viewports with no left rail.
+                  Headline only, and suppressed on the SIGNAL tab, which renders
+                  the same headline and body directly below it. Carrying both
+                  filled the entire first screen of a phone with one paragraph
+                  printed twice. This is a persistent orientation strip for the
+                  other three tabs, not a second copy of the signal. */}
+              {activePanel !== 'SIGNAL' && (
+                <div className="lg:hidden px-4 py-2 border-b border-phosphor/10 bg-terminal-deep/40 flex-shrink-0">
+                  <div className="text-phosphor-dim text-xs tracking-widest">
+                    {cp.phase.replace(/_/g, ' ')} · {cp.crisisDay}
+                  </div>
+                  <div className="text-phosphor text-xs font-bold leading-tight mt-0.5">{cp.signalTitle}</div>
+                </div>
+              )}
+
+              {/* Panel tabs. Scrollable rather than wrapping: four tabs at a
+                  legible tap size exceed a narrow viewport, and a wrapped row
+                  would push the decision surface below the fold. */}
+              <div className="flex border-b border-phosphor/15 flex-shrink-0 overflow-x-auto scrollbar-hide">
                 {PANEL_TABS.map(tab => (
                   <button
                     key={tab.id}
@@ -884,6 +965,54 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                 {/* RISK panel: read-only investigation */}
                 {activePanel === 'RISK' && (
                   <div className="p-5 space-y-4">
+                    {/* The head-to-head the run is actually scored on. Return
+                        alone flatters whoever took the most risk, so it is
+                        never shown here without the Sharpe beside it. */}
+                    <div className="terminal-panel p-4">
+                      <div className="flex items-baseline justify-between mb-3">
+                        <span className="text-phosphor-dim text-xs tracking-widest">RISK-ADJUSTED · YOU VS MACHINE</span>
+                        <span className="text-phosphor-dim/70 text-xs tracking-widest">
+                          {riskAdjusted.samples} CHECKPOINT{riskAdjusted.samples === 1 ? '' : 'S'}
+                        </span>
+                      </div>
+                      {/* Three columns need 360pt of width they do not have on a
+                          phone, so below sm the label takes its own line and the
+                          two figures sit side by side under it. The column
+                          headers go with it; each figure carries its own prefix
+                          instead, because a header row a phone cannot show is
+                          not a label. */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1 sm:gap-y-3 text-xs">
+                        <div className="hidden sm:block" />
+                        <div className="hidden sm:block text-phosphor-dim tracking-widest text-right">YOU</div>
+                        <div className="hidden sm:block text-phosphor-dim tracking-widest text-right">MACHINE</div>
+
+                        <div className="col-span-2 sm:col-span-1 text-phosphor-dim">RETURN</div>
+                        <div className="text-phosphor font-bold tabular-nums text-left sm:text-right">
+                          <span className="sm:hidden text-phosphor-dim font-normal">YOU </span>
+                          {(riskAdjusted.playerReturn * 100).toFixed(2)}%
+                        </div>
+                        <div className="text-phosphor-mid font-bold tabular-nums text-right">
+                          <span className="sm:hidden text-phosphor-dim font-normal">MCH </span>
+                          {(riskAdjusted.machineReturn * 100).toFixed(2)}%
+                        </div>
+
+                        <div className="col-span-2 sm:col-span-1 text-phosphor-dim mt-2 sm:mt-0">SHARPE</div>
+                        <div className="text-phosphor font-bold tabular-nums text-left sm:text-right">
+                          <span className="sm:hidden text-phosphor-dim font-normal">YOU </span>
+                          {fmtSharpe(riskAdjusted.playerSharpe)}
+                        </div>
+                        <div className="text-phosphor-mid font-bold tabular-nums text-right">
+                          <span className="sm:hidden text-phosphor-dim font-normal">MCH </span>
+                          {fmtSharpe(riskAdjusted.machineSharpe)}
+                        </div>
+                      </div>
+                      <div className="text-phosphor-dim/70 text-xs leading-snug mt-3 border-t border-phosphor/10 pt-2">
+                        SHARPE IS RETURN PER UNIT OF RISK TAKEN. PER-CHECKPOINT,
+                        RISK-FREE RATE 0, NOT ANNUALISED. THIS IS A RUN
+                        STATISTIC, NOT A REFI BENCHMARK FIGURE.
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: 'PORTFOLIO VALUE', value: `$${Math.round(portfolio.value).toLocaleString()}`, warn: false },
@@ -1136,6 +1265,30 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
               >
                 SKIP →
               </button>
+
+              {/* The auto-skip is disclosed, never sprung. Text carries the
+                  state as well as the bar, so the meter is not the only
+                  channel (§62). */}
+              <div className="mt-4 w-56" aria-live="polite">
+                <div className="text-phosphor-dim/70 text-xs tracking-widest text-center mb-1.5">
+                  RECORDS AS THESIS UNSTATED IN {thesisSecondsLeft}s
+                </div>
+                <div
+                  className="h-0.5 bg-phosphor/10"
+                  role="meter"
+                  aria-label="TIME LEFT TO STATE A THESIS"
+                  aria-valuenow={thesisSecondsLeft}
+                  aria-valuemin={0}
+                  aria-valuemax={Math.ceil(THESIS_TIMEOUT_MS / 1000)}
+                >
+                  <div
+                    className="h-full bg-phosphor/40 transition-[width] duration-300 ease-linear"
+                    style={{
+                      width: `${(thesisSecondsLeft / Math.ceil(THESIS_TIMEOUT_MS / 1000)) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -1158,6 +1311,11 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                     machineAction={cp.machineDecision.actionCode}
                     machineReason={cp.machineDecision.policyReason}
                     wire={(cp.eventFeed ?? []).map(e => e.text)}
+                    conviction={
+                      lastDecision?.confidence !== undefined
+                        ? confidenceToConviction(lastDecision.confidence)
+                        : CONVICTION_DEFAULT
+                    }
                     score={lastCheckpointScore}
                     verdict={verdict}
                     par={cp.machinePar}
@@ -1248,7 +1406,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
                 {showBreakdown && (
                   <div className="mt-3 border-t border-phosphor/15 pt-3">
-                    <div className="grid grid-cols-3 gap-3 text-xs mb-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-3">
                       {[
                         { label: 'RAER', val: lastCheckpointScore.raerScore },
                         { label: 'DRAWDOWN', val: lastCheckpointScore.drawdownScore },
@@ -1332,7 +1490,13 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         </div>
 
         {/* ── Right: status sidebar ── */}
-        <div className="w-52 flex-shrink-0 border-l border-phosphor/10 flex flex-col">
+        {/* ── Right: ambient context ──
+             Desktop only, and it stays that way. Rank, decision log and machine
+             evolution are context, not inputs to this checkpoint, and Addendum
+             B holds the pre-commit surface at two elements. Small screens reach
+             all of it through the hub rather than carrying it beside the
+             decision. */}
+        <div className="hidden lg:flex w-52 flex-shrink-0 border-l border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest mb-2">ALPHA PROFILE</div>
             <div className="text-phosphor text-xs font-bold">{state.profile.rankCode.replace(/_/g, ' ')}</div>

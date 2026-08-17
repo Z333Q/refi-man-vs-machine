@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ActionCode, RunState } from './gameTypes';
 import {
-  geometryFor, classifyDevice, clearanceAt, hasClearance, radialDistance,
+  geometryFor, classifyDevice, clearanceAt, seatingClearanceAt, hasClearance, radialDistance,
   convictionForDistance, distanceForConviction, gainAt, rubberBand, COMPACT_SCALE,
   gripDisposition, MIN_ENGAGEMENT_MS, type RegionBounds,
 } from './gestureGeometry';
@@ -155,20 +155,38 @@ test('a roomy region classifies standard and a cramped one compact', () => {
   assert.equal(classifyDevice({ width: 393, height: 200 }), 'COMPACT');   // short webview
 });
 
-test('clearance is the worst direction in the working arc, not the best', () => {
+test('clearance is the best direction in the working arc, seating is the worst', () => {
+  // AMENDED. This asserted the worst direction, on the reasoning that a
+  // direction-agnostic pull must reach full draw whichever way the finger
+  // goes. The reasoning is sound and the predicate built on it was not: needing
+  // room left AND right at once puts a hard floor of twice the full draw on the
+  // region width, and no phone clears it with room to spare. See
+  // pullReachability.test.ts for the measurement that forced this.
+  //
+  // Availability now asks the best direction; sizing still asks the worst.
   const region = { width: 400, height: 800 };
-  assert.equal(clearanceAt({ x: 200, y: 100 }, region), 200);
-  // Near the left edge the leftward pull is what runs out first.
-  assert.equal(clearanceAt({ x: 30, y: 100 }, region), 30);
-  // Near the bottom the downward pull runs out first.
-  assert.equal(clearanceAt({ x: 200, y: 780 }, region), 20);
+  assert.equal(clearanceAt({ x: 200, y: 100 }, region), 700);   // down is roomiest
+  assert.equal(clearanceAt({ x: 30, y: 100 }, region), 700);    // still down
+  assert.equal(clearanceAt({ x: 200, y: 780 }, region), 200);   // now right/left
+
+  assert.equal(seatingClearanceAt({ x: 200, y: 100 }, region), 200);
+  assert.equal(seatingClearanceAt({ x: 30, y: 100 }, region), 30);
+  assert.equal(seatingClearanceAt({ x: 200, y: 780 }, region), 20);
 });
 
-test('a card without full clearance is a geometry violation, and detectable', () => {
+test('a card with no way out at all is a geometry violation, and detectable', () => {
+  // AMENDED alongside the test above. A grip needs one direction that reaches
+  // the hard stop, not three.
   const region = { width: 400, height: 800 };
   assert.equal(hasClearance({ x: 200, y: 100 }, region, STD), true);
-  assert.equal(hasClearance({ x: 30, y: 100 }, region, STD), false);
-  assert.equal(hasClearance({ x: 200, y: 700 }, region, STD), false);
+  assert.equal(hasClearance({ x: 30, y: 100 }, region, STD), true);   // right is open
+  assert.equal(hasClearance({ x: 200, y: 700 }, region, STD), true);  // sideways is open
+
+  // A region genuinely too small in every direction still fails, which is what
+  // the check is for.
+  const cramped = { width: 120, height: 120 };
+  assert.equal(hasClearance({ x: 60, y: 60 }, cramped, STD), false);
+
   // Compact needs less room, which is the point of the class.
   assert.equal(hasClearance({ x: 170, y: 100 }, region, geometryFor('COMPACT')), true);
 });
@@ -590,20 +608,26 @@ test('an authored but unaffordable stance is rejected and records no decision', 
 
 // ─── Clearance decides before the gesture owns the pointer ────────────────────
 
-test('a grip without full clearance is sent to the precise controls, not into a pull', () => {
-  // The failure this prevents: the player starts pulling, and the geometry
-  // caps conviction below the maximum in the direction they chose, which they
-  // can only discover once the movement is already underway.
+test('a grip with no way out is sent to the precise controls, not into a pull', () => {
+  // AMENDED. This previously required clearance in every working direction and
+  // sent an edge grip to the slider. The concern behind it is real and is NOT
+  // fully solved: with best-direction clearance a player at an edge can still
+  // pull the cramped way and cap early, which they discover mid-movement.
+  //
+  // That residual is accepted deliberately. The alternative was the behaviour
+  // this replaces, where 96.2% of a phone's stance region could not pull at
+  // all. Capping in one direction is a worse pull; no pull is no core verb.
+  // Tracked in Addendum C Amendment 8 as the coaxing follow-up.
   const bounds: RegionBounds = { left: 0, top: 0, width: 600, height: 800 };
 
-  // Comfortably inside: a full draw fits in every working direction.
   assert.equal(gripDisposition({ x: 300, y: 300 }, bounds, STD, true), 'PULL');
+  // Edge grips now pull, because a direction with room remains.
+  assert.equal(gripDisposition({ x: 300, y: 790 }, bounds, STD, true), 'PULL');
+  assert.equal(gripDisposition({ x: 4, y: 300 }, bounds, STD, true), 'PULL');
 
-  // Hard against the bottom edge: down cannot reach the hard stop.
-  assert.equal(gripDisposition({ x: 300, y: 790 }, bounds, STD, true), 'PRECISE_CONTROLS');
-
-  // Hard against the left edge: left cannot reach the hard stop.
-  assert.equal(gripDisposition({ x: 4, y: 300 }, bounds, STD, true), 'PRECISE_CONTROLS');
+  // A region with no way out in any direction still refuses.
+  const cramped: RegionBounds = { left: 0, top: 0, width: 120, height: 120 };
+  assert.equal(gripDisposition({ x: 60, y: 60 }, cramped, STD, true), 'PRECISE_CONTROLS');
 });
 
 test('clearance is measured in region space, so an offset region behaves identically', () => {
@@ -620,6 +644,7 @@ test('clearance is measured in region space, so an offset region behaves identic
     { x: 300, y: 495 },  // against the bottom edge
     { x: 2, y: 100 },    // against the left edge
     { x: 598, y: 100 },  // against the right edge
+    { x: 599, y: 499 },  // the corner, where every direction is tightest
   ];
 
   for (const local of localGrips) {
@@ -636,12 +661,17 @@ test('clearance is measured in region space, so an offset region behaves identic
   assert.equal(gripDisposition({ x: 300, y: 100 }, atOrigin, STD, true), 'PULL');
   assert.equal(gripDisposition({ x: 540, y: 220 }, offset, STD, true), 'PULL');
 
-  // Feeding B's region-local point as if it were client space is the mistake,
-  // and it must produce a different answer: that is why the API takes bounds.
-  assert.notEqual(
-    gripDisposition({ x: 300, y: 100 }, offset, STD, true),
-    gripDisposition({ x: 540, y: 220 }, offset, STD, true),
-  );
+  // Feeding B's region-local point as if it were client space is the mistake.
+  // It must land somewhere different in the region, which is why the API takes
+  // bounds: the same numbers describe two different grips.
+  //
+  // With best-direction clearance both happen to be pullable, so the
+  // disposition no longer separates them. The mismatch is asserted on the
+  // clearance itself, which is what the offset actually corrupts.
+  const asClient = { x: 300 - offset.left, y: 100 - offset.top };
+  const correct = { x: 540 - offset.left, y: 220 - offset.top };
+  const region = { width: offset.width, height: offset.height };
+  assert.notEqual(clearanceAt(asClient, region), clearanceAt(correct, region));
 });
 
 test('an unaffordable stance is UNAVAILABLE, never merely a fallback', () => {
