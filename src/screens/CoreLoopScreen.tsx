@@ -633,18 +633,20 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     <div className="min-h-screen bg-terminal-black terminal-screen flex flex-col font-mono">
 
       {/* ── Top bar ── */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-3 px-3 sm:px-4 py-2 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
             onClick={onBack}
             className="text-phosphor-dim text-xs hover:text-phosphor transition-colors tracking-widest"
           >
             ← ABORT
           </button>
+          <div className="hidden sm:block h-4 w-px bg-phosphor/20" />
+          <span className="hidden sm:inline text-phosphor-dim text-xs tracking-widest whitespace-nowrap">
+            COVID BLACK SWAN
+          </span>
           <div className="h-4 w-px bg-phosphor/20" />
-          <span className="text-phosphor-dim text-xs tracking-widest">COVID BLACK SWAN</span>
-          <div className="h-4 w-px bg-phosphor/20" />
-          <span className="text-phosphor text-xs tracking-widest">
+          <span className="text-phosphor text-xs tracking-widest whitespace-nowrap tabular-nums">
             CP {String(run.currentCheckpoint).padStart(2, '0')} / {String(run.totalCheckpoints).padStart(2, '0')}
           </span>
           <div className="hidden lg:flex items-center gap-4">
@@ -657,19 +659,22 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap tabular-nums">
             <span className={`text-xs font-bold ${run.playerScore >= run.machineScore ? 'text-paper-green' : 'text-risk-red'}`}>
               YOU {run.playerScore}
             </span>
-            <span className="text-phosphor-dim text-xs">·</span>
+            <span className="hidden sm:inline text-phosphor-dim text-xs">·</span>
             <span className="text-phosphor-mid text-xs">MCH {run.machineScore}</span>
           </div>
           <div className={`text-xs font-bold tabular-nums ${portfolioGain >= 0 ? 'text-paper-green' : 'text-risk-red'}`}>
             {portfolioGain >= 0 ? '+' : ''}{portfolioGain.toFixed(2)}%
           </div>
           {onHelp && (
-            <button onClick={onHelp} className="text-phosphor-dim text-xs hover:text-phosphor transition-colors">
+            <button
+              onClick={onHelp}
+              className="text-phosphor-dim text-xs hover:text-phosphor transition-colors whitespace-nowrap pl-1"
+            >
               ? HELP
             </button>
           )}
@@ -784,15 +789,20 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
           {decisionPhase && (
             <>
-              {/* The READ step, for viewports with no left rail. Same content,
-                  same source; only the placement differs. */}
-              <div className="lg:hidden px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40 flex-shrink-0">
-                <div className="text-phosphor-dim text-xs tracking-widest mb-1">
-                  {cp.phase.replace(/_/g, ' ')} · {cp.crisisDay}
+              {/* The READ step, for viewports with no left rail.
+                  Headline only, and suppressed on the SIGNAL tab, which renders
+                  the same headline and body directly below it. Carrying both
+                  filled the entire first screen of a phone with one paragraph
+                  printed twice. This is a persistent orientation strip for the
+                  other three tabs, not a second copy of the signal. */}
+              {activePanel !== 'SIGNAL' && (
+                <div className="lg:hidden px-4 py-2 border-b border-phosphor/10 bg-terminal-deep/40 flex-shrink-0">
+                  <div className="text-phosphor-dim text-xs tracking-widest">
+                    {cp.phase.replace(/_/g, ' ')} · {cp.crisisDay}
+                  </div>
+                  <div className="text-phosphor text-xs font-bold leading-tight mt-0.5">{cp.signalTitle}</div>
                 </div>
-                <div className="text-phosphor text-sm font-bold leading-tight">{cp.signalTitle}</div>
-                <div className="text-phosphor-mid text-xs leading-relaxed mt-1.5">{cp.signalBody}</div>
-              </div>
+              )}
 
               {/* Panel tabs. Scrollable rather than wrapping: four tabs at a
                   legible tap size exceed a narrow viewport, and a wrapped row
