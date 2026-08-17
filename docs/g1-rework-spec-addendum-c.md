@@ -718,3 +718,85 @@ by implementation. Three candidate readings, for the founder to rule on:
 **Recommendation: A.** It is consistent with what has already shipped, it keeps
 §32 intact, and it needs no second design. Recorded as a recommendation only;
 no §32 text changes until the founder rules.
+
+---
+
+## Part 8 — Amendment 8: the pull was unreachable on a phone
+
+**Status:** implemented, **awaiting ratification** (it amends a ratified invariant).
+
+### Finding
+
+Reported from a phone: "it's just a slider." Correct, and not a rendering fault.
+The pull was refusing to arm, by design, almost everywhere.
+
+`gripDisposition` required `clearanceAt(origin, region) >= fullDraw`, where
+clearance was the **smallest** distance to a boundary across the working arc:
+
+    min(origin.x, width - origin.x, height - origin.y)
+
+Requiring room to the left AND the right simultaneously puts a hard floor on
+the region width of twice the full draw:
+
+    2 x COMPACT fullDraw = 2 x 165.8 = 331.5pt
+
+A 390pt phone offers a 354pt stance region. It clears that floor by 22pt, so
+the pullable area was a 22pt vertical slit down the middle of the region,
+narrower than a fingertip. Measured across the region at 2pt resolution:
+
+| Region | Class | Full draw | PULL | PRECISE_CONTROLS |
+|---|---|---|---|---|
+| phone 390, before | COMPACT | 165.8pt | **3.8%** | 96.2% |
+| phone 390, after | COMPACT | 165.8pt | **100%** | 0% |
+| phone 360, after | COMPACT | 165.8pt | 99.7% | 0.3% |
+| desktop 900, before and after | STANDARD | 195.0pt | 100% | 0% |
+
+Desktop carries roughly 900pt of width and always passed, which is why nothing
+surfaced this. The game's core verb has been unreachable on the platform where
+it is the natural input since the gesture was built.
+
+### The correction
+
+Availability asks whether the finger has room in **some** direction, not in
+every direction at once. A pull needs one way out, not three.
+
+    clearanceAt      = max(left, right, down)     availability
+    seatingClearanceAt = min(left, right, down)   sizing
+
+The split is deliberate. Correcting availability with a single measure also
+flips a phone from COMPACT to STANDARD, growing required thumb travel from
+165.8pt to 195pt on the smallest screens, which inverts the purpose of the
+compact class. Sizing keeps the conservative measure; only availability moves.
+
+**Invariant, as an inequality:** a grip may pull when
+
+    max(x, W - x, H - y) >= fullDraw
+
+and the geometry class is chosen from
+
+    min(W/2, H - deadZone) >= STANDARD.fullDraw  ->  STANDARD, else COMPACT
+
+### Accepted residual
+
+The amended test previously read: *"the player starts pulling, and the geometry
+caps conviction below the maximum in the direction they chose, which they can
+only discover once the movement is already underway."*
+
+That concern is real and this change does not remove it. With best-direction
+clearance, a player gripping near an edge can pull toward the cramped side and
+cap early.
+
+It is accepted deliberately. The alternative is the behaviour being replaced,
+where 96.2% of a phone's stance region could not pull at all. **Capping in one
+direction is a worse pull; no pull is no core verb.**
+
+**Follow-up, open:** the affordance should coax toward the direction that has
+room, so the cramped direction is never the obvious one. Until then the
+residual stands and is recorded here rather than hidden in a passing test.
+
+### Bearing on Amendments 6 and 7
+
+Amendment 6 gave the draw a consequence and a throw. Amendment 7 made the phone
+render. Neither was reachable: on the platform the gesture is designed for, the
+gesture did not exist. The CP1 ghost-hand demonstration and the desktop pull
+affordance stay open, but they were never the reason nobody found the pull.
