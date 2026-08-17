@@ -694,21 +694,32 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
           </div>
           {/* Return and risk-adjusted return, side by side. The game's whole
               argument is that the second one is the real scoreboard, so it is
-              never further away than the first. */}
-          <div className="flex items-center gap-2" title="RETURN VS RISK TAKEN TO GET IT">
-            <span className={`text-xs font-bold tabular-nums ${portfolioGain >= 0 ? 'text-paper-green' : 'text-risk-red'}`}>
+              never further away than the first.
+
+              The bar is budgeted to 360pt, so below sm this shrinks to the
+              player's own figure under a two-letter label. The machine's
+              Sharpe is not dropped, only moved: the risk panel carries the
+              full head-to-head at every width. */}
+          <div
+            className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap tabular-nums"
+            title="RETURN VS RISK TAKEN TO GET IT"
+          >
+            <span className={`text-xs font-bold ${portfolioGain >= 0 ? 'text-paper-green' : 'text-risk-red'}`}>
               {portfolioGain >= 0 ? '+' : ''}{portfolioGain.toFixed(2)}%
             </span>
             <span className="text-phosphor-dim text-xs">·</span>
-            <span className="text-phosphor-dim text-xs tracking-widest">SHARPE</span>
-            <span className={`text-xs font-bold tabular-nums ${
+            <span className="text-phosphor-dim text-xs tracking-widest">
+              <span className="sm:hidden">SH</span>
+              <span className="hidden sm:inline">SHARPE</span>
+            </span>
+            <span className={`text-xs font-bold ${
               riskAdjusted.playerSharpe === null ? 'text-phosphor-dim'
                 : riskAdjusted.machineSharpe !== null && riskAdjusted.playerSharpe >= riskAdjusted.machineSharpe
                   ? 'text-paper-green' : 'text-risk-red'
             }`}>
               {fmtSharpe(riskAdjusted.playerSharpe)}
             </span>
-            <span className="text-phosphor-mid text-xs tabular-nums">
+            <span className="hidden sm:inline text-phosphor-mid text-xs">
               / MCH {fmtSharpe(riskAdjusted.machineSharpe)}
             </span>
           </div>
@@ -964,24 +975,34 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                           {riskAdjusted.samples} CHECKPOINT{riskAdjusted.samples === 1 ? '' : 'S'}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-3 text-xs">
-                        <div />
-                        <div className="text-phosphor-dim tracking-widest text-right">YOU</div>
-                        <div className="text-phosphor-dim tracking-widest text-right">MACHINE</div>
+                      {/* Three columns need 360pt of width they do not have on a
+                          phone, so below sm the label takes its own line and the
+                          two figures sit side by side under it. The column
+                          headers go with it; each figure carries its own prefix
+                          instead, because a header row a phone cannot show is
+                          not a label. */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1 sm:gap-y-3 text-xs">
+                        <div className="hidden sm:block" />
+                        <div className="hidden sm:block text-phosphor-dim tracking-widest text-right">YOU</div>
+                        <div className="hidden sm:block text-phosphor-dim tracking-widest text-right">MACHINE</div>
 
-                        <div className="text-phosphor-dim">RETURN</div>
-                        <div className="text-phosphor font-bold tabular-nums text-right">
+                        <div className="col-span-2 sm:col-span-1 text-phosphor-dim">RETURN</div>
+                        <div className="text-phosphor font-bold tabular-nums text-left sm:text-right">
+                          <span className="sm:hidden text-phosphor-dim font-normal">YOU </span>
                           {(riskAdjusted.playerReturn * 100).toFixed(2)}%
                         </div>
                         <div className="text-phosphor-mid font-bold tabular-nums text-right">
+                          <span className="sm:hidden text-phosphor-dim font-normal">MCH </span>
                           {(riskAdjusted.machineReturn * 100).toFixed(2)}%
                         </div>
 
-                        <div className="text-phosphor-dim">SHARPE</div>
-                        <div className="text-phosphor font-bold tabular-nums text-right">
+                        <div className="col-span-2 sm:col-span-1 text-phosphor-dim mt-2 sm:mt-0">SHARPE</div>
+                        <div className="text-phosphor font-bold tabular-nums text-left sm:text-right">
+                          <span className="sm:hidden text-phosphor-dim font-normal">YOU </span>
                           {fmtSharpe(riskAdjusted.playerSharpe)}
                         </div>
                         <div className="text-phosphor-mid font-bold tabular-nums text-right">
+                          <span className="sm:hidden text-phosphor-dim font-normal">MCH </span>
                           {fmtSharpe(riskAdjusted.machineSharpe)}
                         </div>
                       </div>
