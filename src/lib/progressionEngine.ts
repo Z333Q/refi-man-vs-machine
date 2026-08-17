@@ -6,6 +6,14 @@ import type { ModuleCode, TerminalModule, MachineBenchmark, BenchmarkSnapshot, R
 // The player's terminal becomes more capable as they earn Alpha XP.
 export const TERMINAL_MODULES: TerminalModule[] = [
   {
+    code: 'BLOCK_FIELD',
+    label: 'BLOCK FIELD',
+    key: 'B',
+    description: 'The portfolio drawn as area. Size is exposure, hue is sector, cash is hollow. Touch a stance to see what it would do before you commit it.',
+    unlockRequirement: 'Complete Background Noise (checkpoints 1 to 3)',
+    alwaysAvailable: false,
+  },
+  {
     code: 'PRICE_RETURN',
     label: 'PRICE & RETURN',
     key: 'P',
@@ -106,6 +114,13 @@ export function getAvailableModules(unlockedModules: ModuleCode[]): TerminalModu
 export function checkModuleUnlocks(profile: PlayerProfile, checkpointReached: number): ModuleCode[] {
   const newUnlocks: ModuleCode[] = [];
 
+  // Background Noise is CP1 to CP3, so completing it means reaching CP4. The
+  // block field is the first module a player earns: it arrives once they have
+  // made three decisions and have a portfolio worth looking at, and it brings
+  // the stance preview with it (Addendum B B4).
+  if (checkpointReached >= 4 && !profile.unlockedModules.includes('BLOCK_FIELD')) {
+    newUnlocks.push('BLOCK_FIELD');
+  }
   if (checkpointReached >= 6 && !profile.unlockedModules.includes('CORRELATION_MATRIX')) {
     newUnlocks.push('CORRELATION_MATRIX');
   }

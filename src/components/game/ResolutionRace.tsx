@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CheckpointScore } from '../../lib/gameTypes';
 import { synthesizeTapePath } from '../../lib/tapePath';
 import { verdictStamp, type Verdict, type ScoreComponentCode } from '../../lib/verdict';
+import BlockField from './BlockField';
+import type { BlockInput } from '../../lib/blockField';
 
 // ─── The resolution race ──────────────────────────────────────────────────────
 // The beat the game is named after: you locked your call, now the tape decides.
@@ -47,6 +49,10 @@ interface Props {
   par: number;
 
   reducedMotion: boolean;
+  /** Portfolio before the commit resolved, drawn as ghosts on the reveal. */
+  blocksBefore: BlockInput[];
+  /** Portfolio after the market moved. */
+  blocksAfter: BlockInput[];
   onComplete: () => void;
 }
 
@@ -72,7 +78,7 @@ const METRIC_LABEL: Record<ScoreComponentCode, string> = {
 export default function ResolutionRace({
   playerReturn, machineReturn, volatilityDelta, correlationLevel, seed, checkpointSequence,
   playerAction, machineAction, machineReason, wire,
-  score, verdict, par, reducedMotion, onComplete,
+  score, verdict, par, reducedMotion, blocksBefore, blocksAfter, onComplete,
 }: Props) {
   const [beat, setBeat] = useState<Beat>('LOCK');
   // 0 to 1 across the race. Drives the curve draw and the card flip together,
@@ -278,6 +284,22 @@ export default function ResolutionRace({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* The picture, after the world moved. Verb spec §3.5: the player watches
+          their portfolio change for a second reason, and the ghosts show what
+          it was before. This is the reveal-side home of the block field; it
+          never appears on the pre-commit surface (Addendum B B4). */}
+      {showScore && blocksAfter.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-phosphor/15">
+          <BlockField
+            blocks={blocksAfter}
+            previous={blocksBefore}
+            height={150}
+            reducedMotion={reducedMotion}
+            caption="YOUR PORTFOLIO AFTER THE MARKET MOVED. DOTTED IS WHERE IT WAS."
+          />
         </div>
       )}
 

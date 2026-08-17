@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { useTips } from '../context/TipContext';
-import type { ActionBranch, ThesisCode } from '../lib/gameTypes';
+import type { ActionBranch, ActionCode, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
   canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
-  STARTING_CAPITAL, actionReturnMultiplier, type DecisionCommand,
+  STARTING_CAPITAL, actionReturnMultiplier, stanceCashDelta, type DecisionCommand,
 } from '../lib/runEngine';
 import {
   thesisLabel, thesisOptionsFor, stanceTitle,
@@ -20,6 +20,8 @@ import PullToCommit from '../components/game/PullToCommit';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
 import ResolutionRace from '../components/game/ResolutionRace';
+import BlockField from '../components/game/BlockField';
+import { blocksFromPortfolio, previewStanceBlocks } from '../lib/blockField';
 import MachineEvolution from '../components/game/MachineEvolution';
 import { useVisualEvents, visualRegistry } from '../components/game/VisualEventLayer';
 import { Spotlight } from '../components/onboarding/Spotlight';
@@ -90,6 +92,12 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   // The sub-metrics and the authored teaching note live one tap deeper, so the
   // result reads as one verdict rather than a verdict arguing with a lecture.
   const [showBreakdown, setShowBreakdown] = useState(false);
+  // Snapshot of the portfolio at commit time, so the reveal can ghost what the
+  // field looked like before the market moved.
+  const blocksBeforeRef = useRef<ReturnType<typeof blocksFromPortfolio>>([]);
+  // Which stance the earned module is previewing. Preview only: it never
+  // touches pending state, so looking cannot become deciding.
+  const [previewStance, setPreviewStance] = useState<ActionCode | null>(null);
 
   // ─── Gesture geometry ───────────────────────────────────────────────────────
   // The device class is decided once per run from the usable decision region,
@@ -409,9 +417,12 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
    * half-applied stance or a stale conviction.
    */
   const submitDecision = useCallback((command: DecisionCommand) => {
+    if (run) {
+      blocksBeforeRef.current = blocksFromPortfolio(run.portfolio.positions, run.portfolio.cashWeight);
+    }
     commitDecision(command);
     afterCommit();
-  }, [commitDecision, afterCommit]);
+  }, [commitDecision, afterCommit, run]);
 
   // The precise door: whatever the slider and keyboard have built becomes the
   // command. Same boundary as the gesture, same engine call.
@@ -575,6 +586,15 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     for (const ch of run.arenaId) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
     return h >>> 0;
   })();
+
+  // The field's inputs. `blocksAfter` is the portfolio as it stands now, which
+  // on the reveal is the post-resolution state; the ghosts are the snapshot
+  // taken when the decision was committed.
+  const blocksAfter = blocksFromPortfolio(portfolio.positions, portfolio.cashWeight);
+  const blockFieldEarned = state.profile.unlockedModules.includes('BLOCK_FIELD');
+  const previewBlocks = previewStance
+    ? previewStanceBlocks(blocksAfter, stanceCashDelta(previewStance))
+    : null;
 
   const previousDecision = run.decisions[run.decisions.length - 1];
   const previousConviction = previousDecision
@@ -842,6 +862,59 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                     <div className="text-phosphor-dim text-xs tracking-widest mb-3">
                       YOUR POSITIONS · READ ONLY
                     </div>
+
+                    {/* The earned home of the block field (Addendum B B4). It
+                        unlocks after Background Noise and brings the stance
+                        preview with it: hovering a stance here shows what it
+                        would do, which is the teaching the pre-commit surface
+                        is not allowed to carry. */}
+                    {blockFieldEarned && (
+                      <div className="mb-4 border border-phosphor/10 bg-terminal-deep/40 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-phosphor-dim text-xs tracking-widest">
+                            BLOCK FIELD · MODULE
+                          </span>
+                          {previewStance && (
+                            <span className="text-alert-amber text-xs tracking-widest">PREVIEW</span>
+                          )}
+                        </div>
+                        <BlockField
+                          blocks={previewBlocks ?? blocksAfter}
+                          previous={previewBlocks ? blocksAfter : null}
+                          height={170}
+                          reducedMotion={reducedMotion}
+                          caption={
+                            previewStance
+                              ? `IF YOU ${previewStance}. DOTTED IS WHERE YOU ARE NOW.`
+                              : 'SIZE IS EXPOSURE. HUE IS SECTOR. CASH IS HOLLOW.'
+                          }
+                        />
+                        <div className="flex flex-wrap gap-1.5 mt-3">
+                          {branches.map(b => (
+                            <button
+                              key={b.actionCode}
+                              onMouseEnter={() => setPreviewStance(b.actionCode)}
+                              onMouseLeave={() => setPreviewStance(null)}
+                              onFocus={() => setPreviewStance(b.actionCode)}
+                              onBlur={() => setPreviewStance(null)}
+                              onClick={() => setPreviewStance(
+                                previewStance === b.actionCode ? null : b.actionCode,
+                              )}
+                              className={`px-2 py-1 text-xs tracking-widest border transition-colors ${
+                                previewStance === b.actionCode
+                                  ? 'border-alert-amber text-alert-amber'
+                                  : 'border-phosphor/20 text-phosphor-dim hover:border-phosphor/45 hover:text-phosphor'
+                              }`}
+                            >
+                              {stanceTitle(b)}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="text-phosphor-dim text-xs leading-snug mt-2">
+                          Previewing changes nothing. Commit on the DECIDE panel.
+                        </div>
+                      </div>
+                    )}
 
                     {portfolio.positions.length > 0 && (
                       <div className="flex justify-center mb-4 border border-phosphor/10 bg-terminal-deep/40 py-2">
@@ -1162,6 +1235,8 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                     verdict={verdict}
                     par={cp.machinePar}
                     reducedMotion={reducedMotion}
+                    blocksBefore={blocksBeforeRef.current}
+                    blocksAfter={blocksAfter}
                     onComplete={() => setRevealDelay(1)}
                   />
                 </div>
