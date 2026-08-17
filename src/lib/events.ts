@@ -25,6 +25,10 @@ import {
 // conversion-funnel metrics as the ReFi SEC-facing product (§7 / §63).
 export type GameEventType =
   | 'session.started'
+  // §52 session events. A resume is not a new arena start: emitting
+  // arena.started for it would double-count every interrupted run in the
+  // acquisition funnel.
+  | 'session.resumed'
   | 'onboarding.attract_viewed'
   | 'onboarding.entered'
   | 'arena.started'
@@ -132,6 +136,17 @@ export function beginRunTelemetry(): string {
 
 export function endRunTelemetry(): void {
   currentRunId = null;
+}
+
+/**
+ * Re-adopt the id of a run being resumed, rather than minting a new one.
+ *
+ * An interrupted run is one run. If the resumed half carried a fresh id the
+ * event stream would show two short runs where the record shows one long one,
+ * and any funnel counting arena starts would double-count every refresh.
+ */
+export function setRunTelemetryId(runId: string): void {
+  currentRunId = runId;
 }
 
 export function getCurrentRunId(): string | null {

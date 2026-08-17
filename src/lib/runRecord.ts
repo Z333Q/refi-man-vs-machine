@@ -22,6 +22,10 @@ import type {
   ActionCode, BehavioralFlag, DecisionQuality, ModuleCode,
   RunState, ThesisCode,
 } from './gameTypes';
+import {
+  advanceRunCheckpoint, attachThesis, commitDecisionCommand, createInitialRun,
+} from './runEngine';
+import { confidenceToConviction } from './decisionContract';
 
 /** Bumped when the record shape changes in a way a reader must notice. */
 export const RUN_RECORD_VERSION = 1;
@@ -207,6 +211,89 @@ export function clearRunRecords(): void {
   } catch {
     // See writeAll.
   }
+}
+
+// ─── Replay ───────────────────────────────────────────────────────────────────
+
+/**
+ * Rebuild a live run from its record by replaying the decisions through the
+ * engine.
+ *
+ * The record deliberately stores no portfolio snapshot to restore from. It does
+ * not need one: the engine is pure and the run is anchored by a seed, so the
+ * decision sequence *is* the state. Storing a snapshot as well would create a
+ * second source of truth that could disagree with the engine after any scoring
+ * change, and the disagreement would surface as a player's saved run quietly
+ * scoring differently than it did.
+ *
+ * This is §65's "deterministic replay from run seed" exercised on the live
+ * path rather than asserted in a test only: resuming a run is a replay.
+ *
+ * Returns null when the record cannot be replayed — an unknown stance, a
+ * checkpoint the content no longer authors, an arena that has since changed
+ * shape. A refused resume is correct; a partially reconstructed run is not.
+ */
+export function replayRun(
+  record: RunRecord,
+  seedModules: ModuleCode[] = [],
+): RunState | null {
+  let run: RunState = {
+    ...createInitialRun(record.seed),
+    id: record.runId,
+  };
+
+  // Carry the modules the player had. They gate what the terminal shows, not
+  // what the engine computes, so they are restored rather than replayed.
+  const seen = new Set(run.activeModules);
+  run = {
+    ...run,
+    activeModules: [...run.activeModules, ...seedModules.filter(m => !seen.has(m))],
+  };
+
+  for (const d of record.decisions) {
+    const outcome = commitDecisionCommand(run, {
+      action: d.actionCode,
+      conviction: confidenceToConviction(d.confidence ?? 0.6),
+    });
+    if (!outcome) return null;
+
+    run = outcome.run;
+    if (d.thesisCode) run = attachThesis(run, d.thesisCode);
+
+    // Advance only as far as the record says the run had got. A run recorded
+    // mid-resolution has its last decision committed but not yet advanced.
+    if (run.currentCheckpoint < record.currentCheckpoint) {
+      run = advanceRunCheckpoint(run);
+    }
+  }
+
+  if (run.decisions.length !== record.decisions.length) return null;
+
+  return {
+    ...run,
+    // The record is authoritative for the run's own bookkeeping: these are
+    // outcomes of the replay, and any drift between them is a signal worth
+    // preserving rather than hiding.
+    result: record.result,
+    criticalFailure: record.criticalFailure || run.criticalFailure,
+    criticalFailureCheckpoint: record.criticalFailureCheckpoint ?? run.criticalFailureCheckpoint,
+  };
+}
+
+/**
+ * Whether a replay reproduces the record it came from.
+ *
+ * Scores are the check because they are what the player is shown and what the
+ * profile is built from. A mismatch means the engine has changed since the run
+ * was stored, and the honest response is to decline the resume rather than to
+ * present a run whose numbers have quietly moved.
+ */
+export function replayMatchesRecord(record: RunRecord, replayed: RunState): boolean {
+  return (
+    replayed.playerScore === record.playerScore &&
+    replayed.machineScore === record.machineScore &&
+    replayed.currentCheckpoint === record.currentCheckpoint
+  );
 }
 
 // ─── Forward path to Supabase ─────────────────────────────────────────────────
