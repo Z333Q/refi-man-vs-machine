@@ -141,7 +141,7 @@ export default function AutopsyScreen({ onContinue }: Props) {
               <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-2">
                 BEHAVIORAL FLAGS DETECTED
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {[
                   { flag: 'ACTION_BIAS', count: 3, severity: 'medium' },
                   { flag: 'CONFIDENCE_SIZE_MISMATCH', count: 2, severity: 'high' },

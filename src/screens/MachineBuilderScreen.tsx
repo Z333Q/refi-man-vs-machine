@@ -262,7 +262,10 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left: module list ── */}
-        <div className="w-56 flex-shrink-0 border-r border-phosphor/10 flex flex-col">
+        {/* Module list. Desktop only: paired with the right rail this consumed
+            432pt, more than a phone viewport, and collapsed the editor between
+            them. Small screens reach modules through the stepper instead. */}
+        <div className="hidden lg:flex w-56 flex-shrink-0 border-r border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest">ARCHITECTURE</div>
           </div>
@@ -421,7 +424,8 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
         </div>
 
         {/* ── Right: installed summary ── */}
-        <div className="w-52 flex-shrink-0 border-l border-phosphor/10 flex flex-col">
+        {/* Compile status. Desktop only, for the same reason. */}
+        <div className="hidden lg:flex w-52 flex-shrink-0 border-l border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest">INSTALLED</div>
           </div>

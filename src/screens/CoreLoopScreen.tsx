@@ -694,8 +694,14 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
       {/* ── Main area ── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ── Left: signal sidebar ── */}
-        <div className="w-64 flex-shrink-0 border-r border-phosphor/10 flex flex-col">
+        {/* ── Left: signal sidebar ──
+             Desktop only. Below lg the rails would consume 464px of a 390px
+             viewport without shrinking, collapsing the centre pane (which holds
+             every interactive control) to nothing behind an overflow-hidden
+             parent. The signal headline and body are step 1 of the checkpoint
+             loop, so they are re-rendered above the tabs on small screens
+             rather than dropped. */}
+        <div className="hidden lg:flex w-64 flex-shrink-0 border-r border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest mb-1">
               {cp.phase.replace(/_/g, ' ')} · {cp.crisisDay}
@@ -778,8 +784,20 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
           {decisionPhase && (
             <>
-              {/* Panel tabs */}
-              <div className="flex border-b border-phosphor/15 flex-shrink-0">
+              {/* The READ step, for viewports with no left rail. Same content,
+                  same source; only the placement differs. */}
+              <div className="lg:hidden px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40 flex-shrink-0">
+                <div className="text-phosphor-dim text-xs tracking-widest mb-1">
+                  {cp.phase.replace(/_/g, ' ')} · {cp.crisisDay}
+                </div>
+                <div className="text-phosphor text-sm font-bold leading-tight">{cp.signalTitle}</div>
+                <div className="text-phosphor-mid text-xs leading-relaxed mt-1.5">{cp.signalBody}</div>
+              </div>
+
+              {/* Panel tabs. Scrollable rather than wrapping: four tabs at a
+                  legible tap size exceed a narrow viewport, and a wrapped row
+                  would push the decision surface below the fold. */}
+              <div className="flex border-b border-phosphor/15 flex-shrink-0 overflow-x-auto scrollbar-hide">
                 {PANEL_TABS.map(tab => (
                   <button
                     key={tab.id}
@@ -1253,7 +1271,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
                 {showBreakdown && (
                   <div className="mt-3 border-t border-phosphor/15 pt-3">
-                    <div className="grid grid-cols-3 gap-3 text-xs mb-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-3">
                       {[
                         { label: 'RAER', val: lastCheckpointScore.raerScore },
                         { label: 'DRAWDOWN', val: lastCheckpointScore.drawdownScore },
@@ -1337,7 +1355,13 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
         </div>
 
         {/* ── Right: status sidebar ── */}
-        <div className="w-52 flex-shrink-0 border-l border-phosphor/10 flex flex-col">
+        {/* ── Right: ambient context ──
+             Desktop only, and it stays that way. Rank, decision log and machine
+             evolution are context, not inputs to this checkpoint, and Addendum
+             B holds the pre-commit surface at two elements. Small screens reach
+             all of it through the hub rather than carrying it beside the
+             decision. */}
+        <div className="hidden lg:flex w-52 flex-shrink-0 border-l border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest mb-2">ALPHA PROFILE</div>
             <div className="text-phosphor text-xs font-bold">{state.profile.rankCode.replace(/_/g, ' ')}</div>

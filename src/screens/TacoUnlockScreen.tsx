@@ -73,7 +73,7 @@ export default function TacoUnlockScreen({ onEnter }: Props) {
             <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-4">
               PREREQUISITES VERIFIED
             </div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {PREREQUISITES.map((item, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <span className="text-phosphor text-xs">✓</span>

@@ -139,7 +139,7 @@ export default function DailyTapeScreen({ onBack }: Props) {
           {/* Market data */}
           <div className="border-t border-phosphor/10 pt-4">
             <div className="text-phosphor-dim text-xs tracking-widest mb-3">MARKET DATA</div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {today.marketData.map((md, i) => (
                 <div key={i} className="text-center">
                   <div className="text-phosphor-dim text-xs">{md.indicator}</div>

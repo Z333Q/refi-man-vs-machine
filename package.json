@@ -12,8 +12,9 @@
     "test": "node --import tsx --test src/**/*.test.ts scripts/lib/*.test.mjs",
     "label-gate": "node scripts/label-gate.mjs",
     "provenance-gate": "node scripts/provenance-gate.mjs",
+    "viewport-gate": "node scripts/viewport-gate.mjs",
     "em-dash-gate": "node scripts/em-dash-gate.mjs",
-    "ci-gates": "npm run label-gate && npm run provenance-gate && npm run em-dash-gate"
+    "ci-gates": "npm run label-gate && npm run provenance-gate && npm run em-dash-gate && npm run viewport-gate"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

@@ -86,7 +86,7 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
 
           {/* Left column */}
           <div className="col-span-2 space-y-5">
@@ -135,7 +135,7 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
               <div className="space-y-3">
                 {Object.entries(profile.dimensions).map(([code, { score, sampleSize }]) => (
                   <div key={code} className="flex items-center justify-between gap-4">
-                    <div className="text-phosphor-dim text-xs w-40 flex-shrink-0">
+                    <div className="text-phosphor-dim text-xs w-24 sm:w-40 flex-shrink-0">
                       {DIMENSION_LABELS[code] ?? code}
                     </div>
                     <ScoreBar score={score} sampleSize={sampleSize} />

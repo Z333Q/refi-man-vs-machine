@@ -236,7 +236,7 @@ export default function TacoBossScreen({ onComplete, onBack }: Props) {
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
             {/* Left: Portrait strip */}
             <div className="col-span-1">
               <div className="terminal-panel p-4 space-y-4">

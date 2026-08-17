@@ -101,7 +101,7 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {[
             { label: 'MACHINES BEATEN', value: String(totalBeats) },
             { label: 'TOTAL ATTEMPTS', value: String(totalAttempts) },
@@ -189,7 +189,7 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
                     <div className="text-phosphor-dim text-xs mb-1.5 tracking-widest">{machine.subtitle}</div>
                     <div className="text-phosphor-mid text-xs leading-snug mb-2">{machine.description}</div>
 
-                    <div className="grid grid-cols-3 gap-3 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                       <div>
                         <span className="text-phosphor-dim">CUTOFF: </span>
                         <span className="text-phosphor">{machine.trainingCutoff}</span>
