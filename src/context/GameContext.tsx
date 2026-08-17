@@ -15,6 +15,7 @@ import {
   emitEvent, beginRunTelemetry, endRunTelemetry, covidCrisisDayToISO,
 } from '../lib/events';
 import { markProgressSaved } from '../lib/alphaIdentity';
+import { saveRun } from '../lib/runRecord';
 
 // §56 checkpoint id from the arena code + sequence (e.g. cp_covid_black_swan_007).
 function checkpointId(arenaId: string, sequence: number): string {
@@ -39,7 +40,9 @@ interface GameState {
 
 type GameAction =
   | { type: 'LOAD_PROFILE'; profile: PlayerProfile }
-  | { type: 'START_RUN' }
+  // The identity and determinism anchor are minted here, not in the engine:
+  // both need a clock or an RNG, which the engine may not read.
+  | { type: 'START_RUN'; runId: string; seed: number }
   | { type: 'SET_RUN_PHASE'; phase: RunState['phase'] }
   | { type: 'INVESTIGATE_MODULE'; module: ModuleCode }
   | { type: 'SET_PENDING_ACTION'; action: ActionCode }
@@ -56,6 +59,21 @@ type GameAction =
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
+/**
+ * A run's determinism anchor (§54 `arena_runs.seed`).
+ *
+ * A 32-bit unsigned integer so it survives JSON, localStorage and a Postgres
+ * bigint without loss. Sourced from the CSPRNG where there is one; the clock is
+ * only a fallback, and a duplicated seed costs replay fidelity, not integrity.
+ */
+function mintSeed(): number {
+  try {
+    return crypto.getRandomValues(new Uint32Array(1))[0];
+  } catch {
+    return Date.now() >>> 0;
+  }
+}
+
 /** Union of two module lists, order-stable and duplicate-free. */
 function mergeModules(current: ModuleCode[], incoming: ModuleCode[]): ModuleCode[] {
   const seen = new Set(current);
@@ -71,10 +89,14 @@ function reducer(state: GameState, action: GameAction): GameState {
       // A run opens with the base terminal plus everything the player has
       // already earned. Without this a returning player's unlocked modules
       // silently disappear the moment a new run starts.
-      const base = createInitialRun();
+      const base = createInitialRun(action.seed);
       return {
         ...state,
-        run: { ...base, activeModules: mergeModules(base.activeModules, state.profile.unlockedModules) },
+        run: {
+          ...base,
+          id: action.runId,
+          activeModules: mergeModules(base.activeModules, state.profile.unlockedModules),
+        },
         lastCheckpointScore: null,
         lastCheckpointFlags: [],
       };
@@ -464,6 +486,32 @@ export function GameProvider({ children }: { children: ReactNode }) {
     prevDecisionCount.current = run.decisions.length;
   }, [state.run]);
 
+  // The Run Record (§57). Written whenever the run's shape changes, so an
+  // abandoned run still leaves behind the decisions the player did make and a
+  // refresh no longer destroys the evidence the autopsy is built from.
+  //
+  // Keyed on the transitions worth a write rather than on the run object, so a
+  // panel tab does not re-serialise the run.
+  //
+  // The thesis is one of those transitions and is easy to miss: it attaches
+  // after the commit, leaving the decision count, the phase and the result all
+  // unchanged. Without it in the key, every stored decision reads
+  // THESIS_UNSTATED however carefully the player answered.
+  const lastDecision = state.run?.decisions[state.run.decisions.length - 1];
+  useEffect(() => {
+    if (!state.run?.id) return;
+    saveRun(state.run);
+  }, [
+    state.run?.id,
+    state.run?.decisions.length,
+    state.run?.phase,
+    state.run?.result,
+    lastDecision?.thesisCode,
+    // Reading the whole run at write time is intended; the deps above only
+    // decide when.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ]);
+
   // arena.passed / arena.failed / arena.machine_beaten + score.run.computed —
   // once, when the run reaches a terminal result.
   const prevResult = useRef<RunState['result'] | null>(null);
@@ -496,8 +544,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const startRun = useCallback(() => {
     // New run → new correlation chain. beginRunTelemetry stamps a run id
     // that every event in this run shares (§56 run_id / correlation_id).
-    beginRunTelemetry();
-    dispatch({ type: 'START_RUN' });
+    // The Run Record reuses that same id rather than minting a second one, so
+    // a stored run and its event stream can be read against each other.
+    const runId = beginRunTelemetry();
+    dispatch({ type: 'START_RUN', runId, seed: mintSeed() });
     const arenaId = 'covid_black_swan';
     emitEvent('arena.started', { arenaId, machineId: 'refi_rules' }, { arenaId });
   }, []);

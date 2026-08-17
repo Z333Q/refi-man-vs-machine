@@ -214,6 +214,15 @@ export interface RunDecision {
 
 export interface RunState {
   id: string | null;
+  /**
+   * The run's determinism anchor (§54 `arena_runs.seed`, §65 "deterministic
+   * replay from run seed"). Chosen once when the run opens and never again, so
+   * a stored record plus its decision sequence reproduces the run exactly.
+   *
+   * The engine only carries it. Generating it means reading a clock or an RNG,
+   * which the engine may not do, so the seed is injected from the React layer.
+   */
+  seed: number;
   arenaId: string;
   machineId: string;
   currentCheckpoint: number;
