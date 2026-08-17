@@ -12,10 +12,12 @@ import {
 import { createDefaultProfile, updateDimensions, checkModuleUnlocks, getRankForXp } from '../lib/progressionEngine';
 import { supabase, getSessionId } from '../lib/supabase';
 import {
-  emitEvent, beginRunTelemetry, endRunTelemetry, covidCrisisDayToISO,
+  emitEvent, beginRunTelemetry, endRunTelemetry, setRunTelemetryId, covidCrisisDayToISO,
 } from '../lib/events';
 import { markProgressSaved } from '../lib/alphaIdentity';
-import { saveRun } from '../lib/runRecord';
+import {
+  saveRun, latestUnfinishedRun, replayRun, replayMatchesRecord,
+} from '../lib/runRecord';
 
 // §56 checkpoint id from the arena code + sequence (e.g. cp_covid_black_swan_007).
 function checkpointId(arenaId: string, sequence: number): string {
@@ -43,6 +45,9 @@ type GameAction =
   // The identity and determinism anchor are minted here, not in the engine:
   // both need a clock or an RNG, which the engine may not read.
   | { type: 'START_RUN'; runId: string; seed: number }
+  // A run rebuilt from its record by replaying the decisions through the
+  // engine. The run arrives whole; the reducer only adopts it.
+  | { type: 'RESUME_RUN'; run: RunState }
   | { type: 'SET_RUN_PHASE'; phase: RunState['phase'] }
   | { type: 'INVESTIGATE_MODULE'; module: ModuleCode }
   | { type: 'SET_PENDING_ACTION'; action: ActionCode }
@@ -101,6 +106,16 @@ function reducer(state: GameState, action: GameAction): GameState {
         lastCheckpointFlags: [],
       };
     }
+
+    case 'RESUME_RUN':
+      return {
+        ...state,
+        run: action.run,
+        // The checkpoint score belongs to a resolution the player already saw.
+        // Restoring the run must not reopen it.
+        lastCheckpointScore: null,
+        lastCheckpointFlags: [],
+      };
 
     case 'SET_RUN_PHASE':
       if (!state.run) return state;
@@ -246,6 +261,8 @@ function reducer(state: GameState, action: GameAction): GameState {
 interface GameContextValue {
   state: GameState;
   startRun: () => void;
+  /** Re-enter the stored unfinished run. False when it cannot be reproduced. */
+  resumeRun: () => boolean;
   setPhase: (phase: RunState['phase']) => void;
   investigateModule: (module: ModuleCode) => void;
   setPendingAction: (action: ActionCode) => void;
@@ -272,6 +289,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     xpJustEarned: 0,
     loaded: false,
   });
+
+  // The profile as of the latest render, readable from a stable callback.
+  // resumeRun needs the unlocked modules but must not be rebuilt every time
+  // XP moves, or the resume offer would re-render on every commit.
+  const profileRef = useRef(state.profile);
+  profileRef.current = state.profile;
 
   // Load profile from Supabase on mount
   useEffect(() => {
@@ -551,6 +574,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const arenaId = 'covid_black_swan';
     emitEvent('arena.started', { arenaId, machineId: 'refi_rules' }, { arenaId });
   }, []);
+  /**
+   * Re-enter the run the player left, rebuilt by replaying its decisions.
+   *
+   * Returns false and changes nothing when the record cannot be reproduced
+   * exactly — content or scoring has moved since it was stored. Declining is
+   * the honest outcome: resuming into a run whose numbers have silently
+   * shifted is worse than starting again.
+   */
+  const resumeRun = useCallback((): boolean => {
+    const record = latestUnfinishedRun();
+    if (!record || record.decisions.length === 0) return false;
+
+    const replayed = replayRun(record, profileRef.current.unlockedModules);
+    if (!replayed || !replayMatchesRecord(record, replayed)) return false;
+
+    // The resumed run keeps its original id, so its events and its record stay
+    // one chain across the interruption.
+    setRunTelemetryId(record.runId);
+    dispatch({ type: 'RESUME_RUN', run: replayed });
+    emitEvent('session.resumed', {
+      arenaId: record.arenaId,
+      checkpoint: record.currentCheckpoint,
+      decisions: record.decisions.length,
+    }, { arenaId: record.arenaId });
+    return true;
+  }, []);
+
   const setPhase = useCallback((phase: RunState['phase']) => dispatch({ type: 'SET_RUN_PHASE', phase }), []);
   const investigateModule = useCallback((module: ModuleCode) => dispatch({ type: 'INVESTIGATE_MODULE', module }), []);
   const setPendingAction = useCallback((action: ActionCode) => dispatch({ type: 'SET_PENDING_ACTION', action }), []);
@@ -572,6 +622,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     <GameContext.Provider value={{
       state,
       startRun,
+      resumeRun,
       setPhase,
       investigateModule,
       setPendingAction,

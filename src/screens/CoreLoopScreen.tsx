@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useGame } from '../context/GameContext';
+import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
 import { useTips } from '../context/TipContext';
 import type { ActionBranch, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
@@ -58,6 +59,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   const {
     state,
     startRun,
+    resumeRun,
     investigateModule,
     setPendingAction,
     attachThesis,
@@ -180,9 +182,33 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
   // ─── Side effects ────────────────────────────────────────────────────────────
 
+  // A stored run is offered, never forced. Silently dropping the player back
+  // into a run they left is disorienting, and opening a fresh one over the top
+  // of it buries the record. So the screen asks, once, before any run exists.
+  //
+  // The gate is explicit state rather than a ref, because a ref guard is not
+  // idempotent: StrictMode invokes the effect twice, and the second pass sees
+  // the ref already tripped while the offer it set is still one render away,
+  // so it falls through and starts the very run the offer was meant to
+  // prevent. Every state here is reachable exactly once and re-running the
+  // effect from it changes nothing.
+  const [resumeGate, setResumeGate] = useState<'CHECKING' | 'OFFERING' | 'CLEAR'>('CHECKING');
+  const [resumeOffer, setResumeOffer] = useState<RunRecord | null>(null);
+
   useEffect(() => {
-    if (!run) startRun();
-  }, [run, startRun]);
+    if (resumeGate !== 'CHECKING') return;
+    const stored = latestUnfinishedRun();
+    if (stored && stored.decisions.length > 0) {
+      setResumeOffer(stored);
+      setResumeGate('OFFERING');
+    } else {
+      setResumeGate('CLEAR');
+    }
+  }, [resumeGate]);
+
+  useEffect(() => {
+    if (resumeGate === 'CLEAR' && !run) startRun();
+  }, [resumeGate, run, startRun]);
 
   // Tip: first signal
   useEffect(() => {
@@ -551,6 +577,59 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   }, [thesisPrompt, run, currentCheckpointData, pickThesis]);
 
   // ─── Guard ───────────────────────────────────────────────────────────────────
+
+  if (!run && resumeGate === 'OFFERING' && resumeOffer) {
+    const behind = resumeOffer.playerScore - resumeOffer.machineScore;
+    return (
+      <div className="min-h-screen bg-terminal-black flex items-center justify-center p-6 font-mono">
+        <div className="border border-phosphor/30 bg-terminal-deep/60 p-6 max-w-md w-full space-y-5">
+          <div className="text-phosphor-dim text-xs tracking-widest">RUN IN PROGRESS</div>
+          <div className="text-phosphor text-sm leading-6">
+            You left {resumeOffer.arenaId.replace(/_/g, ' ').toUpperCase()} at
+            checkpoint {resumeOffer.currentCheckpoint} of {resumeOffer.totalCheckpoints}.
+          </div>
+          {/* Below sm the count takes its own row and the two scores keep the
+              row beneath it, because they are the comparison and belong beside
+              each other at any width. */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs border-y border-phosphor/10 py-3">
+            <div className="col-span-2 sm:col-span-1">
+              <Stat label="COMMITTED" value={String(resumeOffer.decisions.length)} />
+            </div>
+            <Stat label="YOU" value={String(resumeOffer.playerScore)} />
+            <Stat
+              label="MACHINE"
+              value={String(resumeOffer.machineScore)}
+              note={behind === 0 ? 'LEVEL' : behind > 0 ? `YOU +${behind}` : `MCH +${-behind}`}
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={() => {
+                // A refused replay means the run cannot be reproduced exactly.
+                // Fall through to CLEAR and start fresh rather than resume into
+                // numbers that have quietly shifted.
+                const resumed = resumeRun();
+                setResumeOffer(null);
+                setResumeGate(resumed ? 'OFFERING' : 'CLEAR');
+              }}
+              className="cmd-button-primary flex-1 py-2.5 text-xs tracking-widest"
+            >
+              RESUME RUN ▶
+            </button>
+            <button
+              onClick={() => { setResumeOffer(null); setResumeGate('CLEAR'); }}
+              className="flex-1 py-2.5 text-xs tracking-widest border border-phosphor/25 text-phosphor-dim hover:text-phosphor hover:border-phosphor/50 transition-colors"
+            >
+              START OVER
+            </button>
+          </div>
+          <div className="text-phosphor-dim/70 text-xs leading-snug">
+            STARTING OVER OPENS A NEW RUN. THE ONE YOU LEFT STAYS IN YOUR RECORDS.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!run || !currentCheckpointData) {
     return (
@@ -1610,6 +1689,17 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
           />
         );
       })()}
+    </div>
+  );
+}
+
+/** One figure in the resume card. */
+function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div>
+      <div className="text-phosphor-dim tracking-widest" style={{ fontSize: '10px' }}>{label}</div>
+      <div className="text-phosphor font-bold tabular-nums mt-0.5">{value}</div>
+      {note && <div className="text-phosphor-dim mt-0.5" style={{ fontSize: '10px' }}>{note}</div>}
     </div>
   );
 }

@@ -6,10 +6,11 @@ import {
   attachThesis, DEFAULT_RUN_SEED,
 } from './runEngine';
 import type { RunState } from './gameTypes';
+import { getCheckpoint } from './covidArena';
 import {
   MAX_STORED_RUNS, RUN_RECORD_VERSION, clearRunRecords, flushableRows,
   getRunRecord, latestFinishedRun, latestUnfinishedRun, listRunRecords,
-  projectRun, saveRun,
+  projectRun, saveRun, replayRun, replayMatchesRecord,
 } from './runRecord';
 import { bestAndWorst, flagTallies, headline, outcomes, scoreAttribution } from './runAnalysis';
 
@@ -266,4 +267,127 @@ test('the headline never claims a win the score does not show', () => {
   assert.match(headline(behind).verdict, /MACHINE LED BY 20/);
   assert.match(headline(ahead).verdict, /YOU BEAT THE MACHINE/);
   assert.match(headline(level).verdict, /LEVEL/);
+});
+
+// ─── Replay ───────────────────────────────────────────────────────────────────
+
+/** A run whose stances differ per checkpoint, so replay has something to get wrong. */
+function variedRun(seed = 31337): RunState {
+  let run: RunState = { ...createInitialRun(seed), id: 'run_varied' };
+  const wanted = ['HOLD', 'REDUCE', 'HOLD', 'RAISE_CASH', 'HOLD'] as const;
+  for (const action of wanted) {
+    const cp = run.currentCheckpoint;
+    const branch = getCheckpoint(cp)?.availableActions.find(a => a.actionCode === action);
+    // Content does not author every stance at every checkpoint; take what is
+    // there so the fixture stays honest about the arena it replays.
+    const chosen = branch?.actionCode ?? getCheckpoint(cp)!.availableActions[0].actionCode;
+    const out = commitDecisionCommand(run, { action: chosen, conviction: 60 });
+    assert.ok(out);
+    run = attachThesis(out.run, 'THESIS_UNCHANGED');
+    run = advanceRunCheckpoint(run);
+  }
+  return run;
+}
+
+test('replay reproduces the run the record came from', () => {
+  const live = variedRun();
+  const rec = projectRun(live, '2026-01-01T00:00:00.000Z');
+  assert.ok(rec);
+
+  const replayed = replayRun(rec);
+  assert.ok(replayed, 'a well-formed record must replay');
+  assert.equal(replayed.playerScore, live.playerScore);
+  assert.equal(replayed.machineScore, live.machineScore);
+  assert.equal(replayed.currentCheckpoint, live.currentCheckpoint);
+  assert.equal(replayed.portfolio.value, live.portfolio.value);
+  assert.equal(replayed.portfolio.drawdown, live.portfolio.drawdown);
+  assert.equal(replayed.portfolio.turnoverUsed, live.portfolio.turnoverUsed);
+  assert.equal(replayed.seed, live.seed);
+  assert.deepEqual(
+    replayed.decisions.map(d => d.actionCode),
+    live.decisions.map(d => d.actionCode),
+  );
+});
+
+test('replay restores the thesis on every decision that had one', () => {
+  const rec = projectRun(variedRun(), 'now');
+  assert.ok(rec);
+  const replayed = replayRun(rec);
+  assert.ok(replayed);
+  assert.deepEqual(
+    replayed.decisions.map(d => d.thesisCode),
+    rec.decisions.map(d => d.thesisCode ?? undefined),
+  );
+});
+
+test('replay is checked against the record, and a match is reported', () => {
+  const live = variedRun();
+  const rec = projectRun(live, 'now');
+  assert.ok(rec);
+  const replayed = replayRun(rec);
+  assert.ok(replayed);
+  assert.equal(replayMatchesRecord(rec, replayed), true);
+});
+
+test('a record whose scores no longer reproduce is refused, not silently accepted', () => {
+  const rec = projectRun(variedRun(), 'now');
+  assert.ok(rec);
+  const replayed = replayRun(rec);
+  assert.ok(replayed);
+  // Stand in for a scoring change since the run was stored.
+  const drifted = { ...rec, playerScore: rec.playerScore + 7 };
+  assert.equal(replayMatchesRecord(drifted, replayed), false);
+});
+
+test('a stance the arena does not author refuses to replay', () => {
+  const rec = projectRun(variedRun(), 'now');
+  assert.ok(rec);
+  const broken = {
+    ...rec,
+    decisions: [{ ...rec.decisions[0], actionCode: 'ROTATE_RISK' as const }, ...rec.decisions.slice(1)],
+  };
+  const replayed = replayRun(broken);
+  // Either the engine refuses the stance outright, or the run it produces no
+  // longer matches the record. Both are a refusal; neither is a silent resume.
+  assert.ok(replayed === null || !replayMatchesRecord(broken, replayed));
+});
+
+test('replay carries the modules the player had earned', () => {
+  const rec = projectRun(variedRun(), 'now');
+  assert.ok(rec);
+  const replayed = replayRun(rec, ['CORRELATION_MATRIX']);
+  assert.ok(replayed);
+  assert.ok(replayed.activeModules.includes('CORRELATION_MATRIX'));
+  assert.equal(
+    new Set(replayed.activeModules).size,
+    replayed.activeModules.length,
+    'the module list must not gain duplicates on resume',
+  );
+});
+
+test('a run recorded mid-resolution replays without advancing past itself', () => {
+  // Commit without advancing: the state a player leaves by closing the tab on
+  // the reveal.
+  let run: RunState = { ...createInitialRun(4242), id: 'run_midair' };
+  const out = commitDecisionCommand(run, { action: 'HOLD', conviction: 50 });
+  assert.ok(out);
+  run = attachThesis(out.run, 'THESIS_UNCHANGED');
+
+  const rec = projectRun(run, 'now');
+  assert.ok(rec);
+  assert.equal(rec.currentCheckpoint, 1, 'the run had not advanced');
+
+  const replayed = replayRun(rec);
+  assert.ok(replayed);
+  assert.equal(replayed.currentCheckpoint, 1);
+  assert.equal(replayed.decisions.length, 1);
+  assert.equal(replayMatchesRecord(rec, replayed), true);
+});
+
+test('an empty record replays to an empty run rather than failing', () => {
+  const rec = projectRun({ ...createInitialRun(9), id: 'run_empty2' }, 'now');
+  assert.ok(rec);
+  const replayed = replayRun(rec);
+  assert.ok(replayed);
+  assert.equal(replayed.decisions.length, 0);
 });
