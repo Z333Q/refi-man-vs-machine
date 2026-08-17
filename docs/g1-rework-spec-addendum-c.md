@@ -568,3 +568,81 @@ The rule this establishes: **a screen may hold authored content, but it may
 never hold authored player data.** Anything that looks like a score, a
 dimension, a decision or a run outcome must come from state or be visibly
 labelled as an example.
+
+---
+
+## Part 6 — Amendment 6: the draw shapes the throw
+
+**Status:** implemented. **Supersedes:** nothing. **Extends:** #25 (Resolution Engine v2).
+
+### Finding
+
+The pull gesture is a draw and the resolution race is the flight, but nothing
+carried between them. The curve left the gate at the same speed whether the
+player hedged at 50 or hauled the card to 95, so the two halves of the core verb
+read as two separate screens: a gesture, then a chart.
+
+The finding arrived from the founder describing the resolution race as a new
+idea, unprompted, four PRs after it shipped. Treat that n=1 as data. If the
+person most motivated to find the game's core verb defaults to the keyboard
+fallback and never discovers it, players will.
+
+### What conviction may and may not drive
+
+The market did not move further because the player felt more strongly about it.
+Widening the curve with conviction would be a fabricated performance claim
+(§58), and outcome-differentiated staging is barred by rule 16 and §61A.
+
+The line is drawn as follows.
+
+| Property | Driven by conviction | Why |
+|---|---|---|
+| Launch pacing | **Yes** | An echo of the input, expressed at release, before any outcome exists. |
+| Reachable score range | **Yes** | Literally the conviction multiplier. A statement about the player's own input, drawn in score space where the axis means what the band measures. |
+| Authored endpoint of either curve | No | Market data. |
+| Race duration, beat order, beat length | No | Identical staging for every outcome. |
+| Sound, flourish, near-miss framing | No | Rule 16. |
+
+### Implementation
+
+`launchEase(t, conviction)` maps wall-clock race progress to draw progress with
+an exponent from 0.78 at `CONVICTION_MIN` to 1.36 at `CONVICTION_MAX`, passing
+through 1.0 (unchanged, linear) at `CONVICTION_DEFAULT`. Reduced motion renders
+complete and never applies it.
+
+The stakes strip renders in the SCORE beat: par fixed at centre, the reachable
+band growing outward from it with the multiplier, and a marker where the
+checkpoint actually landed. Labelled numerically as well as by position, per
+§62.
+
+**Invariants, as tests** (`launchArc.test.ts`):
+
+1. `launchEase(0, c) = 0` and `launchEase(1, c) = 1` for every `c`. The curve
+   always arrives, whatever the draw.
+2. At `CONVICTION_DEFAULT` the easing is within 0.02 of linear across the flight.
+   A player who never touches the meter sees the animation that shipped in #25.
+3. Early in the flight, distance covered is strictly monotonic in conviction.
+4. The curve never runs backwards and never leaves the unit range.
+5. Conviction outside the published scale clamps rather than extrapolates.
+
+### Open: the cut
+
+This amendment makes the throw energetic. It does **not** remove the cut. Release
+still stamps, and the race then begins as a new scene, where the reference
+(Angry Birds) never cuts: the camera follows the projectile from the sling into
+the world in one unbroken motion, and the continuity is where the felt moment
+lives.
+
+The remaining change is that the pull track's snap-back animates directly into
+the first pixels of the equity curve, with no modal transition between them.
+That is a staging change to `PullToCommit` and `CoreLoopScreen`, not to this
+component, and it is filed as a separate step rather than absorbed here.
+
+### Also open: discoverability
+
+Amendment 6 is worthless to a player who never pulls. Two follow-ups, both
+raised to blocking for the G1 exit:
+
+- The CP1 ghost-hand demonstration moves from nice-to-have to required.
+- The desktop pull track needs a visible affordance. Discoverability failed its
+  first field test on the person most motivated to pass it.

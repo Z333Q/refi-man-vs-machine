@@ -11,7 +11,7 @@ import {
 import {
   thesisLabel, thesisOptionsFor, stanceTitle,
   convictionSpan, convictionGovernor, isGovernorActive, clampConviction,
-  convictionToConfidence, confidenceToConviction, isDetent, isLandmark,
+  convictionToConfidence, confidenceToConviction, isDetent, isLandmark, CONVICTION_DEFAULT,
   CONVICTION_KEY_STEP, CONVICTION_KEY_STEP_COARSE,
   GOVERNOR_CAPTION, PANEL_MODULE, THESIS_TIMEOUT_MS, THESIS_TIMEOUT_CODE,
 } from '../lib/decisionContract';
@@ -1158,6 +1158,11 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                     machineAction={cp.machineDecision.actionCode}
                     machineReason={cp.machineDecision.policyReason}
                     wire={(cp.eventFeed ?? []).map(e => e.text)}
+                    conviction={
+                      lastDecision?.confidence !== undefined
+                        ? confidenceToConviction(lastDecision.confidence)
+                        : CONVICTION_DEFAULT
+                    }
                     score={lastCheckpointScore}
                     verdict={verdict}
                     par={cp.machinePar}
