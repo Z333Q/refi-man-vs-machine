@@ -6,6 +6,11 @@ interface Props {
 
 type Tab = 'timeline' | 'analysis' | 'comparison' | 'profile';
 
+// player-data-gate: allow KNOWN DEBT, replacement is PR #5's job and a HARD
+// PRE-G2 BLOCKER. This is a fabricated four-checkpoint run history on the
+// screen that is meant to be the player's own audit trail (§57 Run Record),
+// which makes it a more serious version of the AlphaProfileScreen defect
+// already fixed. It must read the real run before G2 ships.
 const TIMELINE = [
   { cp: 'CP01', action: 'HOLD', quality: 'HIGH', result: '+0.2', score: 72 },
   { cp: 'CP02', action: 'HOLD', quality: 'HIGH', result: '-0.8', score: 74 },

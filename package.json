@@ -13,7 +13,8 @@
     "label-gate": "node scripts/label-gate.mjs",
     "provenance-gate": "node scripts/provenance-gate.mjs",
     "em-dash-gate": "node scripts/em-dash-gate.mjs",
-    "ci-gates": "npm run label-gate && npm run provenance-gate && npm run em-dash-gate"
+    "ci-gates": "npm run label-gate && npm run provenance-gate && npm run em-dash-gate",
+    "player-data-gate": "node scripts/player-data-gate.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

@@ -10,6 +10,7 @@ export type TipTriggerEvent =
   | 'tutorial.portfolio_open'
   | 'tutorial.stance_selected'
   | 'decision.conviction_available'
+  | 'refi.turnover_is_execution_policy'
   | 'tutorial.review_ready'
   | 'tutorial.first_commit'
   | 'tutorial.machine_reveal'
@@ -117,6 +118,29 @@ export const TIP_LIBRARY: TipDef[] = [
     actions: [
       { label: 'CONTINUE', action: 'COMPLETE' },
     ],
+  },
+
+  {
+    // ReFi weave, surface 1 of 5. Attribution, not invitation: the finite
+    // turnover budget the player is already feeling IS ReFi's execution-policy
+    // concept, so naming it once teaches the product's core abstraction through
+    // a mechanic rather than a pitch.
+    //
+    // TODO(founder): copy to be authored by the founder. The body below is a
+    // placeholder and must not ship as written. Surface tag and trigger are
+    // wired so the touchpoint is attributable the moment the copy lands.
+    code: 'REFI_TURNOVER_POLICY',
+    type: 'CONCEPT',
+    title: 'TURNOVER IS A POLICY',
+    body: [
+      'PLACEHOLDER: FOUNDER TO AUTHOR.',
+    ],
+    trigger: 'refi.turnover_is_execution_policy',
+    priority: 50,
+    blocking: false,
+    maxShowCount: 1,
+    requiredMode: 'FULL',
+    actions: [{ label: 'CONTINUE', action: 'COMPLETE' }],
   },
 
   {
