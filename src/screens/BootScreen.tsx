@@ -4,6 +4,19 @@ interface Props {
   onComplete: () => void;
 }
 
+/**
+ * How much slower than the authored timings the boot sequence runs.
+ *
+ * The delays below are the original beats; this stretches all of them by one
+ * factor so their spacing stays intact. The sequence is the game's first
+ * sentence — FUTURE DATA BLOCKED and PLAYER EGO UNVERIFIED are the thesis in
+ * miniature — and at the authored pace it was gone before it could be read.
+ *
+ * Tune here, not in the table.
+ */
+export const BOOT_PACE = 1.25;
+
+/** Beats in milliseconds, before BOOT_PACE is applied. */
 const BOOT_LINES = [
   { text: 'REFI NETWORK BIOS v0.9.2', delay: 0 },
   { text: '', delay: 200 },
@@ -17,6 +30,35 @@ const BOOT_LINES = [
   { text: '> INITIALIZING REFI ALPHA', delay: 2200 },
 ];
 
+/** The title card and the hand-off, on the same clock as the lines. */
+const TITLE_AT = 2500;
+const CURSOR_AT = 2600;
+const COMPLETE_AT = 4200;
+
+const paced = (ms: number) => Math.round(ms * BOOT_PACE);
+
+/**
+ * Every beat of the boot sequence, after pacing.
+ *
+ * Exported so the schedule can be asserted directly. Timing this in a browser
+ * measures the dev server's compile jitter as much as the sequence, and the
+ * property that matters is arithmetic: one factor, applied to every beat, with
+ * the authored spacing intact.
+ */
+export function bootSchedule(): {
+  lines: number[];
+  title: number;
+  cursor: number;
+  complete: number;
+} {
+  return {
+    lines: BOOT_LINES.map(l => paced(l.delay)),
+    title: paced(TITLE_AT),
+    cursor: paced(CURSOR_AT),
+    complete: paced(COMPLETE_AT),
+  };
+}
+
 export default function BootScreen({ onComplete }: Props) {
   const [visibleLines, setVisibleLines] = useState(0);
   const [showTitle, setShowTitle] = useState(false);
@@ -26,12 +68,12 @@ export default function BootScreen({ onComplete }: Props) {
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     BOOT_LINES.forEach((line, i) => {
-      timers.push(setTimeout(() => setVisibleLines(i + 1), line.delay));
+      timers.push(setTimeout(() => setVisibleLines(i + 1), paced(line.delay)));
     });
 
-    timers.push(setTimeout(() => setShowTitle(true), 2500));
-    timers.push(setTimeout(() => setShowCursor(true), 2600));
-    timers.push(setTimeout(() => onComplete(), 4200));
+    timers.push(setTimeout(() => setShowTitle(true), paced(TITLE_AT)));
+    timers.push(setTimeout(() => setShowCursor(true), paced(CURSOR_AT)));
+    timers.push(setTimeout(() => onComplete(), paced(COMPLETE_AT)));
 
     return () => timers.forEach(clearTimeout);
   }, [onComplete]);
