@@ -207,6 +207,22 @@ function convictionFor(config: MachineConfig, reason: PolicyReason): number {
   return isGuardrail ? Math.max(base, 70) : base;
 }
 
+// Conviction is deliberately a property of the machine's construction style and
+// nothing else.
+//
+// An earlier revision scaled it with the evidence: high when the move was large
+// or the regime turned, high on a quiet tape for HOLD. It is an appealing idea
+// and it is measurably wrong here. Conviction scales the score in both
+// directions, and across the arena these machines are wrong more often than
+// right, so leaning in amplified the losses and every configuration got worse
+// (best of 256 went from -159 to -351 against par).
+//
+// The oracle that beats par does use 95 early and 50 late, but it can only pick
+// those because it can see the outcome. A machine that could tell in advance
+// which of its calls were the right ones would not need a conviction dial. The
+// honest model is a steady hand whose size reflects how the player chose to
+// build, not a claim to knowledge the machine does not have.
+
 // ─── The decision ─────────────────────────────────────────────────────────────
 
 /**
