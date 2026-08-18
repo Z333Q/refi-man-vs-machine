@@ -4,6 +4,7 @@ import type { ActionCode, RunState, ThesisCode } from './gameTypes';
 import { COVID_CHECKPOINTS, getCheckpoint } from './covidArena';
 import {
   createInitialRun, createInitialPortfolio, commitPendingDecision, advanceRunCheckpoint,
+  turnoverBudgetFor,
   turnoverCostFor, isTurnoverExhausted, canAffordAction, affordableActions, isHoldOnly,
   TURNOVER_BUDGET_START, STARTING_CAPITAL, DEFAULT_TURNOVER_COST,
 } from './runEngine';
@@ -105,7 +106,11 @@ test('every authored action branch carries a fixed turnover cost', () => {
 test('turnover accounting is the exact sum of the authored costs paid', () => {
   let run = createInitialRun();
   assert.equal(run.portfolio.turnoverUsed, 0);
-  assert.equal(run.turnoverBudget, TURNOVER_BUDGET_START);
+  // The budget is derived from the arena's length, not a flat constant, so the
+  // assertion asks for the derivation rather than a number that moves whenever
+  // content is authored.
+  assert.equal(run.turnoverBudget, turnoverBudgetFor(run.totalCheckpoints));
+  assert.equal(turnoverBudgetFor(14), TURNOVER_BUDGET_START);
 
   let expected = 0;
   for (const step of SEQUENCE) {
@@ -136,7 +141,9 @@ test('an unaffordable stance is unavailable, not merely the one after it', () =>
   // The budget is a hard constraint. A stance that does not fully fit in what
   // is left cannot be taken at all.
   let run = createInitialRun();
-  run = { ...run, portfolio: { ...run.portfolio, turnoverUsed: 0.37 } }; // 0.03 left
+  // Spend down to exactly 0.03 remaining, derived from the run's own budget so
+  // the case holds whatever the arena's length makes that budget.
+  run = { ...run, portfolio: { ...run.portfolio, turnoverUsed: run.turnoverBudget - 0.03 } };
   assert.equal(canAffordAction(run, 'HOLD'), true);            // free
   assert.equal(canAffordAction(run, 'RAISE_CASH'), false);     // 0.04 > 0.03
   assert.equal(canAffordAction(run, 'REDUCE'), false);         // 0.05 > 0.03
@@ -150,8 +157,11 @@ test('expensive stances fall away before cheap ones as the budget drains', () =>
     const codes: ActionCode[] = ['RAISE_CASH', 'REDUCE', 'ADD_RISK', 'ROTATE_DEFENSIVE'];
     return codes.filter(c => canAffordAction(run, c)).length;
   };
-  // Monotonic: spending more never re-opens a stance.
-  const counts = [0, 0.33, 0.35, 0.36, 0.37, 0.40].map(affordableAt);
+  // Monotonic: spending more never re-opens a stance. Expressed as fractions
+  // of the run's own budget rather than as absolute spend, so the property
+  // survives an arena of any length (the budget scales with checkpoint count).
+  const budget = createInitialRun().turnoverBudget;
+  const counts = [0, 0.825, 0.875, 0.9, 0.925, 1].map(f => affordableAt(budget * f));
   for (let i = 1; i < counts.length; i++) {
     assert.ok(counts[i] <= counts[i - 1], `budget spend re-opened a stance: ${counts}`);
   }

@@ -12,7 +12,13 @@ import {
 
 // The authored difficulty curve. Locked here so a change to it is a deliberate
 // content edit that updates this row, not a silent drift.
-const PAR_CURVE = [60, 64, 63, 70, 74, 66, 76, 78, 80, 79, 81, 80, 82, 82];
+const PAR_CURVE = [
+  60, 64, 63, 70, 74, 66, 76, 78, 80, 79, 81, 80, 82, 82,
+  // CP15-22, the re-entry arc §21.3 specifies. The curve flattens rather than
+  // continuing to climb: by July the crisis is decided and what remains to be
+  // scored is discipline, not survival.
+  78, 76, 79, 77, 83, 80, 81, 84,
+];
 
 test('every checkpoint authors its own par', () => {
   assert.equal(COVID_CHECKPOINTS.length, PAR_CURVE.length);

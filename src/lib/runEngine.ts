@@ -17,8 +17,42 @@ import {
 // plus the decisions the player committed.
 
 export const STARTING_CAPITAL = 100000;
-export const TURNOVER_BUDGET_START = 0.40;
 export const CRITICAL_DRAWDOWN = -0.20;
+
+/**
+ * Turnover allowance per checkpoint, from which a run's total budget is
+ * derived.
+ *
+ * The budget used to be a flat 0.40, set when COVID was 14 checkpoints long.
+ * At an average branch price near 0.055 that is roughly seven actions: half
+ * the checkpoints, which is the scarcity the arena was balanced around.
+ *
+ * Completing COVID to the 22 checkpoints §21.3 specifies broke that silently.
+ * The same 0.40 over 22 checkpoints is under a third of them, and because the
+ * budget is a hard constraint the run does not merely get tighter — it goes
+ * HOLD-only from around checkpoint 8 and the remaining fourteen offer the
+ * player one option each. The stress test made it measurable: the best machine
+ * of 256 was blocked at 14 of 22 checkpoints with the budget fully spent.
+ *
+ * So the allowance is expressed per checkpoint and the total scales with the
+ * arena. This is deliberately not a rebalance: 0.40/14 is preserved exactly,
+ * so a 14-checkpoint arena still gets 0.40 and the scarcity ratio every
+ * existing branch price was authored against is unchanged.
+ */
+export const TURNOVER_PER_CHECKPOINT = 0.40 / 14;
+
+/** A run's total turnover budget, for an arena of the given length. */
+export function turnoverBudgetFor(totalCheckpoints: number): number {
+  // Rounded to whole basis points so the meter reads cleanly and the value is
+  // stable across arenas rather than carrying float noise into stored records.
+  return Math.round(TURNOVER_PER_CHECKPOINT * totalCheckpoints * 10000) / 10000;
+}
+
+/**
+ * The 14-checkpoint budget, kept as a named export because tests and content
+ * notes refer to it. Prefer `turnoverBudgetFor` for anything arena-sized.
+ */
+export const TURNOVER_BUDGET_START = turnoverBudgetFor(14);
 
 // Fallback turnover price per action code, used only where content has not
 // authored a branch for the committed action. Authored branch costs win.
@@ -89,7 +123,7 @@ export function createInitialRun(seed: number = DEFAULT_RUN_SEED): RunState {
     totalCheckpoints: COVID_CHECKPOINTS.length,
     phase: 'SIGNAL',
     portfolio: createInitialPortfolio(),
-    turnoverBudget: TURNOVER_BUDGET_START,
+    turnoverBudget: turnoverBudgetFor(COVID_CHECKPOINTS.length),
     playerScore: 50,
     machineScore: 50,
     decisions: [],
