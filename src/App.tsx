@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { GameProvider } from './context/GameContext';
+import type { ArenaId } from './lib/gameTypes';
 import { TipProvider } from './context/TipContext';
 import TipOverlay from './components/TipOverlay';
 import { VisualEventProvider } from './components/game/VisualEventLayer';
@@ -94,6 +95,8 @@ function AppInner() {
     return localStorage.getItem('refi_tutorial_complete') === '1';
   });
   const [showHelp, setShowHelp] = useState(false);
+  // The arena the player picked on the map, carried into the run they start.
+  const [pendingArena, setPendingArena] = useState<ArenaId>('covid_black_swan');
 
   const go = useCallback((s: Screen) => setScreen(s), []);
 
@@ -246,7 +249,7 @@ function AppInner() {
         )}
         {screen === 'arena-map' && (
           <ArenaMapScreen
-            onSelectArena={() => go('arena-briefing')}
+            onSelectArena={(arenaId) => { setPendingArena(arenaId); go('arena-briefing'); }}
             onBack={() => go('progression-hub')}
           />
         )}
@@ -262,6 +265,7 @@ function AppInner() {
         )}
         {screen === 'core-loop' && (
           <CoreLoopScreen
+            arenaId={pendingArena}
             onComplete={() => go('autopsy')}
             onBack={() => go('arena-briefing')}
             onHelp={toggleHelp}

@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type {
-  RunState, PlayerProfile, ActionCode, ThesisCode, ModuleCode,
+  RunState, PlayerProfile, ActionCode, ArenaId, ThesisCode, ModuleCode,
 } from '../lib/gameTypes';
 import { getCheckpoint } from '../lib/arenas';
 import { type DecisionCommand } from '../lib/runEngine';
@@ -16,6 +16,7 @@ import { markProgressSaved } from '../lib/alphaIdentity';
 import {
   saveRun, latestUnfinishedRun, replayRun, replayMatchesRecord,
 } from '../lib/runRecord';
+import { DEFAULT_ARENA_ID } from '../lib/arenas';
 
 // §56 checkpoint id from the arena code + sequence (e.g. cp_covid_black_swan_007).
 function checkpointId(arenaId: string, sequence: number): string {
@@ -26,7 +27,7 @@ function checkpointId(arenaId: string, sequence: number): string {
 
 interface GameContextValue {
   state: GameState;
-  startRun: () => void;
+  startRun: (arenaId?: ArenaId) => void;
   /** Re-enter the stored unfinished run. False when it cannot be reproduced. */
   resumeRun: () => boolean;
   setPhase: (phase: RunState['phase']) => void;
@@ -330,14 +331,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     prevResult.current = result;
   }, [state.run]);
 
-  const startRun = useCallback(() => {
+  const startRun = useCallback((arenaId: ArenaId = DEFAULT_ARENA_ID) => {
     // New run → new correlation chain. beginRunTelemetry stamps a run id
     // that every event in this run shares (§56 run_id / correlation_id).
     // The Run Record reuses that same id rather than minting a second one, so
     // a stored run and its event stream can be read against each other.
     const runId = beginRunTelemetry();
-    dispatch({ type: 'START_RUN', runId, seed: mintSeed() });
-    const arenaId = 'covid_black_swan';
+    dispatch({ type: 'START_RUN', runId, seed: mintSeed(), arenaId });
     emitEvent('arena.started', { arenaId, machineId: 'refi_rules' }, { arenaId });
   }, []);
   /**

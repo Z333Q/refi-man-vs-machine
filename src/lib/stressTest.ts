@@ -46,7 +46,7 @@ export interface StressTestStep {
 
 export interface StressTestResult {
   sourceType: typeof STRESS_TEST_SOURCE;
-  arenaId: string;
+  arenaId: ArenaId;
   seed: number;
   steps: StressTestStep[];
   /** The finished run, for anything that wants the portfolio or the record. */
