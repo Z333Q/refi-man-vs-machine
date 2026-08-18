@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ActionCode, RunState, ThesisCode } from './gameTypes';
-import { COVID_CHECKPOINTS, getCheckpoint } from './covidArena';
+import { COVID_CHECKPOINTS, } from './covidArena';
+import { getCheckpoint } from './arenas';
+import './arenaIndex';
 import {
   createInitialRun, createInitialPortfolio, commitPendingDecision, advanceRunCheckpoint,
   turnoverBudgetFor,
@@ -79,7 +81,7 @@ test('positions move by the authored checkpoint return, with no per-position noi
   run = { ...run, pendingAction: 'HOLD', pendingConfidence: 0.6 };
   const outcome = commitPendingDecision(run);
   assert.ok(outcome);
-  const cp = getCheckpoint(1);
+  const cp = getCheckpoint('covid_black_swan', 1);
   assert.ok(cp);
   const expected = cp.portfolioEffect.returnBias; // HOLD multiplier is 1.0
   for (const pos of outcome.run.portfolio.positions) {
@@ -115,7 +117,7 @@ test('turnover accounting is the exact sum of the authored costs paid', () => {
   let expected = 0;
   for (const step of SEQUENCE) {
     if (run.phase === 'COMPLETE') break;
-    const cp = getCheckpoint(run.currentCheckpoint);
+    const cp = getCheckpoint('covid_black_swan', run.currentCheckpoint);
     expected += turnoverCostFor(step.action, cp);
     run = { ...run, pendingAction: step.action, pendingConfidence: step.confidence };
     const outcome = commitPendingDecision(run);
@@ -220,7 +222,7 @@ test('drawdown is measured from the peak, not from starting capital', () => {
   run = { ...run, pendingAction: 'HOLD', pendingConfidence: 0.6 };
   const outcome = commitPendingDecision(run);
   assert.ok(outcome);
-  const cpReturn = getCheckpoint(1)!.portfolioEffect.returnBias;
+  const cpReturn = getCheckpoint('covid_black_swan', 1)!.portfolioEffect.returnBias;
   if (cpReturn >= 0) {
     assert.equal(outcome.run.portfolio.drawdown, 0);
     assert.ok(outcome.run.portfolio.peakValue > 120000);

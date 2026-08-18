@@ -8,7 +8,7 @@
 // notice that cleared itself after three seconds underneath an animation.
 
 import type {
-  RunState, PlayerProfile, ActionCode, ThesisCode, ModuleCode, DimensionCode,
+  RunState, PlayerProfile, ActionCode, ArenaId, ThesisCode, ModuleCode, DimensionCode,
   BehavioralFlag,
 } from '../lib/gameTypes';
 import { scoreCheckpoint, computeXpAward, getDimensionUpdates } from '../lib/scoringEngine';
@@ -38,7 +38,7 @@ export type GameAction =
   | { type: 'LOAD_PROFILE'; profile: PlayerProfile }
   // The identity and determinism anchor are minted here, not in the engine:
   // both need a clock or an RNG, which the engine may not read.
-  | { type: 'START_RUN'; runId: string; seed: number }
+  | { type: 'START_RUN'; runId: string; seed: number; arenaId: ArenaId }
   // A run rebuilt from its record by replaying the decisions through the
   // engine. The run arrives whole; the reducer only adopts it.
   | { type: 'RESUME_RUN'; run: RunState }
@@ -93,7 +93,7 @@ export function reducer(state: GameState, action: GameAction): GameState {
       // A run opens with the base terminal plus everything the player has
       // already earned. Without this a returning player's unlocked modules
       // silently disappear the moment a new run starts.
-      const base = createInitialRun(action.seed);
+      const base = createInitialRun(action.seed, action.arenaId);
       return {
         ...state,
         run: {

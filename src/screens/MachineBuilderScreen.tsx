@@ -15,6 +15,7 @@ import type {
 import { DEFAULT_MACHINE_CONFIG, DEFAULT_GUARDRAILS } from '../lib/gameTypes';
 import MachineCompile from '../components/game/MachineCompile';
 import { runStressTest, stressTestVerdict } from '../lib/stressTest';
+import { getArena } from '../lib/arenas';
 import { REASON_TEXT } from '../lib/machinePolicy';
 import {
   latestMachineVersion, listMachineVersions, machineBuildHash,
@@ -902,7 +903,7 @@ function StressTestPanel({ config }: { config: MachineConfig }) {
     <div className="p-4 sm:p-6 max-w-3xl space-y-5">
       <div>
         <div className="text-phosphor-dim text-xs tracking-widest mb-1">
-          STRESS TEST · COVID BLACK SWAN
+          STRESS TEST · {getArena(result.arenaId)?.name ?? result.arenaId}
         </div>
         <div className="text-phosphor text-lg font-bold leading-snug">{verdict.headline}</div>
         <div className="text-phosphor-mid text-xs leading-6 mt-1">{verdict.detail}</div>

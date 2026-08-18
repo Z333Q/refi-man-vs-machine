@@ -19,7 +19,7 @@
 // this is the audit trail it leaves behind.
 
 import type {
-  ActionCode, BehavioralFlag, DecisionQuality, ModuleCode,
+  ActionCode, ArenaId, BehavioralFlag, DecisionQuality, ModuleCode,
   RunState, ThesisCode,
 } from './gameTypes';
 import {
@@ -56,7 +56,7 @@ export interface RunRecord {
   recordVersion: number;
   runId: string;
   seed: number;
-  arenaId: string;
+  arenaId: ArenaId;
   machineId: string;
 
   state: RunState['phase'];
@@ -238,7 +238,7 @@ export function replayRun(
   seedModules: ModuleCode[] = [],
 ): RunState | null {
   let run: RunState = {
-    ...createInitialRun(record.seed),
+    ...createInitialRun(record.seed, record.arenaId),
     id: record.runId,
   };
 

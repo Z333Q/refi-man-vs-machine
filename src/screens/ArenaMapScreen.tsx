@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { ArenaId } from '../lib/gameTypes';
+import { allArenas } from '../lib/arenas';
+import { listRunRecords } from '../lib/runRecord';
 
 interface Props {
-  onSelectArena: (arena: string) => void;
+  onSelectArena: (arena: ArenaId) => void;
   onBack: () => void;
 }
 
 type NodeState = 'locked' | 'available' | 'active' | 'passed' | 'machine-beaten';
 
 interface ArenaNode {
-  id: string;
+  id: ArenaId;
   code: string;
   label: string;
   state: NodeState;
@@ -18,83 +21,73 @@ interface ArenaNode {
   decisions: number;
   riskLimit: string;
   lesson: string;
+  window: string;
   icon: string;
 }
 
-const ARENAS: ArenaNode[] = [
-  {
-    id: 'tutorial',
-    code: '00',
-    label: 'TUTORIAL',
-    state: 'passed',
-    difficulty: 3,
-    passPct: '84.2',
-    machine: 'REFI RULES v1.0',
-    decisions: 3,
-    riskLimit: '-15% DD',
-    lesson: 'DECISIONS HAVE CONSEQUENCES.',
-    icon: '/\\',
-  },
-  {
-    id: 'covid',
-    code: '01',
-    label: 'COVID BLACK SWAN',
-    state: 'active',
-    difficulty: 7,
-    passPct: '18.4',
-    machine: 'REFI CRISIS v1.4',
-    decisions: 22,
-    riskLimit: '-20% DD',
-    lesson: 'PANIC IS NOT A RISK MODEL.',
-    icon: '~~~',
-  },
-  {
-    id: 'recovery',
-    code: '02',
-    label: 'RECOVERY TRAP',
-    state: 'locked',
-    difficulty: 6,
-    passPct: null,
-    machine: 'REFI CRISIS v1.4',
-    decisions: 18,
-    riskLimit: '-18% DD',
-    lesson: 'RECOVERY IS NOT UNIFORM.',
-    icon: '/^\\',
-  },
-  {
-    id: 'inflation',
-    code: '03',
-    label: 'INFLATION SHIFT',
-    state: 'locked',
-    difficulty: 7,
-    passPct: null,
-    machine: 'REFI ALPHA v2.1',
-    decisions: 20,
-    riskLimit: '-18% DD',
-    lesson: 'REGIME CHANGE ARRIVES SLOWLY THEN ALL AT ONCE.',
-    icon: '$$$',
-  },
-  {
-    id: 'banking',
-    code: '04',
-    label: 'BANKING STRESS',
-    state: 'locked',
-    difficulty: 8,
-    passPct: null,
-    machine: 'REFI ENSEMBLE v1.0',
-    decisions: 16,
-    riskLimit: '-15% DD',
-    lesson: 'CONTAGION IS NON-LINEAR.',
-    icon: '|||',
-  },
-];
+/**
+ * The map is built from the arena registry, not from a hand-written list.
+ *
+ * It used to be a fixture: labels, decision counts and risk limits typed in
+ * beside the real content and free to disagree with it. Three of the four
+ * regimes it advertised did not exist at all, and the one that did was
+ * described as 22 decisions while the engine ran 14. Reading the registry means
+ * the map cannot claim an arena the game cannot run.
+ */
+function useArenaNodes(): ArenaNode[] {
+  return useMemo(() => {
+    const records = listRunRecords();
+    const arenas = allArenas();
+
+    return arenas.map((a, i) => {
+      const runs = records.filter(r => r.arenaId === a.id && r.completedAt !== null);
+      const beaten = runs.some(r => r.result === 'MACHINE_BEATEN');
+      const passed = runs.some(r => r.result === 'PASSED' || r.result === 'MACHINE_BEATEN');
+
+      // Progression: the first arena is always open, and each later one opens
+      // once the previous has been finished. Unlocks are earned from the run
+      // record, so they survive a refresh like everything else.
+      const prev = arenas[i - 1];
+      const prevDone = !prev || records.some(
+        r => r.arenaId === prev.id && r.completedAt !== null,
+      );
+
+      const state: NodeState =
+        beaten ? 'machine-beaten'
+          : passed ? 'passed'
+            : prevDone ? (runs.length > 0 ? 'active' : 'available')
+              : 'locked';
+
+      return {
+        id: a.id,
+        code: String(a.order).padStart(2, '0'),
+        label: a.name,
+        state,
+        difficulty: a.difficulty,
+        passPct: null,
+        machine: 'REFI RULES MACHINE',
+        decisions: a.checkpoints.length,
+        riskLimit: `${Math.round(a.criticalDrawdown * 100)}% DD`,
+        lesson: a.lesson.toUpperCase(),
+        window: a.window,
+        icon: ARENA_ICON[a.id] ?? '///',
+      };
+    });
+  }, []);
+}
+
+const ARENA_ICON: Record<string, string> = {
+  covid_black_swan: '~~~',
+  recovery_trap: '/^\\',
+  inflation_shift: '$$$',
+  banking_stress: '|||',
+  taco_protocol: '>>>',
+};
 
 const SIDE_ARENAS = [
-  { code: '05', label: 'MAN VS MACHINE', state: 'locked' as NodeState },
-  { code: '06', label: 'BASKET WRITER', state: 'locked' as NodeState },
-  { code: '07', label: 'POLICY WRITER', state: 'locked' as NodeState },
-  { code: '08', label: 'BLIND GAUNTLET', state: 'locked' as NodeState },
-  { code: '09', label: 'TACO PROTOCOL', state: 'locked' as NodeState },
+  { code: '06', label: 'MAN VS MACHINE', state: 'locked' as NodeState },
+  { code: '07', label: 'BASKET WRITER', state: 'locked' as NodeState },
+  { code: '08', label: 'POLICY WRITER', state: 'locked' as NodeState },
 ];
 
 const NODE_SYMBOL: Record<NodeState, string> = {
@@ -128,7 +121,15 @@ function DifficultyBar({ level }: { level: number }) {
 }
 
 export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
-  const [selected, setSelected] = useState<ArenaNode>(ARENAS[1]);
+  const ARENAS = useArenaNodes();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Default to the furthest arena the player can actually enter, so the map
+  // opens on their progress rather than always on the first regime.
+  const selected =
+    ARENAS.find(a => a.id === selectedId)
+    ?? [...ARENAS].reverse().find(a => a.state !== 'locked')
+    ?? ARENAS[0];
+  const setSelected = (a: ArenaNode) => setSelectedId(a.id);
 
   return (
     <div className="terminal-screen min-h-screen flex flex-col">

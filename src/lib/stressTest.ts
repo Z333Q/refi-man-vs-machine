@@ -15,9 +15,9 @@
 // no future data. It must never be presented as RF/RL benchmark performance.
 
 import type {
-  ActionCode, BehavioralFlag, CheckpointData, MachineConfig, RunState,
+  ActionCode, ArenaId, BehavioralFlag, CheckpointData, MachineConfig, RunState,
 } from './gameTypes';
-import { getCheckpoint } from './covidArena';
+import { getCheckpoint } from './arenas';
 import {
   advanceRunCheckpoint, attachThesis, canAffordAction, commitDecisionCommand,
   createInitialRun, runRiskAdjusted,
@@ -46,7 +46,7 @@ export interface StressTestStep {
 
 export interface StressTestResult {
   sourceType: typeof STRESS_TEST_SOURCE;
-  arenaId: string;
+  arenaId: ArenaId;
   seed: number;
   steps: StressTestStep[];
   /** The finished run, for anything that wants the portfolio or the record. */
@@ -100,16 +100,16 @@ const REASON_THESIS: Record<PolicyReason, Parameters<typeof attachThesis>[1]> = 
  */
 export function runStressTest(
   config: MachineConfig,
-  options: { seed?: number; arenaId?: string } = {},
+  options: { seed?: number; arenaId?: ArenaId } = {},
 ): StressTestResult {
   const seed = options.seed ?? 0;
-  const arenaId = options.arenaId ?? 'covid_black_swan';
+  const arenaId: ArenaId = options.arenaId ?? 'covid_black_swan';
 
-  let run: RunState = { ...createInitialRun(seed), id: `stress_${seed}` };
+  let run: RunState = { ...createInitialRun(seed, arenaId), id: `stress_${seed}` };
   const steps: StressTestStep[] = [];
 
   for (let guard = 0; guard < run.totalCheckpoints + 1; guard++) {
-    const cp: CheckpointData | undefined = getCheckpoint(run.currentCheckpoint);
+    const cp: CheckpointData | undefined = getCheckpoint(arenaId, run.currentCheckpoint);
     if (!cp) break;
 
     const decision = decideCheckpoint(
@@ -149,7 +149,7 @@ export function runStressTest(
     run = advanceRunCheckpoint(run);
   }
 
-  const risk = runRiskAdjusted(run.decisions);
+  const risk = runRiskAdjusted(run.decisions, arenaId);
   const scoreTotal = steps.reduce((a, s) => a + s.score, 0);
   const parTotal = steps.reduce((a, s) => a + s.par, 0);
 

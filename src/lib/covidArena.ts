@@ -2016,12 +2016,45 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   },
 ];
 
-// ─── Arena exports ────────────────────────────────────────────────────────────
+// ─── Arena registration ───────────────────────────────────────────────────────
 
-export function getCheckpoint(sequence: number): CheckpointData | undefined {
+import { registerArena, buildPortfolio } from './arenas';
+
+/**
+ * The book the player is handed for COVID.
+ *
+ * Ten names carrying three embedded risks the arena goes on to expose: travel
+ * (DAL + MAR = 16%), tech concentration (MSFT + AAPL = 20%) and cyclicals
+ * (CAT + XOM + HD = 23%). None of that is stated to the player. It is the
+ * thing the correlation lessons reveal.
+ */
+export const COVID_ARENA = registerArena({
+  id: 'covid_black_swan',
+  name: 'COVID BLACK SWAN',
+  order: 1,
+  difficulty: 3,
+  lesson: 'Uncertainty, correlation and the cost of acting on pain rather than evidence.',
+  window: 'JAN 2020 - DEC 2020',
+  checkpoints: COVID_CHECKPOINTS,
+  criticalDrawdown: -0.20,
+  startingPortfolio: () => buildPortfolio(
+    [
+      { symbol: 'MSFT', weight: 0.10, riskContrib: 0.14, sector: 'TECHNOLOGY' },
+      { symbol: 'AAPL', weight: 0.10, riskContrib: 0.14, sector: 'TECHNOLOGY' },
+      { symbol: 'JPM',  weight: 0.10, riskContrib: 0.18, sector: 'FINANCIALS' },
+      { symbol: 'DAL',  weight: 0.08, riskContrib: 0.20, sector: 'AIRLINES' },
+      { symbol: 'MAR',  weight: 0.08, riskContrib: 0.18, sector: 'HOTELS' },
+      { symbol: 'XOM',  weight: 0.08, riskContrib: 0.16, sector: 'ENERGY' },
+      { symbol: 'JNJ',  weight: 0.08, riskContrib: 0.07, sector: 'HEALTHCARE' },
+      { symbol: 'PG',   weight: 0.08, riskContrib: 0.06, sector: 'CONSUMER STAPLES' },
+      { symbol: 'CAT',  weight: 0.08, riskContrib: 0.15, sector: 'INDUSTRIALS' },
+      { symbol: 'HD',   weight: 0.07, riskContrib: 0.10, sector: 'CONSUMER DISCRETIONARY' },
+    ],
+    { volatility: 0.16, correlationIndex: 0.48, startingCapital: 100000 },
+  ),
+});
+
+// Kept for callers that predate the registry and only ever meant COVID.
+export function getCovidCheckpoint(sequence: number): CheckpointData | undefined {
   return COVID_CHECKPOINTS.find(cp => cp.sequence === sequence);
-}
-
-export function getTotalCheckpoints(): number {
-  return COVID_CHECKPOINTS.length;
 }

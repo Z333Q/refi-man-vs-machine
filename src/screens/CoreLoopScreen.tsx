@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
+import { getArena } from '../lib/arenas';
 import { useTips, type TipGameState } from '../context/TipContext';
-import type { ActionBranch, ThesisCode } from '../lib/gameTypes';
+import type { ActionBranch, ArenaId, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
@@ -50,12 +51,14 @@ function fmtSharpe(v: number | null): string {
 }
 
 interface Props {
+  /** The arena this run plays. Chosen on the map and carried through. */
+  arenaId?: ArenaId;
   onComplete: () => void;
   onBack: () => void;
   onHelp?: () => void;
 }
 
-export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
+export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplete, onBack, onHelp }: Props) {
   const {
     state,
     startRun,
@@ -207,8 +210,8 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   }, [resumeGate]);
 
   useEffect(() => {
-    if (resumeGate === 'CLEAR' && !run) startRun();
-  }, [resumeGate, run, startRun]);
+    if (resumeGate === 'CLEAR' && !run) startRun(arenaId);
+  }, [resumeGate, run, startRun, arenaId]);
 
   // Tip: first signal
   useEffect(() => {
@@ -749,8 +752,11 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
     : null;
   const earnedProcessCredit = Boolean(lastDecision?.behavioralFlags.includes('GOOD_PROCESS')) && cp.isRegimeChange;
 
+  // The arena's own name, so a run never announces itself as the wrong regime.
+  const arenaName = getArena(run.arenaId)?.name ?? 'ARENA';
+
   // Risk-adjusted standing, reconstructed from the decision record each render.
-  const riskAdjusted = runRiskAdjusted(run.decisions);
+  const riskAdjusted = runRiskAdjusted(run.decisions, run.arenaId);
 
   const PANEL_TABS: { id: ActivePanel; label: string; key: string }[] = [
     { id: 'SIGNAL', label: 'SIGNAL', key: 'S' },
@@ -773,7 +779,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
           </button>
           <div className="hidden sm:block h-4 w-px bg-phosphor/20" />
           <span className="hidden sm:inline text-phosphor-dim text-xs tracking-widest whitespace-nowrap">
-            COVID BLACK SWAN
+            {arenaName}
           </span>
           <div className="h-4 w-px bg-phosphor/20" />
           <span className="text-phosphor text-xs tracking-widest whitespace-nowrap tabular-nums">

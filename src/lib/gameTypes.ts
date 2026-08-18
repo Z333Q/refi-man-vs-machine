@@ -73,13 +73,41 @@ export interface TerminalModule {
 
 // ─── Checkpoint data types ────────────────────────────────────────────────────
 
+/**
+ * Arenas in the §20 progression. A union rather than a bare string so a typo in
+ * an arena id is a compile error instead of a run that silently finds no
+ * checkpoints and ends immediately.
+ */
+export type ArenaId =
+  | 'covid_black_swan'
+  | 'recovery_trap'
+  | 'inflation_shift'
+  | 'banking_stress'
+  | 'taco_protocol';
+
 export type CheckpointPhase =
   | 'BACKGROUND_NOISE'
   | 'REGIME_RECOGNITION'
   | 'PANIC'
   | 'POLICY_INTERVENTION'
   | 'BOTTOMING'
-  | 'RECOVERY_REENTRY';
+  | 'RECOVERY_REENTRY'
+  // Recovery Trap (§22): the regime where survival logic becomes the liability.
+  | 'REENTRY_WINDOW'
+  | 'LEADERSHIP_CHANGE'
+  // Inflation / rate shock (§23).
+  | 'INFLATION_ONSET'
+  | 'RATE_SHOCK'
+  | 'VALUATION_COMPRESSION'
+  // Banking stress (§24).
+  | 'FUNDING_STRESS'
+  | 'CONTAGION'
+  // TACO (§25).
+  | 'POLICY_SHOCK'
+  | 'NEGOTIATION'
+  | 'PATTERN_TRAP'
+  | 'PERSISTENCE'
+  | 'REFLEXIVITY';
 
 export interface MarketSignal {
   indicator: string;
@@ -223,7 +251,7 @@ export interface RunState {
    * which the engine may not do, so the seed is injected from the React layer.
    */
   seed: number;
-  arenaId: string;
+  arenaId: ArenaId;
   machineId: string;
   currentCheckpoint: number;
   totalCheckpoints: number;
