@@ -19,7 +19,7 @@ import {
 } from '../lib/decisionContract';
 import { classifyDevice, type DeviceClass, type RegionBounds } from '../lib/gestureGeometry';
 import PullToCommit from '../components/game/PullToCommit';
-import { InflationCompression, BankingContagion, SupplyChain, Reflexivity } from '../components/game/AsciiPlates';
+import { InflationCompression, BankingContagion, SupplyChain, Reflexivity, TacoPortrait } from '../components/game/AsciiPlates';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
 import ResolutionRace from '../components/game/ResolutionRace';
@@ -788,9 +788,22 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
     }
     if (run.arenaId === 'taco_protocol') {
       const sectors = [...new Set(portfolio.positions.map(p => p.sector))].slice(0, 4);
-      return run.currentCheckpoint >= 4
-        ? <Reflexivity />
-        : <SupplyChain sectors={sectors} />;
+      // §48: the portrait resolves as the player works through the episode,
+      // beside the plate for the round they are actually in.
+      return (
+        <div className="flex gap-4 items-start">
+          <TacoPortrait
+            round={run.currentCheckpoint}
+            totalRounds={run.totalCheckpoints}
+            className="flex-shrink-0 hidden sm:block"
+          />
+          <div className="min-w-0 flex-1">
+            {run.currentCheckpoint >= 4
+              ? <Reflexivity />
+              : <SupplyChain sectors={sectors} />}
+          </div>
+        </div>
+      );
     }
     return null;
   })();

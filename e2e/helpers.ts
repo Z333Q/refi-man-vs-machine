@@ -18,11 +18,20 @@ import type { Page } from '@playwright/test';
  * correct code.
  */
 export async function gotoScreen(page: Page, label: string) {
-  const nav = page.getByRole('button', { name: new RegExp(`^${label}`) });
+  // Match the nav item by NAME only, never by its position in the strip.
+  // These used to be addressed as '17 BUILDER'; removing one screen from the
+  // demo flow renumbered everything after it and broke specs that had nothing
+  // to do with the change.
+  const nav = page.getByRole('button', { name: new RegExp(`\\d+\\s+${label}$`) });
   if (await nav.count() === 0) {
     await page.goto('/');
   }
-  await nav.waitFor({ state: 'visible', timeout: 30_000 });
+  await nav.waitFor({ state: 'attached', timeout: 30_000 });
+  // The nav is a horizontally scrolling strip. On a phone the later items sit
+  // off-screen and are not "visible" until scrolled — which is correct
+  // behaviour, not a defect, so the helper scrolls rather than the app
+  // reflowing a 20-item strip onto a 393pt viewport.
+  await nav.scrollIntoViewIfNeeded();
   await nav.click();
 }
 

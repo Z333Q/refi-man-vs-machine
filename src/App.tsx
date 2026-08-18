@@ -17,7 +17,6 @@ import AutopsyScreen from './screens/AutopsyScreen';
 import AlphaProfileScreen from './screens/AlphaProfileScreen';
 import BasketWriterScreen from './screens/BasketWriterScreen';
 import TacoUnlockScreen from './screens/TacoUnlockScreen';
-import TacoBossScreen from './screens/TacoBossScreen';
 import DailyTapeScreen from './screens/DailyTapeScreen';
 import MachineLadderScreen from './screens/MachineLadderScreen';
 import MachineBuilderScreen from './screens/MachineBuilderScreen';
@@ -39,7 +38,6 @@ type Screen =
   | 'alpha-profile'
   | 'basket-writer'
   | 'taco-unlock'
-  | 'taco-boss'
   | 'daily-tape'
   | 'machine-ladder'
   | 'machine-builder'
@@ -58,7 +56,6 @@ const NAV_LABELS: Partial<Record<Screen, string>> = {
   'alpha-profile': 'PROFILE',
   'basket-writer': 'BASKET',
   'taco-unlock': 'TACO UNLOCK',
-  'taco-boss': 'FINAL BOSS',
   'daily-tape': 'DAILY TAPE',
   'machine-ladder': 'LADDER',
   'machine-builder': 'BUILDER',
@@ -79,14 +76,13 @@ const DEMO_FLOW: Screen[] = [
   'alpha-profile',
   'basket-writer',
   'taco-unlock',
-  'taco-boss',
   'daily-tape',
   'machine-ladder',
   'machine-builder',
 ];
 
 // Screens that take the full viewport with no nav overlay
-const FULLSCREEN_SCREENS: Screen[] = ['core-loop', 'taco-boss', 'tutorial'];
+const FULLSCREEN_SCREENS: Screen[] = ['core-loop', 'tutorial'];
 
 function AppInner() {
   const [screen, setScreen] = useState<Screen>('boot');
@@ -125,7 +121,6 @@ function AppInner() {
           autopsy: 'checkpoint-score',
           'alpha-profile': 'autopsy',
           'basket-writer': 'alpha-profile',
-          'taco-boss': 'taco-unlock',
           'daily-tape': 'progression-hub',
           'machine-ladder': 'progression-hub',
           'machine-builder': 'progression-hub',
@@ -298,12 +293,16 @@ function AppInner() {
           />
         )}
         {screen === 'taco-unlock' && (
-          <TacoUnlockScreen onEnter={() => go('taco-boss')} />
-        )}
-        {screen === 'taco-boss' && (
-          <TacoBossScreen
-            onComplete={() => go('alpha-profile')}
-            onBack={() => go('taco-unlock')}
+          <TacoUnlockScreen
+            onEnter={() => {
+              // TACO is an arena like any other. It used to open a bespoke
+              // screen with five hardcoded rounds and invented market numbers,
+              // which meant the final boss produced no run record, no score
+              // and no autopsy — it was not actually part of the game. It now
+              // runs its five real checkpoints through the run engine.
+              setPendingArena('taco_protocol');
+              go('core-loop');
+            }}
           />
         )}
         {screen === 'daily-tape' && (

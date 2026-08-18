@@ -22,7 +22,7 @@ test('the boot sequence is readable rather than instant', async ({ page }) => {
 
 test('the arena map lists every registered regime', async ({ page }) => {
   await resetProgress(page);
-  await gotoScreen(page, '04 ARENA MAP');
+  await gotoScreen(page, 'ARENA MAP');
   for (const name of [
     'COVID BLACK SWAN', 'RECOVERY TRAP', 'INFLATION SHIFT', 'BANKING STRESS', 'TACO PROTOCOL',
   ]) {
@@ -33,7 +33,7 @@ test('the arena map lists every registered regime', async ({ page }) => {
 test('the map states the arena it will actually run', async ({ page }) => {
   // It used to advertise 22 decisions while the engine ran 14.
   await resetProgress(page);
-  await gotoScreen(page, '04 ARENA MAP');
+  await gotoScreen(page, 'ARENA MAP');
   const panel = page.locator('body');
   await expect(panel).toContainText('COVID BLACK SWAN');
   await expect(panel).toContainText('AVAILABLE');
@@ -46,7 +46,7 @@ test('a locked arena can be read but not entered', async ({ page }) => {
   // selection, so clicking a locked regime did nothing and the panel's own
   // LOCKED branch was unreachable.
   await resetProgress(page);
-  await gotoScreen(page, '04 ARENA MAP');
+  await gotoScreen(page, 'ARENA MAP');
   await page.getByText('RECOVERY TRAP', { exact: false }).first().click();
 
   const body = page.locator('body');
@@ -60,7 +60,7 @@ test('finishing an arena unlocks the next one, and it survives a reload', async 
   await resetProgress(page);
   await seedFinishedRun(page, 'covid_black_swan');
   await page.reload();
-  await gotoScreen(page, '04 ARENA MAP');
+  await gotoScreen(page, 'ARENA MAP');
 
   const body = page.locator('body');
   await expect(body).toContainText('RECOVERY TRAP');
@@ -74,7 +74,7 @@ test('the briefing describes the arena being entered, not always COVID', async (
   await resetProgress(page);
   await seedFinishedRun(page, 'covid_black_swan');
   await page.reload();
-  await gotoScreen(page, '04 ARENA MAP');
+  await gotoScreen(page, 'ARENA MAP');
   await page.getByRole('button', { name: /ENTER ARENA/ }).click();
 
   const body = page.locator('body');

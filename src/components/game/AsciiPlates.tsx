@@ -341,3 +341,69 @@ export function ArenaEmblem({ arenaId, className }: { arenaId: string; className
     </pre>
   );
 }
+
+// ─── §48 TACO portrait ────────────────────────────────────────────────────────
+
+/**
+ * The final boss portrait.
+ *
+ * §48 is specific about the treatment: neutral, monochrome, no slogans, no
+ * flag, no caricature body. The humour is meant to come from the market term
+ * and the mechanic, not from the picture. This is an abstract dithered mask,
+ * and it stays that way.
+ */
+const TACO_PORTRAIT = `
+                   ........:::::::::::::::........
+              ....::::::////////////////::::::....
+           ...:::://////++++++++++++++//////::::...
+         ..:::////++++++==============++++++////:::..
+       ..::///++++====----------------====++++///::..
+      .::///+++===----::::::::::::::::----===+++///::.
+     .:://+++==---:::................:::---==+++//::.
+     :://++==--::......            ......::--==++//::
+     ://++==--:....                    .....:--==++//:
+     //++==--:...     TACO PROTOCOL      ...:--==++//
+     \\++==--:...                          ...:--==++/
+     |\\+=---:...    ___   ___   ___    ....:---=+//|
+      |\\+==--...  _|   | |   | |   |_  ...:--=+//|
+      |/++==-:.  | |   | |   | |   | | .:.-==++/|
+      //++==--:   |_|___| |___| |___|   :--==++//
+     ://++==---:.                    ..:---==++//:
+    .://+++===----:::..............:::----===+++//::.
+   ..::////++++=======-----------======++++////:::..
+    ...:::://////++++++++++++++++++++//////::::...
+        ....::::::::///////////////////::::....
+              ..........::::::::::..........
+`;
+
+/**
+ * §48's reveal progression: a partial silhouette in round 1, filling out to
+ * the full portrait by the final round.
+ *
+ * The reveal is tied to run progress rather than to a timer, so it means
+ * something: the boss resolves as the player works through the policy episode,
+ * and a player who stops early never sees the whole face.
+ */
+export function TacoPortrait({
+  round, totalRounds, className,
+}: { round: number; totalRounds: number; className?: string }) {
+  const lines = TACO_PORTRAIT.split('\n').filter(Boolean);
+  // Round 1 shows roughly the top third, the final round shows all of it.
+  const fraction = totalRounds > 0 ? Math.min(1, round / totalRounds) : 1;
+  const shown = Math.max(3, Math.ceil(lines.length * (0.3 + 0.7 * fraction)));
+
+  return (
+    <div className={className}>
+      <pre
+        className="font-mono text-phosphor-dim"
+        style={{ fontSize: '7px', lineHeight: '1.0', letterSpacing: '-0.04em', whiteSpace: 'pre' }}
+        aria-hidden="true"
+      >
+        {lines.slice(0, shown).join('\n')}
+      </pre>
+      <div className="font-mono text-xs text-phosphor-dim mt-2 tracking-widest">
+        ROUND {round} OF {totalRounds}
+      </div>
+    </div>
+  );
+}

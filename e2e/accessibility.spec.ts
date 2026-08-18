@@ -5,7 +5,7 @@ import { gotoScreen, resetProgress, dismissOverlays } from './helpers';
 
 test('every screen is reachable by keyboard and shows focus', async ({ page }) => {
   await resetProgress(page);
-  await gotoScreen(page, '04 ARENA MAP');
+  await gotoScreen(page, 'ARENA MAP');
 
   await page.keyboard.press('Tab');
   const focused = await page.evaluate(() => {
@@ -24,7 +24,7 @@ test('every screen is reachable by keyboard and shows focus', async ({ page }) =
 
 test('every keyboard action in the run has a clickable equivalent (§9)', async ({ page }) => {
   await resetProgress(page);
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
   await dismissOverlays(page);
 
   // The action bar advertises the keys; each must also be a real control.
@@ -36,7 +36,7 @@ test('every keyboard action in the run has a clickable equivalent (§9)', async 
 test('reduced motion is honoured rather than advertised', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await resetProgress(page);
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
   await dismissOverlays(page);
 
   // §62 requires a reduced-motion equivalent, not merely a shorter animation.
@@ -53,7 +53,7 @@ test('reduced motion is honoured rather than advertised', async ({ page }) => {
 
 test('the run screen never uses colour alone for pass and fail (§62)', async ({ page }) => {
   await resetProgress(page);
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
   await dismissOverlays(page);
   // The action bar is the phone-width route to the risk panel; the tab strip
   // is the desktop one. Either must reach it.
@@ -71,7 +71,7 @@ test('the run screen never uses colour alone for pass and fail (§62)', async ({
 
 test('the turnover meter exposes its state to assistive tech', async ({ page }) => {
   await resetProgress(page);
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
   await dismissOverlays(page);
 
   const meter = page.getByRole('meter', { name: /TURNOVER BUDGET SPENT/ });

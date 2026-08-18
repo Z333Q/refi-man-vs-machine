@@ -273,7 +273,13 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
     <div className="min-h-screen bg-terminal-black terminal-screen font-mono flex flex-col">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
+      {/* The header used to force the back button, title, module count,
+          version and all four tabs onto one row. Below the lg breakpoint the
+          flex children compressed past their own text and the tab buttons
+          physically overlapped each other — SCHEMATIC sat on top of STRESS
+          TEST, which could then never be tapped. It now wraps, and the tabs
+          are their own scrollable row rather than a squeezed tail of this one. */}
+      <div className="flex flex-wrap items-center justify-between gap-y-3 px-5 py-3 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="text-phosphor-dim text-xs hover:text-phosphor transition-colors tracking-widest">
             ← BACK
@@ -284,18 +290,20 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
             <div className="text-phosphor text-sm font-bold">{machineName}</div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="text-phosphor-dim text-xs">
             {installedModules.size}/{MODULES.length} MODULES
           </div>
           <div className="text-phosphor text-xs font-bold">
             {versionString(versionNumber)}
           </div>
+        </div>
+        <div className="flex items-center gap-1.5 w-full lg:w-auto overflow-x-auto scrollbar-hide">
           {(['BUILD', 'SCHEMATIC', 'FUNNEL', 'STRESS TEST'] as BuilderTab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`text-xs tracking-widest px-2.5 py-1 border transition-colors ${
+              className={`text-xs tracking-widest px-2.5 py-1 border transition-colors flex-shrink-0 whitespace-nowrap ${
                 tab === t
                   ? 'border-phosphor text-phosphor bg-phosphor/8'
                   : 'border-phosphor/20 text-phosphor-dim hover:border-phosphor/35 hover:text-phosphor'
@@ -481,6 +489,47 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
                   Configure options above then install
                 </div>
               )}
+
+              {/* Compile, for viewports with no left rail.
+                  The only compile control used to live inside that rail, which
+                  is `hidden lg:flex`. A phone player could install every module
+                  through the stepper and then had no way to build the machine
+                  at all — §18's build/test/diagnose/revise loop was unreachable
+                  below the lg breakpoint. Same handler and same disabled rule
+                  as the rail's copy; it is a second entrance, not a second
+                  behaviour. */}
+              <div className="lg:hidden mt-6 pt-5 border-t border-phosphor/15">
+                {compiling ? (
+                  <div className="text-phosphor-dim text-xs tracking-widest text-center animate-pulse">
+                    COMPILING...
+                  </div>
+                ) : compiled && isUnchanged ? (
+                  <div className="text-paper-green text-xs tracking-widest text-center">
+                    ✓ {compiledVersion} READY
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleCompile}
+                    disabled={installedModules.size === 0}
+                    className={`w-full py-2.5 text-xs tracking-widest border transition-colors ${
+                      installedModules.size === 0
+                        ? 'border-phosphor/10 text-phosphor-dim cursor-not-allowed'
+                        : 'border-phosphor text-phosphor hover:bg-phosphor/10 hover:text-phosphor-hot'
+                    }`}
+                  >
+                    {history.length > 0
+                      ? `RECOMPILE AS ${versionString(nextVersionNumber(machineName))} ▶`
+                      : allInstalled
+                        ? 'COMPILE ▶'
+                        : `COMPILE PARTIAL (${installedModules.size}/${MODULES.length})`}
+                  </button>
+                )}
+                {installedModules.size === 0 && (
+                  <div className="text-phosphor-dim text-xs text-center mt-1" style={{ fontSize: '9px' }}>
+                    INSTALL AT LEAST ONE MODULE
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

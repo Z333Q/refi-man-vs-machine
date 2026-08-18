@@ -10,7 +10,7 @@ test('a tip opens on the first checkpoint and can be dismissed with ESC', async 
     localStorage.setItem('refi_guidance_mode', 'FULL');
   });
   await resetProgress(page);
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
 
   const tip = page.getByText('GUIDANCE: FULL', { exact: false });
   await expect(tip.first()).toBeVisible({ timeout: 20_000 });
@@ -29,7 +29,7 @@ test('a tip states a dismissal that actually works', async ({ page }) => {
     localStorage.setItem('refi_guidance_mode', 'FULL');
   });
   await resetProgress(page);
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
 
   const footer = page.getByText('GUIDANCE: FULL', { exact: false }).first();
   await expect(footer).toBeVisible({ timeout: 20_000 });
@@ -53,7 +53,7 @@ test('guidance OFF suppresses tips entirely', async ({ page }) => {
     localStorage.setItem('refi_guidance_mode', 'OFF');
   });
   await resetProgress(page);
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
   await page.waitForTimeout(2500);
   await expect(page.getByText('GUIDANCE: FULL', { exact: false })).toHaveCount(0);
 });

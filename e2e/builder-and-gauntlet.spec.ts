@@ -7,10 +7,7 @@ import { gotoScreen, resetProgress } from './helpers';
 // operable. That is a real gap in the screen, recorded here as a known one
 // rather than asserted as working — when the builder gets a phone layout,
 // this line comes off and these specs run everywhere.
-test.skip(
-  ({ viewport }) => (viewport?.width ?? 0) < 1024,
-  'Machine Builder has no phone layout yet',
-);
+
 
 // The Machine Builder, its stress test and the Blind Gauntlet.
 //
@@ -19,7 +16,7 @@ test.skip(
 // merely present.
 
 async function openStressTest(page: import('@playwright/test').Page) {
-  await gotoScreen(page, '17 BUILDER');
+  await gotoScreen(page, 'BUILDER');
   // The builder's tab strip scrolls horizontally at phone width, so the tab
   // has to be brought into view before it can be clicked. That is the real
   // interaction a player performs, not a test-only shortcut.
@@ -30,7 +27,7 @@ async function openStressTest(page: import('@playwright/test').Page) {
 
 test('a compiled machine survives leaving the builder', async ({ page }) => {
   await resetProgress(page);
-  await gotoScreen(page, '17 BUILDER');
+  await gotoScreen(page, 'BUILDER');
 
   // Install the first module and compile.
   const install = page.getByRole('button', { name: /INSTALL MODULE/ });
@@ -52,8 +49,8 @@ test('a compiled machine survives leaving the builder', async ({ page }) => {
   expect(stored.buildHash).toMatch(/^[0-9A-F]{4}:[0-9A-F]{4}:[0-9A-F]{4}$/);
 
   // Leave the builder entirely and come back.
-  await gotoScreen(page, '03 HUB');
-  await gotoScreen(page, '17 BUILDER');
+  await gotoScreen(page, 'HUB');
+  await gotoScreen(page, 'BUILDER');
 
   // The version rail is desktop-only, so the durable check is the record the
   // builder reopens from rather than a panel that may be hidden at this width.
@@ -99,7 +96,7 @@ test('the Blind Gauntlet is reachable and reports every leg', async ({ page }) =
 
 test('editing the machine changes its build hash and offers a recompile', async ({ page }) => {
   await resetProgress(page);
-  await gotoScreen(page, '17 BUILDER');
+  await gotoScreen(page, 'BUILDER');
 
   const hashOf = async () => {
     const t = await page.locator('body').textContent();

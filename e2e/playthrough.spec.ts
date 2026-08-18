@@ -28,7 +28,7 @@ test('a run can be played from the first checkpoint to the results screen', asyn
   await seedFinishedRun(page, 'covid_black_swan');
   await page.reload();
 
-  await gotoScreen(page, '04 ARENA MAP');
+  await gotoScreen(page, 'ARENA MAP');
   await enterSelectedArena(page);
   await dismissOverlays(page);
 
@@ -49,7 +49,7 @@ test('a completed run produces an autopsy built from the decisions taken', async
   await resetProgress(page);
   await seedFinishedRun(page, 'covid_black_swan');
   await page.reload();
-  await gotoScreen(page, '04 ARENA MAP');
+  await gotoScreen(page, 'ARENA MAP');
   await enterSelectedArena(page);
   await dismissOverlays(page);
 
@@ -68,7 +68,7 @@ test('a completed run produces an autopsy built from the decisions taken', async
 test('the run record survives a reload and can be resumed mid-arena', async ({ page }) => {
 
   await resetProgress(page);
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
   await dismissOverlays(page);
 
   await playCheckpoint(page);
@@ -77,7 +77,7 @@ test('the run record survives a reload and can be resumed mid-arena', async ({ p
   expect(before?.decisions?.length).toBeGreaterThan(0);
 
   await page.reload();
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
 
   // The offer is a choice, never an automatic restore.
   const offer = page.getByText('RUN IN PROGRESS');
@@ -94,7 +94,7 @@ test('the run record survives a reload and can be resumed mid-arena', async ({ p
 test('starting over opens a new run and keeps the one that was left', async ({ page }) => {
 
   await resetProgress(page);
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
   await dismissOverlays(page);
   await playCheckpoint(page);
 
@@ -102,7 +102,7 @@ test('starting over opens a new run and keeps the one that was left', async ({ p
     JSON.parse(localStorage.getItem('refi_run_records') || '[]')[0].runId);
 
   await page.reload();
-  await gotoScreen(page, '07 CORE LOOP');
+  await gotoScreen(page, 'CORE LOOP');
   await expect(page.getByText('RUN IN PROGRESS')).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: /START OVER/ }).click();
   await dismissOverlays(page);
