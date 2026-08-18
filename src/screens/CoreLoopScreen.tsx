@@ -3,7 +3,7 @@ import { useGame } from '../context/GameContext';
 import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
 import { getArena } from '../lib/arenas';
 import { useTips, type TipGameState } from '../context/TipContext';
-import type { ActionBranch, ArenaId, ThesisCode } from '../lib/gameTypes';
+import type { ActionBranch, ArenaId, ModuleCode, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
@@ -20,6 +20,7 @@ import {
 import { classifyDevice, type DeviceClass, type RegionBounds } from '../lib/gestureGeometry';
 import PullToCommit from '../components/game/PullToCommit';
 import { InflationCompression, BankingContagion, SupplyChain, Reflexivity, TacoPortrait } from '../components/game/AsciiPlates';
+import { CorrelationPanel, DrawdownPanel, RegimePanel } from '../components/game/ModulePanels';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
 import ResolutionRace from '../components/game/ResolutionRace';
@@ -31,7 +32,13 @@ import { ArcRail } from '../components/onboarding/ArcRail';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ActivePanel = 'SIGNAL' | 'PORTFOLIO' | 'RISK' | 'DECIDE';
+type ActivePanel =
+  | 'SIGNAL' | 'PORTFOLIO' | 'RISK' | 'DECIDE'
+  // Panels that exist only once their module is unlocked. Modules used to
+  // unlock into nothing at all — `activeModules` was read by the dot rack in
+  // the right rail and by nothing else — so earning one announced a module,
+  // ticked a counter, and gave the player nowhere to go and nothing to open.
+  | 'CORRELATION' | 'DRAWDOWN' | 'REGIME';
 
 const DIRECTION_COLORS = {
   up: 'text-paper-green',
@@ -359,13 +366,14 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
   useEffect(() => {
     const state: TipGameState =
       thesisPrompt ? 'THESIS_PROMPT'
+      : commitConfirm ? 'COMMIT_CONFIRM'
       : run?.phase === 'RESOLVING' && revealDelay === 0 ? 'MARKET_ADVANCING'
       : run?.phase === 'RESOLVING' ? 'MACHINE_REVEAL'
       : run?.phase === 'COMPLETE' ? 'COMPLETE'
       : run ? 'DECISION_REQUIRED'
       : 'IDLE';
     reportGameState(state);
-  }, [thesisPrompt, run?.phase, revealDelay, run, reportGameState]);
+  }, [thesisPrompt, commitConfirm, run?.phase, revealDelay, run, reportGameState]);
 
   // Leaving the run screen must reopen the gate, or a tip queued during a
   // resolution would be stuck behind a state nothing is going to change.
@@ -543,6 +551,11 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
       if (e.key === 'r' || e.key === 'R') { openPanel('RISK'); return; }
       if (e.key === 's' || e.key === 'S') { openPanel('SIGNAL'); return; }
       if (e.key === 'd' || e.key === 'D') { openPanel('DECIDE'); return; }
+      // Module keys only bind once the module is unlocked, so a key never
+      // opens a panel the player has not earned.
+      if ((e.key === 'c' || e.key === 'C') && run?.activeModules.includes('CORRELATION_MATRIX')) { openPanel('CORRELATION'); return; }
+      if ((e.key === 'w' || e.key === 'W') && run?.activeModules.includes('DRAWDOWN_MAP')) { openPanel('DRAWDOWN'); return; }
+      if ((e.key === 'g' || e.key === 'G') && run?.activeModules.includes('REGIME_SCANNER')) { openPanel('REGIME'); return; }
 
       // 1..4 select a stance card
       const n = Number(e.key);
@@ -814,10 +827,21 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
   // Risk-adjusted standing, reconstructed from the decision record each render.
   const riskAdjusted = runRiskAdjusted(run.decisions, run.arenaId);
 
+  // An unlocked module has to become somewhere the player can actually go.
+  // These tabs appear the moment the module is earned and carry the same
+  // access key the module has always advertised in TERMINAL_MODULES.
+  const MODULE_TABS: { id: ActivePanel; label: string; key: string; module: ModuleCode }[] = [
+    { id: 'CORRELATION', label: 'CORRELATION', key: 'C', module: 'CORRELATION_MATRIX' },
+    { id: 'DRAWDOWN', label: 'DRAWDOWN', key: 'W', module: 'DRAWDOWN_MAP' },
+    { id: 'REGIME', label: 'REGIME', key: 'G', module: 'REGIME_SCANNER' },
+  ];
+  const unlockedModuleTabs = MODULE_TABS.filter(t => run.activeModules.includes(t.module));
+
   const PANEL_TABS: { id: ActivePanel; label: string; key: string }[] = [
     { id: 'SIGNAL', label: 'SIGNAL', key: 'S' },
     { id: 'PORTFOLIO', label: 'PORTFOLIO', key: 'P' },
     { id: 'RISK', label: 'RISK', key: 'R' },
+    ...unlockedModuleTabs.map(({ id, label, key }) => ({ id, label, key })),
     { id: 'DECIDE', label: decisionReady ? 'DECIDE ✓' : 'DECIDE', key: 'D' },
   ];
 
@@ -928,9 +952,27 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
               <div className="text-xs tracking-widest text-paper-green truncate">
                 ▲ MODULE UNLOCKED: {moduleJustUnlocked.replace(/_/g, ' ')}
               </div>
-              <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">
-                ADDED TO YOUR TERMINAL
-              </div>
+              {/* "ADDED TO YOUR TERMINAL" was true and useless: it did not say
+                  where, and there was nowhere. Point at the tab it just
+                  created, and give the player a way to open it from here. */}
+              {(() => {
+                const dest = MODULE_TABS.find(t => t.module === moduleJustUnlocked);
+                if (!dest) {
+                  return (
+                    <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">
+                      ADDED TO YOUR MACHINE
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    onClick={() => { openPanel(dest.id); clearModuleUnlock(); }}
+                    className="text-phosphor text-xs tracking-widest mt-0.5 underline underline-offset-2 hover:text-phosphor-hot transition-colors"
+                  >
+                    OPEN {dest.label} · [{dest.key}]
+                  </button>
+                );
+              })()}
             </div>
             <button
               onClick={clearModuleUnlock}
@@ -1191,6 +1233,22 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                       DECIDE ▶ [D]
                     </button>
                   </div>
+                )}
+
+                {/* Module panels. These exist only once earned, which is the
+                    whole point: the unlock now leads somewhere. */}
+                {activePanel === 'CORRELATION' && (
+                  <CorrelationPanel portfolio={portfolio} checkpoint={cp} />
+                )}
+                {activePanel === 'DRAWDOWN' && (
+                  <DrawdownPanel
+                    portfolio={portfolio}
+                    decisions={run.decisions}
+                    criticalDrawdown={getArena(run.arenaId)?.criticalDrawdown ?? -0.2}
+                  />
+                )}
+                {activePanel === 'REGIME' && (
+                  <RegimePanel portfolio={portfolio} checkpoint={cp} />
                 )}
 
                 {/* PORTFOLIO panel: read-only investigation */}

@@ -6,7 +6,12 @@ import {
 
 // A full arena is genuinely long: the resolution race alone is several seconds
 // per checkpoint and these walk every one of them.
-test.describe.configure({ timeout: 300_000 });
+// A full COVID run is 22 checkpoints, each with a resolution animation, and
+// both projects run it. 300s was enough on an idle machine and not enough on a
+// busy one, which showed up as a different spec timing out on each run — the
+// signature of a budget that is too tight, not of a race. Retries stay at 0 so
+// a real race still surfaces.
+test.describe.configure({ timeout: 600_000 });
 
 test.beforeEach(async ({ page }) => {
   // These specs are about the loop, not about onboarding. The coaching

@@ -39,7 +39,10 @@ test('idle is open, so tips outside a run are unaffected', () => {
 });
 
 test('exactly two states are blocked, and both are things that cover the screen', () => {
-  assert.deepEqual([...BLOCKED_TIP_STATES].sort(), ['MARKET_ADVANCING', 'THESIS_PROMPT']);
+  assert.deepEqual(
+    [...BLOCKED_TIP_STATES].sort(),
+    ['COMMIT_CONFIRM', 'MARKET_ADVANCING', 'THESIS_PROMPT'],
+  );
 });
 
 test('every state is decided: the gate has no undefined answer', () => {
