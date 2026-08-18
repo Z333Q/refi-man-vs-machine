@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import type {
   MachineModuleId,
   MachineConfig,
@@ -14,6 +14,8 @@ import type {
 } from '../lib/gameTypes';
 import { DEFAULT_MACHINE_CONFIG, DEFAULT_GUARDRAILS } from '../lib/gameTypes';
 import MachineCompile from '../components/game/MachineCompile';
+import { runStressTest, stressTestVerdict } from '../lib/stressTest';
+import { REASON_TEXT } from '../lib/machinePolicy';
 import {
   latestMachineVersion, listMachineVersions, machineBuildHash,
   nextVersionNumber, saveMachineVersion, toPlayerMachine,
@@ -176,7 +178,7 @@ interface Props {
   onCompiled?: (machine: PlayerMachine) => void;
 }
 
-type BuilderTab = 'BUILD' | 'SCHEMATIC' | 'FUNNEL';
+type BuilderTab = 'BUILD' | 'SCHEMATIC' | 'FUNNEL' | 'STRESS TEST';
 
 export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
   const [config, setConfig] = useState<MachineConfig>({ ...DEFAULT_MACHINE_CONFIG, guardrails: { ...DEFAULT_GUARDRAILS } });
@@ -279,7 +281,7 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
           <div className="text-phosphor text-xs font-bold">
             {versionString(versionNumber)}
           </div>
-          {(['BUILD', 'SCHEMATIC', 'FUNNEL'] as BuilderTab[]).map(t => (
+          {(['BUILD', 'SCHEMATIC', 'FUNNEL', 'STRESS TEST'] as BuilderTab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -467,6 +469,10 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
               <div className="text-phosphor-dim text-xs tracking-widest mb-4">UNIVERSE FUNNEL</div>
               <UniverseFunnel funnel={funnel} config={config} />
             </div>
+          )}
+
+          {tab === 'STRESS TEST' && !compiling && (
+            <StressTestPanel config={config} />
           )}
         </div>
 
@@ -872,4 +878,118 @@ function getInstalledSummary(id: MachineModuleId, config: MachineConfig): string
     case 'EXECUTION': return EXECUTION_OPTIONS.find(o => o.value === config.execution)?.label ?? '';
     case 'MONITORING': return MONITORING_OPTIONS.find(o => o.value === config.monitoring)?.label ?? '';
   }
+}
+
+// ─── Stress test panel ────────────────────────────────────────────────────────
+
+/**
+ * Runs the machine in front of the player against COVID and reports what it
+ * did, checkpoint by checkpoint.
+ *
+ * The result is recomputed from the live config rather than stored, because a
+ * stress test is a property of a configuration: caching one would let the
+ * screen show a verdict for a machine the player has since edited.
+ *
+ * Labelled as the rules engine throughout. §26.4 forbids presenting a
+ * transparent rules machine as RF/RL benchmark performance, and this screen
+ * sits next to copy that quotes the real benchmark's numbers.
+ */
+function StressTestPanel({ config }: { config: MachineConfig }) {
+  const result = useMemo(() => runStressTest(config, { seed: 7 }), [config]);
+  const verdict = stressTestVerdict(result);
+
+  return (
+    <div className="p-4 sm:p-6 max-w-3xl space-y-5">
+      <div>
+        <div className="text-phosphor-dim text-xs tracking-widest mb-1">
+          STRESS TEST · COVID BLACK SWAN
+        </div>
+        <div className="text-phosphor text-lg font-bold leading-snug">{verdict.headline}</div>
+        <div className="text-phosphor-mid text-xs leading-6 mt-1">{verdict.detail}</div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-y border-phosphor/10 py-3 text-xs">
+        <Metric label="SCORE" value={String(result.scoreTotal)} note={`PAR ${result.parTotal}`} />
+        <Metric
+          label="VS PAR"
+          value={`${result.vsPar >= 0 ? '+' : ''}${result.vsPar}`}
+          tone={result.vsPar >= 0 ? 'good' : 'bad'}
+        />
+        <Metric label="MAX DD" value={`${Math.abs(result.maxDrawdown * 100).toFixed(1)}%`} />
+        <Metric label="TURNOVER" value={`${(result.turnoverUsed * 100).toFixed(0)}%`} />
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <Metric label="HELD" value={`${result.holdCount}/${result.steps.length}`} />
+        <Metric
+          label="BLOCKED"
+          value={String(result.blockedCount)}
+          note="WANTED ONE STANCE, TOOK ANOTHER"
+        />
+        <Metric label="RETURN" value={`${(result.finalReturn * 100).toFixed(2)}%`} />
+        <Metric label="SHARPE" value={result.sharpe === null ? '--' : result.sharpe.toFixed(2)} />
+      </div>
+
+      <div className="space-y-1">
+        <div className="text-phosphor-dim text-xs tracking-widest">DECISION LOG</div>
+        {result.steps.map(s => (
+          <div key={s.sequence} className="border-b border-phosphor/10 py-2">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
+              <span className="text-phosphor-dim w-10 flex-shrink-0">
+                CP{String(s.sequence).padStart(2, '0')}
+              </span>
+              <span className="text-phosphor w-36 flex-shrink-0">
+                {s.action}
+                {s.substitution !== 'NONE' && (
+                  <span className="text-alert-amber" title={`WANTED ${s.preferred}`}> *</span>
+                )}
+              </span>
+              <span className="text-phosphor-dim flex-1 min-w-0 truncate hidden sm:block">
+                {s.signalTitle}
+              </span>
+              <span className={`tabular-nums w-16 text-right flex-shrink-0 ${
+                s.score >= s.par ? 'positive-value' : 'negative-value'
+              }`}>
+                {s.score} / {s.par}
+              </span>
+            </div>
+            <div className="text-phosphor-dim text-xs mt-0.5 leading-snug pl-10">
+              {REASON_TEXT[s.reason]}
+              {s.substitution === 'TURNOVER_EXHAUSTED' && ' Budget would not cover the stance it wanted.'}
+              {s.substitution === 'STANCE_UNAVAILABLE' && ` This checkpoint offered no ${s.preferred.replace(/_/g, ' ')}.`}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t border-phosphor/15 pt-3 text-phosphor-dim text-xs leading-6">
+        TRANSPARENT RULES MACHINE. NO FORECAST, NO TRAINING, NO FUTURE DATA:
+        ONLY THE RULES YOU SET, APPLIED TO HISTORICAL CONTENT. THIS IS NOT A
+        REFI RF/RL BENCHMARK RESULT AND MUST NOT BE READ AS ONE.
+        <br />
+        SAME TURNOVER BUDGET, SAME RISK LIMITS AND SAME SCORING AS YOUR OWN RUN.
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value, note, tone }: {
+  label: string;
+  value: string;
+  note?: string;
+  tone?: 'good' | 'bad';
+}) {
+  return (
+    <div>
+      <div className="text-phosphor-dim tracking-widest" style={{ fontSize: '9px' }}>{label}</div>
+      <div className={`font-bold tabular-nums mt-0.5 ${
+        tone === 'good' ? 'positive-value' : tone === 'bad' ? 'negative-value' : 'text-phosphor'
+      }`}>
+        {value}
+      </div>
+      {note && (
+        <div className="text-phosphor-dim mt-0.5 leading-snug" style={{ fontSize: '9px' }}>{note}</div>
+      )}
+    </div>
+  );
 }
