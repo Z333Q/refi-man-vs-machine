@@ -1,10 +1,32 @@
+import type { ArenaId } from '../lib/gameTypes';
+import { getArena } from '../lib/arenas';
+
+// The briefing describes the arena the player is about to enter.
+//
+// It used to describe COVID unconditionally: the title, the risk limit, the
+// window and the ASCII plate were all typed in. Once the map could select a
+// regime, that meant walking into Recovery through a COVID briefing, with a
+// -20% limit printed over an arena that ends at -15%. A briefing that states
+// the wrong risk budget is worse than no briefing.
+
 interface Props {
+  arenaId?: ArenaId;
   onStart: () => void;
   onViewMachineCard: () => void;
   onBack: () => void;
 }
 
-export default function ArenaBriefingScreen({ onStart, onViewMachineCard, onBack }: Props) {
+export default function ArenaBriefingScreen({
+  arenaId = 'covid_black_swan', onStart, onViewMachineCard, onBack,
+}: Props) {
+  const arena = getArena(arenaId);
+  const name = arena?.name ?? 'ARENA';
+  // Split on the last space so a two-word regime stacks the way the plate was
+  // designed for, and a one-word regime simply does not stack.
+  const cut = name.lastIndexOf(' ');
+  const nameTop = cut > 0 ? name.slice(0, cut) : name;
+  const nameBottom = cut > 0 ? name.slice(cut + 1) : '';
+
   return (
     <div className="terminal-screen min-h-screen flex flex-col">
       {/* Header */}
@@ -22,17 +44,22 @@ export default function ArenaBriefingScreen({ onStart, onViewMachineCard, onBack
           {/* Left: Briefing */}
           <div className="space-y-6">
             <div>
-              <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-2">ARENA 01</div>
+              <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-2">
+                ARENA {String(arena?.order ?? 1).padStart(2, '0')}
+              </div>
               <h1 className="font-mono text-3xl font-bold text-phosphor-hot terminal-glow-strong tracking-wide">
-                COVID<br />BLACK SWAN
+                {nameTop}{nameBottom && <><br />{nameBottom}</>}
               </h1>
+              <div className="font-mono text-xs text-phosphor-dim mt-2">{arena?.window}</div>
             </div>
 
             <div className="terminal-panel p-4 space-y-2">
               <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-2 mb-3">
                 OBJECTIVE
               </div>
-              <div className="font-mono text-sm text-phosphor leading-6">SURVIVE THE SHOCK.</div>
+              <div className="font-mono text-sm text-phosphor leading-6">
+                {arena?.lesson ?? 'SURVIVE THE SHOCK.'}
+              </div>
               <div className="font-mono text-sm text-phosphor leading-6">BEAT THE MACHINE.</div>
             </div>
 
@@ -41,7 +68,12 @@ export default function ArenaBriefingScreen({ onStart, onViewMachineCard, onBack
                 { label: 'STARTING CAPITAL', value: '$100,000' },
                 { label: 'MAX POSITION SIZE', value: '15%' },
                 { label: 'MAX SECTOR EXPOSURE', value: '35%' },
-                { label: 'CRITICAL DRAWDOWN', value: '-20%', danger: true },
+                {
+                  label: 'CRITICAL DRAWDOWN',
+                  value: `${Math.round((arena?.criticalDrawdown ?? -0.2) * 100)}%`,
+                  danger: true,
+                },
+                { label: 'CHECKPOINTS', value: String(arena?.checkpoints.length ?? 0) },
                 { label: 'LEVERAGE', value: 'DISABLED', muted: true },
                 { label: 'SHORT SELLING', value: 'DISABLED', muted: true },
               ].map(row => (
@@ -100,12 +132,11 @@ export default function ArenaBriefingScreen({ onStart, onViewMachineCard, onBack
 {`       ___
    ___/   \\___
   /           \\
- |  BLACK SWAN |
+ |   ${(arena?.name ?? '').slice(0, 11).padStart(6 + Math.ceil((arena?.name ?? '').slice(0, 11).length / 2)).padEnd(11)} |
   \\           /
    \\___   ___/
        \\_/
-  COVID-19 SHOCK
- FEB - MAR 2020`}
+${(arena?.window ?? '').padStart(8 + Math.ceil((arena?.window ?? '').length / 2)).padEnd(16)}`}
               </pre>
             </div>
 

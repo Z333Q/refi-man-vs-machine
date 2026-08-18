@@ -255,6 +255,7 @@ function AppInner() {
         )}
         {screen === 'arena-briefing' && (
           <ArenaBriefingScreen
+            arenaId={pendingArena}
             onStart={() => go('core-loop')}
             onViewMachineCard={() => go('machine-card')}
             onBack={() => go('arena-map')}
