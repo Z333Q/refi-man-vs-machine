@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type {
   MachineModuleId,
   MachineConfig,
@@ -14,6 +14,11 @@ import type {
 } from '../lib/gameTypes';
 import { DEFAULT_MACHINE_CONFIG, DEFAULT_GUARDRAILS } from '../lib/gameTypes';
 import MachineCompile from '../components/game/MachineCompile';
+import {
+  latestMachineVersion, listMachineVersions, machineBuildHash,
+  nextVersionNumber, saveMachineVersion, toPlayerMachine,
+  type MachineVersionRecord,
+} from '../lib/machineVersions';
 
 // ─── Module definitions ───────────────────────────────────────────────────────
 
@@ -183,6 +188,23 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
   const [compiling, setCompiling] = useState(false);
   const [compiled, setCompiled] = useState(false);
   const [compiledVersion, setCompiledVersion] = useState<string>('');
+  const [history, setHistory] = useState<MachineVersionRecord[]>([]);
+  // The version waiting to be handed to the host once the compile has played.
+  const [pendingHandoff, setPendingHandoff] = useState<MachineVersionRecord | null>(null);
+
+  // A machine is meant to accumulate. Before this the builder opened empty
+  // every time and the previous build was gone, so §18's "build, test,
+  // diagnose, revise" had nothing to revise.
+  useEffect(() => {
+    const latest = latestMachineVersion(machineName);
+    setHistory(listMachineVersions(machineName));
+    if (!latest) return;
+    setConfig(latest.config);
+    setInstalledModules(new Set(latest.installedModules));
+    setVersionNumber(latest.version);
+    setCompiledVersion(versionString(latest.version));
+    setCompiled(true);
+  }, [machineName]);
 
   const activeDef = MODULES.find(m => m.id === activeModule)!;
 
@@ -193,30 +215,45 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
   const isInstalled = (id: MachineModuleId) => installedModules.has(id);
   const allInstalled = MODULES.every(m => installedModules.has(m.id));
 
+  /**
+   * Compiling is what saves the version. The animation only reports it.
+   *
+   * The save used to hang off the compile animation's onComplete, which made a
+   * decorative sequence load-bearing: when that animation stalled, the version
+   * the player had just built was silently never written. Presentation must not
+   * be able to lose data. The record is written on the player's click, and the
+   * animation plays over the top of an already-durable fact.
+   */
   function handleCompile() {
     if (compiling) return;
+
+    const record = saveMachineVersion(machineName, config, [...installedModules]);
+    setVersionNumber(record.version);
+    setCompiledVersion(versionString(record.version));
+    setHistory(listMachineVersions(machineName));
+    // Held, not announced. `onCompiled` is a navigation in the host app, so
+    // firing it here would leave the screen before the compile the player
+    // asked for has played.
+    setPendingHandoff(record);
+
     setCompiling(true);
     setCompiled(false);
-    const nextVersion = versionNumber + 1;
-    setVersionNumber(nextVersion);
-    setCompiledVersion(versionString(nextVersion));
   }
 
   function handleCompileComplete() {
     setCompiling(false);
     setCompiled(true);
-    const machine: PlayerMachine = {
-      machineId: `player_${Date.now()}`,
-      name: machineName,
-      version: compiledVersion,
-      versionNumber,
-      config,
-      compiledAt: new Date().toISOString(),
-      installedModules: [...installedModules],
-      arenasCompleted: [],
-    };
-    onCompiled?.(machine);
+    if (pendingHandoff) {
+      onCompiled?.(toPlayerMachine(pendingHandoff));
+      setPendingHandoff(null);
+    }
   }
+
+  // The live build's identity, recomputed as the player edits, so the hash on
+  // screen always describes the machine in front of them rather than the last
+  // one they compiled.
+  const liveHash = machineBuildHash(config, [...installedModules]);
+  const isUnchanged = history.length > 0 && history[0].buildHash === liveHash;
 
   const funnel = funnelCounts(config);
 
@@ -314,11 +351,16 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
 
           {/* Compile button */}
           <div className="border-t border-phosphor/15 p-4">
+            {/* READY means "this configuration is compiled", not "a compile has
+                happened at some point". The two were conflated, so the button
+                was replaced by ✓ READY forever after the first compile and the
+                player could change every layer with no way to rebuild — §18's
+                build, test, diagnose, revise loop had no revise. */}
             {compiling ? (
               <div className="text-phosphor-dim text-xs tracking-widest text-center animate-pulse">
                 COMPILING...
               </div>
-            ) : compiled ? (
+            ) : compiled && isUnchanged ? (
               <div className="text-paper-green text-xs tracking-widest text-center">
                 ✓ {compiledVersion} READY
               </div>
@@ -332,7 +374,11 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
                     : 'border-phosphor text-phosphor hover:bg-phosphor/10 hover:text-phosphor-hot'
                 }`}
               >
-                {allInstalled ? 'COMPILE ▶' : `COMPILE PARTIAL (${installedModules.size}/${MODULES.length})`}
+                {history.length > 0
+                  ? `RECOMPILE AS ${versionString(nextVersionNumber(machineName))} ▶`
+                  : allInstalled
+                    ? 'COMPILE ▶'
+                    : `COMPILE PARTIAL (${installedModules.size}/${MODULES.length})`}
               </button>
             )}
             {installedModules.size === 0 && (
@@ -399,6 +445,7 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
               <MachineCompile
                 machineName={machineName}
                 version={compiledVersion}
+                buildHash={liveHash}
                 checks={buildCompileChecks(config)}
                 checkIntervalMs={160}
                 onComplete={handleCompileComplete}
@@ -452,17 +499,54 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
             })}
           </div>
 
-          {/* Version history */}
+          {/* Version history. §18: every change creates a new testable version,
+              which is only true if the earlier ones are still here to compare
+              against. */}
           <div className="border-t border-phosphor/10 px-4 py-3">
             <div className="text-phosphor-dim text-xs tracking-widest mb-2">VERSION</div>
             <div className="text-phosphor font-bold text-lg">{versionString(versionNumber)}</div>
-            {compiled && (
+            {compiled && !isUnchanged && (
               <div className="text-paper-green text-xs mt-0.5">COMPILED</div>
             )}
+            {isUnchanged && versionNumber > 0 && (
+              <div className="text-alert-amber text-xs mt-0.5 leading-snug">
+                UNCHANGED SINCE {versionString(versionNumber)}
+              </div>
+            )}
+
+            <div className="text-phosphor-dim text-xs mt-2 tracking-widest" style={{ fontSize: '9px' }}>
+              BUILD HASH
+            </div>
+            <div className="text-phosphor-mid text-xs tabular-nums break-all">{liveHash}</div>
+
+            {history.length > 0 && (
+              <div className="mt-3 border-t border-phosphor/10 pt-2">
+                <div className="text-phosphor-dim text-xs tracking-widest mb-1.5" style={{ fontSize: '9px' }}>
+                  HISTORY · {history.length}
+                </div>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {history.map(v => (
+                    <div key={v.buildHash} className="flex items-baseline justify-between gap-2">
+                      <span className={`text-xs ${v.buildHash === liveHash ? 'text-phosphor' : 'text-phosphor-dim'}`}>
+                        {versionString(v.version)}
+                      </span>
+                      <span
+                        className="text-phosphor-dim tabular-nums truncate"
+                        style={{ fontSize: '9px' }}
+                        title={v.buildHash}
+                      >
+                        {v.buildHash}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="text-phosphor-dim text-xs mt-2 leading-snug" style={{ fontSize: '9px' }}>
               {versionNumber === 0
                 ? 'NOT YET COMPILED'
-                : `COMPILED ${versionNumber} TIME${versionNumber !== 1 ? 'S' : ''}`}
+                : 'STORED ON THIS DEVICE'}
             </div>
           </div>
         </div>

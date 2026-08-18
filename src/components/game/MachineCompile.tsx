@@ -18,8 +18,15 @@ const DEFAULT_CHECKS: CompileCheck[] = [
   { label: 'RE-ENTRY LOGIC', detail: 'STAGED DEPLOYMENT' },
 ];
 
-function buildHash(version: string): string {
-  // Deterministic-looking hash from version string
+/**
+ * Fallback identifier for callers with no real build to hash.
+ *
+ * Derived from the name and version only, so it identifies a slot rather than
+ * a build. The builder passes the real hash, computed from the configuration
+ * itself (see machineVersions.machineBuildHash); this exists for the visual
+ * event renderer, which announces a compile it has no configuration for.
+ */
+function placeholderHash(version: string): string {
   let h = 0;
   for (const c of version) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
   const hex = Math.abs(h).toString(16).toUpperCase().padStart(8, '0');
@@ -29,6 +36,8 @@ function buildHash(version: string): string {
 interface Props {
   machineName?: string;
   version?: string;
+  /** The build's real hash, derived from its configuration. */
+  buildHash?: string;
   checks?: CompileCheck[];
   /** ms per check line */
   checkIntervalMs?: number;
@@ -39,6 +48,7 @@ interface Props {
 export default function MachineCompile({
   machineName = 'PLAYER MACHINE',
   version = 'v0.1',
+  buildHash,
   checks = DEFAULT_CHECKS,
   checkIntervalMs = 180,
   reducedMotion = false,
@@ -48,9 +58,26 @@ export default function MachineCompile({
   const [done, setDone] = useState(reducedMotion);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // The callback is held in a ref rather than depended on.
+  //
+  // `onComplete` is almost always a fresh closure from the parent, so having it
+  // in the dependency array meant any parent re-render tore down the timer and
+  // restarted the sequence from the first check. Once the parent re-rendered in
+  // response to completion, the animation restarted forever and the compile
+  // never finished: the screen sat on COMPILING and no version was ever saved.
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
+  // Completion fires once per compile. A restart for any other reason must not
+  // produce a second version of the same build.
+  const firedRef = useRef(false);
+
   useEffect(() => {
     if (reducedMotion) {
-      onComplete?.();
+      if (!firedRef.current) {
+        firedRef.current = true;
+        onCompleteRef.current?.();
+      }
       return;
     }
 
@@ -63,15 +90,18 @@ export default function MachineCompile({
       } else {
         timerRef.current = setTimeout(() => {
           setDone(true);
-          onComplete?.();
+          if (!firedRef.current) {
+            firedRef.current = true;
+            onCompleteRef.current?.();
+          }
         }, 400);
       }
     };
     timerRef.current = setTimeout(tick, 200);
     return () => clearTimeout(timerRef.current);
-  }, [checks.length, checkIntervalMs, reducedMotion, onComplete]);
+  }, [checks.length, checkIntervalMs, reducedMotion]);
 
-  const hash = buildHash(`${machineName}-${version}`);
+  const hash = buildHash ?? placeholderHash(`${machineName}-${version}`);
   const dotPad = (label: string, total = 30) =>
     label + '.'.repeat(Math.max(1, total - label.length));
 
