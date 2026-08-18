@@ -824,8 +824,14 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
   return (
     <div className="min-h-screen bg-terminal-black terminal-screen flex flex-col font-mono">
 
-      {/* ── Top bar ── */}
-      <div className="flex items-center justify-between gap-3 px-3 sm:px-4 py-2 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
+      {/* ── Top bar ──
+           Wraps rather than compressing. The left group could shrink but its
+           children are all `whitespace-nowrap`, and the right group refused to
+           shrink at all, so on a phone the two groups overran each other and
+           CP 01 / 22 was printed on top of YOU 50. Letting the bar take a
+           second row costs a few points of height and keeps every figure
+           legible. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 sm:px-4 py-2 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
             onClick={onBack}
@@ -851,7 +857,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0">
+        <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0 ml-auto">
           <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap tabular-nums">
             <span className={`text-xs font-bold ${run.playerScore >= run.machineScore ? 'text-paper-green' : 'text-risk-red'}`}>
               YOU {run.playerScore}
@@ -991,7 +997,17 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
              every interactive control) to nothing behind an overflow-hidden
              parent. The signal headline and body are step 1 of the checkpoint
              loop, so they are re-rendered above the tabs on small screens
-             rather than dropped. */}
+             rather than dropped.
+
+             The rail used to print the signal body in full and repeat all four
+             event-feed items under a WIRE heading — the exact text the centre
+             panel was already showing under SUPPORTING DETAIL. The checkpoint
+             screen was therefore rendering the same paragraph twice and the
+             same four items twice, which is most of the reason players said
+             they could not tell where to look. The rail now keeps only what is
+             genuinely its own: where we are, the headline as orientation, the
+             market data table, and the standing portfolio numbers. The signal
+             itself has one home, in the centre. */}
         <div className="hidden lg:flex w-64 flex-shrink-0 border-r border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest mb-1">
@@ -1000,9 +1016,6 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
             <div className="text-phosphor text-sm font-bold leading-tight">{cp.signalTitle}</div>
           </div>
 
-          <div className="px-4 py-3 border-b border-phosphor/10 text-phosphor-mid text-xs leading-relaxed overflow-y-auto max-h-36">
-            {cp.signalBody}
-          </div>
 
           <div className="px-4 py-3 border-b border-phosphor/10">
             <div className="text-phosphor-dim text-xs tracking-widest mb-2">MARKET DATA</div>
@@ -1018,17 +1031,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
             </div>
           </div>
 
-          <div className="flex-1 px-4 py-3 overflow-y-auto">
-            <div className="text-phosphor-dim text-xs tracking-widest mb-2">WIRE</div>
-            <div className="space-y-2">
-              {cp.eventFeed.slice(0, 4).map((ev, i) => (
-                <div key={i} className="border-l-2 border-phosphor/20 pl-2">
-                  <div className="text-phosphor-dim text-xs tracking-widest">{ev.category}</div>
-                  <div className="text-phosphor-mid text-xs leading-snug mt-0.5">{ev.text}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <div className="flex-1" />
 
           <div className="px-4 py-2 border-t border-phosphor/10 bg-terminal-deep/40 text-xs space-y-0.5">
             <div className="flex justify-between">
@@ -1086,7 +1089,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                   <div className="text-phosphor-dim text-xs tracking-widest">
                     {cp.phase.replace(/_/g, ' ')} · {cp.crisisDay}
                   </div>
-                  <div className="text-phosphor text-xs font-bold leading-tight mt-0.5">{cp.signalTitle}</div>
+                  <div className="text-phosphor-hot text-xs font-bold leading-tight mt-0.5">{cp.signalTitle}</div>
                 </div>
               )}
 
@@ -1129,15 +1132,42 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                         drawn once — a picture that disagrees with the portfolio
                         beside it is worse than no picture. */}
                     {arenaPlate && <div className="mb-5">{arenaPlate}</div>}
-                    <div className="text-phosphor-dim text-xs tracking-widest mb-1">TODAY'S SIGNAL</div>
-                    <div className="text-phosphor text-lg font-bold mb-3 leading-snug">{cp.signalTitle}</div>
-                    <div className="text-phosphor-mid text-xs leading-relaxed mb-5">{cp.signalBody}</div>
+                    {/* The signal is the only thing on this screen that is new
+                        at this checkpoint. Everything else — portfolio, risk,
+                        machine card, event feed — is state the player can
+                        already see, and it was all rendered at the same weight
+                        in the same green, so the eye had nowhere to land. This
+                        block now carries the screen's single piece of emphasis,
+                        and the feed below it is explicitly demoted to context. */}
+                    <div
+                      key={run.currentCheckpoint}
+                      className={`signal-block ${reducedMotion ? '' : 'signal-block-arriving'} pl-4 pr-3 py-3 mb-5`}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span
+                          className={`text-phosphor-hot text-xs ${reducedMotion ? '' : 'signal-new-marker'}`}
+                          aria-hidden="true"
+                        >
+                          ●
+                        </span>
+                        <span className="text-phosphor-hot text-xs tracking-widest">
+                          NEW INFORMATION · READ THIS FIRST
+                        </span>
+                      </div>
+                      <h2 className="text-phosphor-hot text-xl font-bold mb-2 leading-snug terminal-glow">
+                        {cp.signalTitle}
+                      </h2>
+                      <div className="text-phosphor text-sm leading-relaxed">{cp.signalBody}</div>
+                    </div>
 
-                    <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div className="text-phosphor-dim text-xs tracking-widest mb-2">
+                      SUPPORTING DETAIL
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
                       {cp.eventFeed.map((ev, i) => (
-                        <div key={i} className="border-l-2 border-phosphor/20 pl-3">
-                          <div className="text-phosphor-dim text-xs tracking-widest">{ev.category}</div>
-                          <div className="text-phosphor-mid text-xs mt-0.5 leading-snug">{ev.text}</div>
+                        <div key={i} className="border-l border-phosphor/15 pl-3">
+                          <div className="text-phosphor-dim/70 text-xs tracking-widest">{ev.category}</div>
+                          <div className="text-phosphor-dim text-xs mt-0.5 leading-snug">{ev.text}</div>
                         </div>
                       ))}
                     </div>
