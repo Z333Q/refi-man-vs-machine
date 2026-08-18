@@ -754,6 +754,9 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
 
   // The arena's own name, so a run never announces itself as the wrong regime.
   const arenaName = getArena(run.arenaId)?.name ?? 'ARENA';
+  // The arena's own risk budget. Printed rather than assumed: these strings
+  // said -20% on every arena, which misstates the rule on four of the five.
+  const riskLimitPct = `${Math.round((getArena(run.arenaId)?.criticalDrawdown ?? -0.2) * 100)}%`;
 
   // Risk-adjusted standing, reconstructed from the decision record each render.
   const riskAdjusted = runRiskAdjusted(run.decisions, run.arenaId);
@@ -1036,7 +1039,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
 
                     {isObservation && (
                       <div className="border border-alert-amber/60 bg-alert-amber/8 px-4 py-3 mb-3 text-alert-amber text-xs leading-relaxed">
-                        OBSERVATION MODE: DRAWDOWN EXCEEDS -20%. RUN CONTINUES BUT CANNOT PASS. USE THIS TIME TO STUDY MACHINE DECISIONS.
+                        OBSERVATION MODE: DRAWDOWN EXCEEDS {riskLimitPct}. RUN CONTINUES BUT CANNOT PASS. USE THIS TIME TO STUDY MACHINE DECISIONS.
                       </div>
                     )}
 
@@ -1193,7 +1196,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
 
                     {isObservation && (
                       <div className="border border-risk-red/60 bg-risk-red/5 px-4 py-3 text-risk-red text-xs leading-relaxed">
-                        OBSERVATION MODE ACTIVE. DRAWDOWN {Math.abs(portfolio.drawdown * 100).toFixed(1)}% EXCEEDS -20% THRESHOLD. RUN CONTINUES, MACHINE COMPARISON ONLY.
+                        OBSERVATION MODE ACTIVE. DRAWDOWN {Math.abs(portfolio.drawdown * 100).toFixed(1)}% EXCEEDS THE {riskLimitPct} THRESHOLD. RUN CONTINUES, MACHINE COMPARISON ONLY.
                       </div>
                     )}
                   </div>

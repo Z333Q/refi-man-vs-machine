@@ -75,7 +75,7 @@ const SECTIONS = [
     items: [
       'PASS: Complete all checkpoints without hitting critical failure.',
       'MACHINE BEATEN: Your total score exceeds the machine\'s.',
-      'OBSERVATION MODE: Drawdown exceeds -20%. Run continues but cannot pass.',
+      'OBSERVATION MODE: Drawdown exceeds the arena risk limit, shown on its briefing. The run continues but cannot pass.',
       'Your process quality is tracked across all runs in your Alpha Profile.',
     ],
   },

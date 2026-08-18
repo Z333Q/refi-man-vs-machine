@@ -11,11 +11,14 @@ import type {
   MonitoringChoice,
   PlayerMachine,
   MachineOption,
+  ArenaId,
 } from '../lib/gameTypes';
 import { DEFAULT_MACHINE_CONFIG, DEFAULT_GUARDRAILS } from '../lib/gameTypes';
 import MachineCompile from '../components/game/MachineCompile';
 import { runStressTest, stressTestVerdict } from '../lib/stressTest';
-import { getArena } from '../lib/arenas';
+import { runGauntlet, gauntletVerdict, type GauntletResult } from '../lib/gauntlet';
+import { allArenas, getArena } from '../lib/arenas';
+
 import { REASON_TEXT } from '../lib/machinePolicy';
 import {
   latestMachineVersion, listMachineVersions, machineBuildHash,
@@ -896,11 +899,53 @@ function getInstalledSummary(id: MachineModuleId, config: MachineConfig): string
  * sits next to copy that quotes the real benchmark's numbers.
  */
 function StressTestPanel({ config }: { config: MachineConfig }) {
-  const result = useMemo(() => runStressTest(config, { seed: 7 }), [config]);
+  // A machine tested against one regime has not been stress-tested, it has been
+  // fitted. The panel was hardcoded to COVID, so the four arenas the game now
+  // has were unreachable from the builder and the gauntlet's whole premise had
+  // no single-arena counterpart to build on.
+  const [arenaId, setArenaId] = useState<ArenaId>('covid_black_swan');
+  const [showGauntlet, setShowGauntlet] = useState(false);
+
+  const result = useMemo(() => runStressTest(config, { seed: 7, arenaId }), [config, arenaId]);
+  const gauntlet = useMemo(
+    () => (showGauntlet ? runGauntlet(config, { seed: 7 }) : null),
+    [config, showGauntlet],
+  );
   const verdict = stressTestVerdict(result);
 
   return (
     <div className="p-4 sm:p-6 max-w-3xl space-y-5">
+      {/* Regime picker */}
+      <div className="flex flex-wrap gap-1.5">
+        {allArenas().map(a => (
+          <button
+            key={a.id}
+            onClick={() => { setArenaId(a.id); setShowGauntlet(false); }}
+            className={`px-2.5 py-1.5 text-xs tracking-widest border transition-colors ${
+              !showGauntlet && arenaId === a.id
+                ? 'border-phosphor text-phosphor bg-phosphor/10'
+                : 'border-phosphor/20 text-phosphor-dim hover:border-phosphor/40 hover:text-phosphor-mid'
+            }`}
+          >
+            {a.name}
+          </button>
+        ))}
+        <button
+          onClick={() => setShowGauntlet(true)}
+          className={`px-2.5 py-1.5 text-xs tracking-widest border transition-colors ${
+            showGauntlet
+              ? 'border-alert-amber text-alert-amber bg-alert-amber/10'
+              : 'border-phosphor/20 text-phosphor-dim hover:border-phosphor/40 hover:text-phosphor-mid'
+          }`}
+          title="ONE MACHINE, EVERY REGIME, LOCKED"
+        >
+          BLIND GAUNTLET
+        </button>
+      </div>
+
+      {showGauntlet && gauntlet && <GauntletPanel result={gauntlet} />}
+
+      {!showGauntlet && (<>
       <div>
         <div className="text-phosphor-dim text-xs tracking-widest mb-1">
           STRESS TEST · {getArena(result.arenaId)?.name ?? result.arenaId}
@@ -969,6 +1014,78 @@ function StressTestPanel({ config }: { config: MachineConfig }) {
         REFI RF/RL BENCHMARK RESULT AND MUST NOT BE READ AS ONE.
         <br />
         SAME TURNOVER BUDGET, SAME RISK LIMITS AND SAME SCORING AS YOUR OWN RUN.
+      </div>
+      </>)}
+    </div>
+  );
+}
+
+/**
+ * The Blind Gauntlet result (§7.5): one machine across every regime, locked.
+ *
+ * The spread is given the headline position rather than the total, because the
+ * total lets a machine that is excellent in one regime and broken in another
+ * look competent, which is precisely the mistake §1.3 says a player will make
+ * about their own skill.
+ */
+function GauntletPanel({ result }: { result: GauntletResult }) {
+  const verdict = gauntletVerdict(result);
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="text-phosphor-dim text-xs tracking-widest mb-1">
+          BLIND GAUNTLET · MACHINE LOCKED ACROSS {result.legs.length} REGIMES
+        </div>
+        <div className="text-phosphor text-lg font-bold leading-snug">{verdict.headline}</div>
+        <div className="text-phosphor-mid text-xs leading-6 mt-1">{verdict.detail}</div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-y border-phosphor/10 py-3 text-xs">
+        <Metric
+          label="CONSISTENCY SPREAD"
+          value={String(result.consistencySpread)}
+          note="BEST LEG MINUS WORST"
+          tone={result.consistencySpread > 100 ? 'bad' : 'good'}
+        />
+        <Metric label="SURVIVED" value={`${result.survivedCount}/${result.legs.length}`} />
+        <Metric label="BEAT PAR" value={`${result.beatParCount}/${result.legs.length}`} />
+        <Metric
+          label="TOTAL VS PAR"
+          value={`${result.totalVsPar >= 0 ? '+' : ''}${result.totalVsPar}`}
+          tone={result.totalVsPar >= 0 ? 'good' : 'bad'}
+        />
+      </div>
+
+      <div className="space-y-1">
+        {result.legs.map(leg => (
+          <div key={leg.arenaId} className="border-b border-phosphor/10 py-2">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
+              <span className="text-phosphor w-28 sm:w-40 flex-shrink-0 truncate">{leg.arenaName}</span>
+              <span className={`tabular-nums w-16 text-right flex-shrink-0 ${
+                leg.vsPar >= 0 ? 'positive-value' : 'negative-value'
+              }`}>
+                {leg.vsPar >= 0 ? '+' : ''}{leg.vsPar}
+              </span>
+              <span className={`w-20 text-right flex-shrink-0 ${
+                leg.survived ? 'text-phosphor-dim' : 'negative-value'
+              }`}>
+                {leg.survived ? 'SURVIVED' : 'BROKE'}
+              </span>
+              <span className="text-phosphor-dim flex-1 min-w-0 truncate hidden md:block">
+                {leg.lesson}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t border-phosphor/15 pt-3 text-phosphor-dim text-xs leading-6">
+        ONE CONFIGURATION, UNCHANGED, ACROSS EVERY REGIME (§7.5). NO MID-SERIES
+        MODIFICATION IS PERMITTED: THAT IS THE ADAPTIVE GAUNTLET, A DIFFERENT
+        MODE AND A DIFFERENT LESSON.
+        <br />
+        BEATING ONE REGIME IS POSSIBLE. THE SPREAD IS WHAT SAYS WHETHER YOU
+        BUILT A PROCESS OR FITTED A REGIME.
       </div>
     </div>
   );

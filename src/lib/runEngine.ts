@@ -458,13 +458,23 @@ export function resolveRunResult(run: RunState, requested: RunState['result']): 
   return requested === 'MACHINE_BEATEN' ? 'PASSED' : requested;
 }
 
-/** One line stating where the run lost its claim on the machine. */
+/**
+ * One line stating where the run lost its claim on the machine.
+ *
+ * The limit is read from the arena rather than written into the string. It was
+ * hardcoded to -20% when every run was COVID, so once arenas carried their own
+ * risk budgets this told a Recovery player they had exceeded -20% at the point
+ * they crossed -15%. A message that misstates the rule it is enforcing is worse
+ * than no message.
+ */
 export function observationModeReason(run: RunState): string | null {
   if (!run.criticalFailure) return null;
+  const limit = getArena(run.arenaId)?.criticalDrawdown ?? CRITICAL_DRAWDOWN;
+  const pct = `${Math.round(limit * 100)}%`;
   const at = run.criticalFailureCheckpoint;
   return at
-    ? `DRAWDOWN EXCEEDED -20% AT CP${String(at).padStart(2, '0')}. THIS RUN CANNOT BEAT THE MACHINE.`
-    : 'DRAWDOWN EXCEEDED -20%. THIS RUN CANNOT BEAT THE MACHINE.';
+    ? `DRAWDOWN EXCEEDED ${pct} AT CP${String(at).padStart(2, '0')}. THIS RUN CANNOT BEAT THE MACHINE.`
+    : `DRAWDOWN EXCEEDED ${pct}. THIS RUN CANNOT BEAT THE MACHINE.`;
 }
 
 /** Move to the next checkpoint, or mark the run complete. */
