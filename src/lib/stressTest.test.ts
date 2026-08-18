@@ -5,7 +5,8 @@ import { DEFAULT_MACHINE_CONFIG, DEFAULT_GUARDRAILS } from './gameTypes';
 import type { MachineConfig } from './gameTypes';
 import { runStressTest, stressTestVerdict, STRESS_TEST_SOURCE } from './stressTest';
 import { decideCheckpoint, REASON_TEXT } from './machinePolicy';
-import { getCheckpoint } from './covidArena';
+import { getCheckpoint } from './arenas';
+import './arenaIndex';
 import { createInitialRun } from './runEngine';
 
 function cfg(o: Partial<MachineConfig> = {}): MachineConfig {
@@ -94,7 +95,7 @@ test('construction choice moves conviction', () => {
 test('a machine that cannot see correlation cannot respond to it', () => {
   // §17.11: the monitoring layer decides what the machine is able to notice.
   // Skipping it should cost the player who skipped it.
-  const cp = getCheckpoint(1)!;
+  const cp = getCheckpoint('covid_black_swan', 1)!;
   const highCorrelation = {
     ...cp,
     portfolioEffect: { ...cp.portfolioEffect, correlationLevel: 0.99 },
@@ -115,7 +116,7 @@ test('a machine that cannot see correlation cannot respond to it', () => {
 });
 
 test('a breached drawdown gate outranks the signal', () => {
-  const cp = getCheckpoint(1)!;
+  const cp = getCheckpoint('covid_black_swan', 1)!;
   const deepLoss = { ...createInitialRun().portfolio, drawdown: -0.9 };
   const d = decideCheckpoint(
     cfg({ signal: 'PRICE_MOMENTUM' }), cp, deepLoss, () => true,
@@ -126,15 +127,15 @@ test('a breached drawdown gate outranks the signal', () => {
 test('a guardrail ignores the rebalance cycle', () => {
   // A machine that waited for its weekly slot while past its own drawdown gate
   // would not be following the rule the player wrote.
-  const offCycleSeq = [2, 3].find(n => getCheckpoint(n));
-  const cp = getCheckpoint(offCycleSeq!)!;
+  const offCycleSeq = [2, 3].find(n => getCheckpoint('covid_black_swan', n));
+  const cp = getCheckpoint('covid_black_swan', offCycleSeq!)!;
   const deepLoss = { ...createInitialRun().portfolio, drawdown: -0.9 };
   const d = decideCheckpoint(cfg({ execution: 'WEEKLY' }), cp, deepLoss, () => true);
   assert.equal(d.reason, 'DRAWDOWN_GATE');
 });
 
 test('a cash floor breach is answered before the signal', () => {
-  const cp = getCheckpoint(1)!;
+  const cp = getCheckpoint('covid_black_swan', 1)!;
   const noCash = { ...createInitialRun().portfolio, cashWeight: 0 };
   const d = decideCheckpoint(
     cfg({ guardrails: { ...DEFAULT_GUARDRAILS, cashFloorPct: 0.2 } }),
@@ -146,7 +147,7 @@ test('a cash floor breach is answered before the signal', () => {
 // ─── Degrading safely ─────────────────────────────────────────────────────────
 
 test('an unaffordable stance degrades rather than being committed', () => {
-  const cp = getCheckpoint(1)!;
+  const cp = getCheckpoint('covid_black_swan', 1)!;
   const portfolio = createInitialRun().portfolio;
   // Only HOLD is affordable.
   const d = decideCheckpoint(cfg(), cp, portfolio, action => action === 'HOLD');
@@ -155,7 +156,7 @@ test('an unaffordable stance degrades rather than being committed', () => {
 });
 
 test('a blocked de-risk never degrades into adding risk', () => {
-  const cp = getCheckpoint(1)!;
+  const cp = getCheckpoint('covid_black_swan', 1)!;
   const deepLoss = { ...createInitialRun().portfolio, drawdown: -0.9 };
   const d = decideCheckpoint(cfg(), cp, deepLoss, a => a !== 'REDUCE');
   assert.notEqual(d.action, 'ADD_RISK', 'degrading must not reverse the machine’s intent');
@@ -163,9 +164,9 @@ test('a blocked de-risk never degrades into adding risk', () => {
 
 test('every decision the policy makes is one the checkpoint authors', () => {
   for (let seq = 1; seq <= 14; seq++) {
-    const cp = getCheckpoint(seq);
+    const cp = getCheckpoint('covid_black_swan', seq);
     if (!cp) continue;
-    const authored = new Set(cp.availableActions.map(a => a.actionCode));
+    const authored = new Set(cp.availableActions.map((a: { actionCode: string }) => a.actionCode));
     for (const signal of ['PRICE_MOMENTUM', 'QUALITY_FACTOR', 'REGIME_CLASSIFIER', 'RF_RL_PIPELINE'] as const) {
       const d = decideCheckpoint(cfg({ signal }), cp, createInitialRun().portfolio, () => true);
       assert.ok(authored.has(d.action), `cp${seq}/${signal} chose an unauthored stance: ${d.action}`);

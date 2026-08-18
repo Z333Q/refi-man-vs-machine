@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { RunState } from './gameTypes';
-import { COVID_CHECKPOINTS, getCheckpoint } from './covidArena';
+import { COVID_CHECKPOINTS, } from './covidArena';
+import { getCheckpoint } from './arenas';
+import './arenaIndex';
 import { scoreCheckpoint } from './scoringEngine';
 import {
   createInitialRun, commitPendingDecision, advanceRunCheckpoint,
@@ -70,7 +72,7 @@ test('scoring reads par straight from the checkpoint', () => {
 });
 
 test('changing a checkpoint par changes only that checkpoint', () => {
-  const cp = getCheckpoint(3);
+  const cp = getCheckpoint('covid_black_swan', 3);
   assert.ok(cp);
   const raised = scoreCheckpoint({
     action: 'HOLD',
@@ -81,13 +83,13 @@ test('changing a checkpoint par changes only that checkpoint', () => {
     portfolioDD: 0,
   });
   assert.equal(raised.machineScore, 95);
-  assert.equal(getCheckpoint(3)?.machinePar, PAR_CURVE[2], 'content was mutated');
+  assert.equal(getCheckpoint('covid_black_swan', 3)?.machinePar, PAR_CURVE[2], 'content was mutated');
 });
 
 // ─── No fabricated machine drawdown ───────────────────────────────────────────
 
 test('with no authored machine drawdown, drawdown scores against the risk budget', () => {
-  const cp = getCheckpoint(1);
+  const cp = getCheckpoint('covid_black_swan', 1);
   assert.ok(cp);
   const at = (dd: number) => scoreCheckpoint({
     action: 'HOLD', checkpoint: cp, flags: [], confidence: 0.7,
@@ -101,7 +103,7 @@ test('with no authored machine drawdown, drawdown scores against the risk budget
 });
 
 test('an authored machine drawdown is used when content supplies one', () => {
-  const cp = getCheckpoint(1);
+  const cp = getCheckpoint('covid_black_swan', 1);
   assert.ok(cp);
   const versus = (playerDD: number, machineDD: number) => scoreCheckpoint({
     action: 'HOLD', checkpoint: cp, flags: [], confidence: 0.7,

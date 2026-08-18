@@ -6,7 +6,8 @@ import {
   convictionForDistance, distanceForConviction, gainAt, rubberBand, COMPACT_SCALE,
   gripDisposition, MIN_ENGAGEMENT_MS, type RegionBounds,
 } from './gestureGeometry';
-import { getCheckpoint } from './covidArena';
+import { getCheckpoint } from './arenas';
+import './arenaIndex';
 import { OneEuroFilter, MedianOf3, PullFilter, DEFAULT_ONE_EURO } from './oneEuroFilter';
 import {
   gestureReducer, runGesture,
@@ -567,9 +568,9 @@ test('an unauthored stance is rejected and records no decision', () => {
   // author has no branch: no authored flags, no alpha impact, no turnover
   // price. Committing it would score against numbers nobody wrote.
   const run = createInitialRun();
-  const cp = getCheckpoint(run.currentCheckpoint);
+  const cp = getCheckpoint('covid_black_swan', run.currentCheckpoint);
   assert.ok(cp);
-  const offered = cp.availableActions.map(a => a.actionCode);
+  const offered = cp.availableActions.map((a: { actionCode: string }) => a.actionCode);
   const unauthored = (['STAGED_BUY', 'STAGED_SELL', 'ADD_RISK', 'ROTATE_RISK'] as ActionCode[])
     .find(a => !offered.includes(a));
   assert.ok(unauthored, 'this checkpoint must leave some stance unauthored');
@@ -583,7 +584,7 @@ test('an unauthored stance is rejected and records no decision', () => {
 
 test('an authored but unaffordable stance is rejected and records no decision', () => {
   const run = createInitialRun();
-  const cp = getCheckpoint(run.currentCheckpoint);
+  const cp = getCheckpoint('covid_black_swan', run.currentCheckpoint);
   assert.ok(cp);
   const priced = cp.availableActions.find(a => a.actionCode !== 'HOLD');
   assert.ok(priced, 'this checkpoint must author a stance that costs turnover');

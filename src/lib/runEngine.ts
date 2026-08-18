@@ -1,8 +1,11 @@
 import type {
-  ActionCode, BehavioralFlag, CheckpointData, CheckpointScore,
+  ActionCode, ArenaId, BehavioralFlag, CheckpointData, CheckpointScore,
   DimensionCode, PortfolioState, RunDecision, RunState, ThesisCode,
 } from './gameTypes';
-import { COVID_CHECKPOINTS, getCheckpoint } from './covidArena';
+import { DEFAULT_ARENA_ID, getArena, getCheckpoint } from './arenas';
+// Importing the arena modules is what registers them. Without this the
+// registry is empty at runtime and every run ends at its first checkpoint.
+import './arenaIndex';
 import { scoreCheckpoint } from './scoringEngine';
 import {
   clampConviction, confidenceToConviction, consultedRisk,
@@ -73,9 +76,22 @@ export const DEFAULT_TURNOVER_COST: Record<ActionCode, number> = {
 
 // ─── Initial state ────────────────────────────────────────────────────────────
 
+/**
+ * The starting book for an arena.
+ *
+ * Each arena owns its own, because the portfolio is part of the lesson: §24
+ * cannot teach that six bank tickers are one exposure to a player holding the
+ * COVID book.
+ */
+export function createInitialPortfolio(arenaId: ArenaId = DEFAULT_ARENA_ID): PortfolioState {
+  const arena = getArena(arenaId);
+  if (arena) return arena.startingPortfolio();
+  return legacyCovidPortfolio();
+}
+
 // U.S. equities only. Bonds, gold, and commodities are signals, not positions.
 // Embedded risks: TRAVEL (DAL+MAR=16%), TECH CONC (MSFT+AAPL=20%), CYCLICAL (CAT+XOM+HD=23%)
-export function createInitialPortfolio(): PortfolioState {
+function legacyCovidPortfolio(): PortfolioState {
   return {
     value: STARTING_CAPITAL,
     cashWeight: 0.15,
@@ -113,17 +129,22 @@ export function createInitialPortfolio(): PortfolioState {
  */
 export const DEFAULT_RUN_SEED = 0;
 
-export function createInitialRun(seed: number = DEFAULT_RUN_SEED): RunState {
+export function createInitialRun(
+  seed: number = DEFAULT_RUN_SEED,
+  arenaId: ArenaId = DEFAULT_ARENA_ID,
+): RunState {
+  const arena = getArena(arenaId);
+  const total = arena?.checkpoints.length ?? 0;
   return {
     id: null,
     seed,
-    arenaId: 'covid_black_swan',
+    arenaId,
     machineId: 'refi_rules',
     currentCheckpoint: 1,
-    totalCheckpoints: COVID_CHECKPOINTS.length,
+    totalCheckpoints: total,
     phase: 'SIGNAL',
-    portfolio: createInitialPortfolio(),
-    turnoverBudget: turnoverBudgetFor(COVID_CHECKPOINTS.length),
+    portfolio: createInitialPortfolio(arenaId),
+    turnoverBudget: turnoverBudgetFor(total),
     playerScore: 50,
     machineScore: 50,
     decisions: [],
@@ -163,7 +184,7 @@ export function isTurnoverExhausted(run: RunState): boolean {
  */
 export function canAffordAction(run: RunState, action: ActionCode, checkpoint?: CheckpointData): boolean {
   if (action === 'HOLD') return true;
-  const cp = checkpoint ?? getCheckpoint(run.currentCheckpoint);
+  const cp = checkpoint ?? getCheckpoint(run.arenaId, run.currentCheckpoint);
   // Cents-scale epsilon so accumulated float error cannot bar an action that
   // exactly fits the remaining budget.
   return run.portfolio.turnoverUsed + turnoverCostFor(action, cp) <= run.turnoverBudget + 1e-9;
@@ -171,7 +192,7 @@ export function canAffordAction(run: RunState, action: ActionCode, checkpoint?: 
 
 /** The stances this checkpoint offers that the remaining budget still covers. */
 export function affordableActions(run: RunState, checkpoint?: CheckpointData): ActionCode[] {
-  const cp = checkpoint ?? getCheckpoint(run.currentCheckpoint);
+  const cp = checkpoint ?? getCheckpoint(run.arenaId, run.currentCheckpoint);
   const offered = cp?.availableActions.map(a => a.actionCode) ?? [];
   return offered.filter(a => canAffordAction(run, a, cp));
 }
@@ -203,9 +224,10 @@ export function actionReturnMultiplier(action: ActionCode): number {
 export function simulatePortfolioAdvance(
   portfolio: PortfolioState,
   action: ActionCode,
-  checkpointSeq: number
+  checkpointSeq: number,
+  arenaId: ArenaId = DEFAULT_ARENA_ID,
 ): PortfolioState {
-  const cp = getCheckpoint(checkpointSeq);
+  const cp = getCheckpoint(arenaId, checkpointSeq);
   if (!cp) return portfolio;
 
   const { returnBias, volatilityDelta, correlationLevel, positionReturns } = cp.portfolioEffect;
@@ -296,7 +318,7 @@ export interface CommitOutcome {
 export function commitPendingDecision(run: RunState): CommitOutcome | null {
   const action = run.pendingAction;
   if (!action) return null;
-  const cp = getCheckpoint(run.currentCheckpoint);
+  const cp = getCheckpoint(run.arenaId, run.currentCheckpoint);
   if (!cp) return null;
 
   // The engine is the authority on what may be committed, not the screen that
@@ -339,7 +361,7 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
     // No fabricated machine drawdown. Where content authors one it is used;
     // otherwise drawdown scores against the arena risk budget.
     machineDD: cp.portfolioEffect.machineDrawdown,
-    riskBudgetDD: CRITICAL_DRAWDOWN,
+    riskBudgetDD: getArena(run.arenaId)?.criticalDrawdown ?? CRITICAL_DRAWDOWN,
   });
 
   const decision: RunDecision = {
@@ -357,8 +379,9 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
     committed: true,
   };
 
-  const portfolio = simulatePortfolioAdvance(run.portfolio, action, run.currentCheckpoint);
-  const crossedNow = portfolio.drawdown <= CRITICAL_DRAWDOWN;
+  const portfolio = simulatePortfolioAdvance(run.portfolio, action, run.currentCheckpoint, run.arenaId);
+  const criticalDD = getArena(run.arenaId)?.criticalDrawdown ?? CRITICAL_DRAWDOWN;
+  const crossedNow = portfolio.drawdown <= criticalDD;
   const n = run.currentCheckpoint;
   const playerScore = Math.round((run.playerScore * (n - 1) + score.totalScore) / n);
   const machineScore = Math.round((run.machineScore * (n - 1) + score.machineScore) / n);
@@ -518,12 +541,15 @@ export interface ReturnSeriesInput {
   machineActionCode: ActionCode;
 }
 
-export function runRiskAdjusted(decisions: readonly ReturnSeriesInput[]): RunRiskAdjusted {
+export function runRiskAdjusted(
+  decisions: readonly ReturnSeriesInput[],
+  arenaId: ArenaId = DEFAULT_ARENA_ID,
+): RunRiskAdjusted {
   const playerReturns: number[] = [];
   const machineReturns: number[] = [];
 
   for (const d of decisions) {
-    const cp = getCheckpoint(d.checkpointSequence);
+    const cp = getCheckpoint(arenaId, d.checkpointSequence);
     if (!cp) continue;
     const bias = cp.portfolioEffect.returnBias;
     playerReturns.push(bias * actionReturnMultiplier(d.actionCode));

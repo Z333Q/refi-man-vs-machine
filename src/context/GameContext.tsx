@@ -2,7 +2,7 @@ import { createContext, useContext, useReducer, useEffect, useCallback, useRef, 
 import type {
   RunState, PlayerProfile, ActionCode, ThesisCode, ModuleCode,
 } from '../lib/gameTypes';
-import { getCheckpoint } from '../lib/covidArena';
+import { getCheckpoint } from '../lib/arenas';
 import { type DecisionCommand } from '../lib/runEngine';
 import { createDefaultProfile } from '../lib/progressionEngine';
 import {
@@ -231,7 +231,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const run = state.run;
     if (!run) { prevCheckpoint.current = null; return; }
     if (run.currentCheckpoint !== prevCheckpoint.current) {
-      const cp = getCheckpoint(run.currentCheckpoint);
+      const cp = getCheckpoint(run.arenaId, run.currentCheckpoint);
       emitEvent('checkpoint.loaded',
         { sequence: run.currentCheckpoint, phase: cp?.phase, crisisDay: cp?.crisisDay },
         {
@@ -251,7 +251,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!run) { prevDecisionCount.current = 0; return; }
     if (run.decisions.length > prevDecisionCount.current) {
       const d = run.decisions[run.decisions.length - 1];
-      const cp = getCheckpoint(d.checkpointSequence);
+      const cp = getCheckpoint(run.arenaId, d.checkpointSequence);
       const ctx = {
         arenaId: run.arenaId,
         checkpointId: checkpointId(run.arenaId, d.checkpointSequence),
@@ -382,7 +382,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const clearXpEarned = useCallback(() => dispatch({ type: 'CLEAR_XP_EARNED' }), []);
   const earnXp = useCallback((amount: number) => dispatch({ type: 'EARN_XP', amount }), []);
 
-  const currentCheckpointData = state.run ? getCheckpoint(state.run.currentCheckpoint) : undefined;
+  const currentCheckpointData = state.run ? getCheckpoint(state.run.arenaId, state.run.currentCheckpoint) : undefined;
 
   return (
     <GameContext.Provider value={{

@@ -6,7 +6,8 @@ import {
   attachThesis, DEFAULT_RUN_SEED,
 } from './runEngine';
 import type { RunState } from './gameTypes';
-import { getCheckpoint } from './covidArena';
+import { getCheckpoint } from './arenas';
+import './arenaIndex';
 import {
   MAX_STORED_RUNS, RUN_RECORD_VERSION, clearRunRecords, flushableRows,
   getRunRecord, latestFinishedRun, latestUnfinishedRun, listRunRecords,
@@ -277,10 +278,10 @@ function variedRun(seed = 31337): RunState {
   const wanted = ['HOLD', 'REDUCE', 'HOLD', 'RAISE_CASH', 'HOLD'] as const;
   for (const action of wanted) {
     const cp = run.currentCheckpoint;
-    const branch = getCheckpoint(cp)?.availableActions.find(a => a.actionCode === action);
+    const branch = getCheckpoint('covid_black_swan', cp)?.availableActions.find(a => a.actionCode === action);
     // Content does not author every stance at every checkpoint; take what is
     // there so the fixture stays honest about the arena it replays.
-    const chosen = branch?.actionCode ?? getCheckpoint(cp)!.availableActions[0].actionCode;
+    const chosen = branch?.actionCode ?? getCheckpoint('covid_black_swan', cp)!.availableActions[0].actionCode;
     const out = commitDecisionCommand(run, { action: chosen, conviction: 60 });
     assert.ok(out);
     run = attachThesis(out.run, 'THESIS_UNCHANGED');

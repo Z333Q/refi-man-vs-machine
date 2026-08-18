@@ -6,7 +6,7 @@ import {
 } from '../lib/runAnalysis';
 import { runRiskAdjusted } from '../lib/runEngine';
 import { getQualityColor } from '../lib/scoringEngine';
-import { getCheckpoint } from '../lib/covidArena';
+import { getCheckpoint } from '../lib/arenas';
 
 // The autopsy reads the Run Record (§57), never a fixture.
 //
@@ -88,7 +88,7 @@ export default function AutopsyScreen({ onContinue }: Props) {
   const flags = flagTallies(record);
   const attribution = scoreAttribution(record);
   const verdict = headline(record);
-  const risk = runRiskAdjusted(record.decisions);
+  const risk = runRiskAdjusted(record.decisions, record.arenaId);
 
   const committed = record.decisions.length;
   const playerTrades = record.decisions.filter(d => d.actionCode !== 'HOLD').length;
@@ -137,7 +137,7 @@ export default function AutopsyScreen({ onContinue }: Props) {
             </div>
             <div className="space-y-1">
               {rows.map(r => {
-                const par = getCheckpoint(r.sequence)?.machinePar ?? 0;
+                const par = getCheckpoint(record.arenaId, r.sequence)?.machinePar ?? 0;
                 const vsPar = r.decision.scoreContribution - par;
                 return (
                   <div

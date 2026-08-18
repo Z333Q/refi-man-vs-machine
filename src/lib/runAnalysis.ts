@@ -14,7 +14,7 @@
 import type { BehavioralFlag } from './gameTypes';
 import type { RecordedDecision, RunRecord } from './runRecord';
 import { actionReturnMultiplier } from './runEngine';
-import { getCheckpoint } from './covidArena';
+import { getCheckpoint } from './arenas';
 
 // ─── Per-checkpoint returns ───────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ export interface CheckpointOutcome {
 export function outcomes(record: RunRecord): CheckpointOutcome[] {
   const out: CheckpointOutcome[] = [];
   for (const d of record.decisions) {
-    const cp = getCheckpoint(d.checkpointSequence);
+    const cp = getCheckpoint(record.arenaId, d.checkpointSequence);
     if (!cp) continue;
     const bias = cp.portfolioEffect.returnBias;
     out.push({
@@ -146,7 +146,7 @@ export function scoreAttribution(record: RunRecord): {
   let belowParCount = 0;
 
   for (const d of record.decisions) {
-    const cp = getCheckpoint(d.checkpointSequence);
+    const cp = getCheckpoint(record.arenaId, d.checkpointSequence);
     if (!cp) continue;
     const delta = d.scoreContribution - cp.machinePar;
     if (delta >= 0) {
