@@ -7,6 +7,7 @@ import {
 import { runRiskAdjusted } from '../lib/runEngine';
 import { getQualityColor } from '../lib/scoringEngine';
 import { getCheckpoint } from '../lib/arenas';
+import { ScoreTrace } from '../components/game/AsciiPlates';
 
 // The autopsy reads the Run Record (§57), never a fixture.
 //
@@ -301,6 +302,15 @@ export default function AutopsyScreen({ onContinue }: Props) {
                   <br />
                   {attribution.belowParCount} fell short, removing {attribution.removed}.
                 </div>
+              </div>
+              {/* The run's shape, not just its total. A steady run and a run
+                  that collapsed once can average the same and are not the same
+                  run — the totals above cannot show that and this can. */}
+              <div className="border-t border-phosphor/20 pt-4">
+                <ScoreTrace
+                  scores={rows.map(r => r.decision.scoreContribution)}
+                  pars={rows.map(r => getCheckpoint(record.arenaId, r.sequence)?.machinePar ?? 0)}
+                />
               </div>
               <div className="border-t border-phosphor/20 pt-4 font-mono text-xs text-phosphor-dim leading-5">
                 SIMULATION RESULT BASED ON PLAYER DECISIONS, OVER HISTORICAL

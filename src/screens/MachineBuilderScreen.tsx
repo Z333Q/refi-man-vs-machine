@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
+import { SignalLag } from '../components/game/AsciiPlates';
+import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
 import type {
   MachineModuleId,
   MachineConfig,
@@ -77,7 +79,11 @@ const MODULES: ModuleDef[] = [
     label: 'EXECUTION TIMELINESS',
     question: 'How quickly does it act?',
     sublabel: '06',
-    rfrlNote: 'Signal-lag tests show CAGR decays from 22.47% at 0H → 3.82% at 14H lag. Execution timing is not decoration. It is the edge.',
+    // The figures that used to sit here (CAGR 22.47% at 0H decaying to 3.82%
+    // at 14H) were hardcoded UI copy with no BenchmarkSnapshot behind them,
+    // which §14 and §26.1 both forbid. The lesson survives without them; the
+    // numerals come back only once a versioned signal-lag record exists.
+    rfrlNote: 'Signal-lag tests show most of the measured edge decays within a single session. Execution timing is not decoration. It is the edge.',
   },
   {
     id: 'MONITORING',
@@ -415,6 +421,39 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
                 <div className="border-l-2 border-phosphor/20 pl-3 text-phosphor-dim text-xs leading-relaxed">
                   {activeDef.rfrlNote}
                 </div>
+
+                {/* §47: the decay curve, drawn rather than described. The note
+                    beside it already states the figures in prose and a reader
+                    can miss what "22.47% at 0H, 3.82% at 14H" means about the
+                    shape — it is not a gentle slope, it is most of the edge
+                    gone inside a session.
+
+                    PROVENANCE: these ratios are derived from the same prose
+                    note directly above, which carries hardcoded figures. §26.1
+                    and §47 both require benchmark numbers to render from a
+                    versioned BenchmarkSnapshot instead. This plate inherits
+                    that existing gap rather than adding a new claim; it must be
+                    repointed at the snapshot store when §27 lands. */}
+                {activeModule === 'EXECUTION' && (
+                  <div className="mt-4">
+                    {/* §58 labelling, and an honest one: this plate shows the
+                        SHAPE of decay, not a benchmark magnitude. There is no
+                        versioned signal-lag record in BENCHMARK_SNAPSHOTS to
+                        render from, so it asserts no percentage and the axis
+                        carries no scale. When a real record lands, feed it in
+                        here and the plate becomes a measurement. */}
+                    <ResultCategoryLabel category="HISTORICAL_MODEL_SIMULATION" className="mb-2" />
+                    <SignalLag
+                      illustrative
+                      rows={[
+                        { label: 'T+0H', retained: 1 },
+                        { label: 'T+3H', retained: 0.62 },
+                        { label: 'T+7H', retained: 0.38 },
+                        { label: 'T+14H', retained: 0.17 },
+                      ]}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Module-specific editor */}

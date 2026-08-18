@@ -19,6 +19,7 @@ import {
 } from '../lib/decisionContract';
 import { classifyDevice, type DeviceClass, type RegionBounds } from '../lib/gestureGeometry';
 import PullToCommit from '../components/game/PullToCommit';
+import { InflationCompression, BankingContagion, SupplyChain, Reflexivity } from '../components/game/AsciiPlates';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
 import ResolutionRace from '../components/game/ResolutionRace';
@@ -754,6 +755,45 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
 
   // The arena's own name, so a run never announces itself as the wrong regime.
   const arenaName = getArena(run.arenaId)?.name ?? 'ARENA';
+
+  // §41/§42/§48 plates, chosen by what the arena is actually teaching. COVID
+  // and Recovery already carry their own signature visuals, so they get none
+  // here rather than a decorative one.
+  const correlation = cp.portfolioEffect.correlationLevel ?? 0;
+  const arenaPlate = (() => {
+    if (run.arenaId === 'banking_stress') {
+      const banks = portfolio.positions.filter(p => p.sector === 'FINANCIALS').slice(0, 6);
+      if (banks.length === 0) return null;
+      return (
+        <BankingContagion
+          nodes={banks.map(b => ({
+            symbol: b.symbol,
+            // Risk contribution above weight is the liquidity story: the name
+            // is carrying more of the portfolio's risk than of its capital.
+            liquidity: Math.max(0.1, Math.min(1, 1 - (b.riskContrib - b.weight) * 4)),
+          }))}
+          correlation={correlation}
+        />
+      );
+    }
+    if (run.arenaId === 'inflation_shift') {
+      const rows = portfolio.positions.slice(0, 5).map(p => ({
+        symbol: p.symbol,
+        before: p.weight,
+        // Higher risk contribution compresses harder: long-duration equity is
+        // what a rate move actually re-prices.
+        after: p.weight * Math.max(0.45, 1 - p.riskContrib * 1.6),
+      }));
+      return <InflationCompression rows={rows} />;
+    }
+    if (run.arenaId === 'taco_protocol') {
+      const sectors = [...new Set(portfolio.positions.map(p => p.sector))].slice(0, 4);
+      return run.currentCheckpoint >= 4
+        ? <Reflexivity />
+        : <SupplyChain sectors={sectors} />;
+    }
+    return null;
+  })();
   // The arena's own risk budget. Printed rather than assumed: these strings
   // said -20% on every arena, which misstates the rule on four of the five.
   const riskLimitPct = `${Math.round((getArena(run.arenaId)?.criticalDrawdown ?? -0.2) * 100)}%`;
@@ -885,6 +925,51 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
       )}
 
       {/* ── Main area ── */}
+      {/* Mobile status strip.
+
+          Cash, drawdown and the turnover meter live in the left rail, which
+          is hidden below lg. On a phone that left the player unable to see
+          the one constraint that silently removes their options: the budget
+          prices out stances, the cards stop responding, and nothing on
+          screen says why. The meter carries the same aria attributes as the
+          rail's, so assistive tech gets it at every width rather than only
+          on a desktop. */}
+      <div className="lg:hidden border-b border-phosphor/10 bg-terminal-deep/40 px-3 py-2">
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-phosphor-dim">CASH</span>
+          <span className="text-phosphor tabular-nums">{(portfolio.cashWeight * 100).toFixed(0)}%</span>
+          <span className="text-phosphor-dim">DD</span>
+          <span className={`tabular-nums ${
+            portfolio.drawdown < -0.10 ? 'text-risk-red'
+            : portfolio.drawdown < -0.05 ? 'text-alert-amber' : 'text-phosphor'
+          }`}>
+            {(portfolio.drawdown * 100).toFixed(1)}%
+          </span>
+          <span className="text-phosphor-dim ml-auto">TURNOVER</span>
+          <span className={`tabular-nums ${turnoverColor}`}>
+            {(portfolio.turnoverUsed * 100).toFixed(0)}% / {(turnoverBudget * 100).toFixed(0)}%
+          </span>
+        </div>
+        <div
+          className="mt-1 h-1 bg-phosphor/10"
+          role="meter"
+          aria-label="TURNOVER BUDGET SPENT"
+          aria-valuenow={Math.round(turnoverSpentPct * 100)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div
+            className={`h-full ${turnoverBarColor}`}
+            style={{ width: `${Math.min(100, turnoverSpentPct * 100)}%` }}
+          />
+        </div>
+        {turnoverExhausted && (
+          <div className="text-risk-red text-xs tracking-widest mt-1">
+            TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
+          </div>
+        )}
+      </div>
+
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left: signal sidebar ──
@@ -1012,12 +1097,25 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                 ))}
               </div>
 
-              {/* Panel content */}
-              <div className="flex-1 overflow-y-auto">
+              {/* Panel content.
+                  The bottom padding is not decorative. Without it the primary
+                  action of the screen — REVIEW & COMMIT — comes to rest flush
+                  against the bottom edge of a phone viewport, where the browser
+                  chrome and the home indicator sit on top of it and the button
+                  cannot reliably be tapped at all. The padding guarantees the
+                  commit control always scrolls clear of the edge; the safe-area
+                  inset covers notched devices. Desktop has the room already. */}
+              <div className="flex-1 overflow-y-auto pb-28 lg:pb-0"
+                   style={{ scrollPaddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
                 {/* SIGNAL panel */}
                 {activePanel === 'SIGNAL' && (
                   <div className="p-5" data-spotlight="cp-signal">
+                    {/* §34: the plate explains the state this arena is about,
+                        and is built from the run's own numbers rather than
+                        drawn once — a picture that disagrees with the portfolio
+                        beside it is worse than no picture. */}
+                    {arenaPlate && <div className="mb-5">{arenaPlate}</div>}
                     <div className="text-phosphor-dim text-xs tracking-widest mb-1">TODAY'S SIGNAL</div>
                     <div className="text-phosphor text-lg font-bold mb-3 leading-snug">{cp.signalTitle}</div>
                     <div className="text-phosphor-mid text-xs leading-relaxed mb-5">{cp.signalBody}</div>
