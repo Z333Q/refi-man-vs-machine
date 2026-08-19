@@ -44,7 +44,19 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev -- --port 5199 --host 127.0.0.1',
     url: 'http://127.0.0.1:5199',
-    reuseExistingServer: !process.env.CI,
+    // Always reuse a server that is already up, including in CI.
+    //
+    // This was `!process.env.CI`, which is the documented default and which
+    // leaks locally: a run killed part-way — by a command timeout, a Ctrl-C, a
+    // crashed worker — never tears its dev server down, and the next run
+    // starts another one. Six accumulated over two days here, each holding an
+    // esbuild worker, and the machine's load average climbed until specs
+    // started timing out and looking like flakes. Reusing means repeated runs
+    // share one server instead of stacking new ones.
+    //
+    // CI starts clean every time, so there is never a server to reuse there and
+    // the flag costs nothing.
+    reuseExistingServer: true,
     timeout: 120_000,
   },
 });

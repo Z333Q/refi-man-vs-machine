@@ -48,6 +48,45 @@ jobs:
       - name: Build
         run: npm run build
 
+  # The end-to-end suite existed for a week without ever running here, which
+  # meant 47 specs covering the whole run loop were verified only when someone
+  # happened to run them by hand on a laptop. That laptop's load average
+  # swung between 11 and 300 during one afternoon, and wall time for the suite
+  # swung with it — 2.6 minutes quiet, 12.4 minutes busy — which produced
+  # timeouts that looked like flakes and cost real time to disprove. A
+  # dedicated runner removes the variable entirely.
+  e2e:
+    name: End-to-end (desktop + phone)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end tests
+        run: npm run e2e
+        env:
+          # The app will not boot without these, and CI has no .env, so without
+          # values every spec fails at the first render. The anon key is public
+          # by design and the suite never signs in; the fallbacks keep the job
+          # working on forks where the secrets are not available.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'http://127.0.0.1:54321' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'ci-placeholder-anon-key' }}
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-traces
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
   handoff:
     name: Handoff / Typecheck / Tests
     runs-on: ubuntu-latest
