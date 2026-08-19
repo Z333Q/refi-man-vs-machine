@@ -14,12 +14,35 @@ import {
 
 // The authored difficulty curve. Locked here so a change to it is a deliberate
 // content edit that updates this row, not a silent drift.
+//
+// Recalibrated 2026-08. The previous curve climbed 60 to 84 across the arena
+// while the score a player can actually reach FALLS, because drawdownScore
+// (20% weight) and turnoverScore (10%) both decay as a crisis runs long. In a
+// 22-checkpoint crash that is a third of the score eroding under the player.
+// The two curves crossed at CP7: from CP8 to CP22 the best available move
+// scored 5 to 18 points BELOW par, so fifteen consecutive checkpoints were
+// unwinnable no matter what the player chose. Measured, not estimated — the
+// engine is deterministic, so the achievable ceiling can be swept exactly.
+//
+// That contradicted §1.4, which asks for beating the machine to be hard and
+// repeatable-with-difficulty, not arithmetically impossible. The curve now
+// tracks the achievable ceiling with headroom tapering from about +18 to about
+// +3, which is the same difficulty shape Recovery and Banking Stress already
+// have and which they demonstrably play well at.
+//
+// Par falls through the panic phase rather than climbing. That is the honest
+// direction: the machine is taking drawdown in March 2020 too, and a par that
+// rises while every participant is being hurt describes no machine that exists.
+//
+// This remains authored content. §26.4's transparent rules machine is the real
+// answer — par generated from an actual constrained-machine run rather than
+// hand-authored — and until that exists these numbers are a calibration, not a
+// benchmark, and must not be presented as one.
 const PAR_CURVE = [
-  60, 64, 63, 70, 74, 66, 76, 78, 80, 79, 81, 80, 82, 82,
-  // CP15-22, the re-entry arc §21.3 specifies. The curve flattens rather than
-  // continuing to climb: by July the crisis is decided and what remains to be
-  // scored is discipline, not survival.
-  78, 76, 79, 77, 83, 80, 81, 84,
+  64, 63, 64, 70, 69, 63, 64, 60, 56, 52, 52, 56, 55, 59,
+  // CP15-22, the re-entry arc §21.3 specifies. Par recovers as the drawdown
+  // heals and the scoreable question turns back into discipline from survival.
+  59, 61, 66, 62, 64, 62, 65, 67,
 ];
 
 test('every checkpoint authors its own par', () => {
