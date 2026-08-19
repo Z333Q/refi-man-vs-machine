@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import BuildStamp from '../components/BuildStamp';
 import { useGame } from '../context/GameContext';
 import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
 import { getArena } from '../lib/arenas';
@@ -920,6 +921,11 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
               / MCH {fmtSharpe(riskAdjusted.machineSharpe)}
             </span>
           </div>
+          {/* The run screen is fullscreen: no nav bar and no ticker tape, and a
+              run is where a tester spends almost all of their time. Hidden on
+              the narrowest bar, which is already budgeted to the point of
+              wrapping. */}
+          <BuildStamp className="hidden sm:inline" />
           {onHelp && (
             <button
               onClick={onHelp}
