@@ -49,29 +49,28 @@ export function posture(state: MachinePetState): PetPosture {
   return 'STANDING';
 }
 
-const W = 26;          // canvas width
-const HEAD_L = 5;      // the head sits centred over the body
-const BODY_L = 4;
-const BODY_W = 12;
+const W = 22;          // canvas width
+const L = 4;           // left edge of the head and body
+const HEAD_W = 13;     // ears included
 // Legs paired front and back the way a dog's are. Evenly spaced legs read as a
-// table; paired legs read as an animal.
-const MOUNTS = [6, 7, 12, 13];
+// table; paired legs read as an animal. They sit under the belly's sockets.
+const MOUNTS = [6, 8, 12, 14];
+const TAIL = 17;       // the tail hangs off the body's right wall, at TAIL - 1
 
 /**
- * A dog, specifically.
+ * Box-drawing, not ASCII — and that is a deliberate choice, not the old
+ * confusion.
  *
- * The previous face was ` /\_/\ ` over `( o.o )` over ` > w < `, which is the
- * canonical ASCII *cat*: pointed ears on top of the skull, a triangle nose, a
- * whisker mouth. Read it beside any cat ASCII on the internet and it is the
- * same drawing.
+ * A previous pass moved this to strict printable ASCII on the grounds that
+ * ASCII is letters and digits, which is true. But the drawing that came out of
+ * it read worse: `,-._____,-.` over `(  o   o  )` reads as a bear, and the
+ * letterforms fight the terminal grid rather than sitting in it. This shape,
+ * built from U+2500 box-drawing, is the one that reads as a pup. Looking right
+ * wins over being categorically named right, so the name is what gets
+ * corrected: this is box-drawing art, and the file should eventually say so.
  *
- * What separates a dog is ears that hang down the sides of the head rather than
- * pointing up from it, and a blunt muzzle with a big round nose. Both are here,
- * and neither is decoration: the ears are what SIGNAL installs and the nose is
- * what ELIGIBILITY installs, so the two most dog-like features are also the two
- * that say most about the configuration.
- *
- * Everything is printable ASCII, 0x20 to 0x7E, enforced by test.
+ * The half-width rule still holds and is still tested: a fullwidth glyph counts
+ * as one code point but occupies two columns, which tears the row it sits on.
  */
 const row = () => Array<string>(W).fill(' ');
 const put = (r: string[], col: number, text: string) => {
@@ -86,44 +85,47 @@ const put = (r: string[], col: number, text: string) => {
  * X-eyes: a guardrail stopping an order is a success condition (§45), and
  * drawing it as roadkill would teach the opposite.
  */
-function eyesFor(state: MachinePetState, canSee: boolean): string {
-  if (!canSee) return '.   .';
+function eyesFor(state: MachinePetState, canSee: boolean): [string, string] {
+  if (!canSee) return ['·', '·'];
   switch (posture(state)) {
-    case 'BENCH':  return 'u   u';   // dozing
-    case 'BRACED': return 'O   O';   // wide awake, watching the risk
-    case 'HALTED': return '-   -';   // stopped, calm
-    default:       return 'o   o';   // happy
+    case 'BENCH':  return ['^', '^'];   // dozing
+    case 'BRACED': return ['◉', '◉'];   // wide awake, watching the risk
+    case 'HALTED': return ['—', '—'];   // stopped, calm
+    default:       return ['◕', '◕'];   // happy
   }
 }
 
 /**
- * The tail, which is the fastest read in the drawing.
+ * The tail.
  *
- * It cascades up and away when the machine is running clean, so the wag is
- * legible as motion in a still frame.
+ * It joins the body through a ╠ in the right wall rather than floating beside
+ * it — an unattached diagonal next to a dog's rump does not read as a tail, as
+ * was pointed out in the least flattering way available. It is also the fastest
+ * read of state in the drawing, so each posture gets a distinct shape.
  */
 function drawTail(canvas: string[][], state: MachinePetState) {
   switch (posture(state)) {
-    case 'STANDING':
-      put(canvas[2], 20, '~~');
-      put(canvas[3], 18, '~~');
-      put(canvas[4], 16, '~~');
+    case 'STANDING':                       // up in a happy curl
+      put(canvas[4], TAIL, '╭╮');
+      put(canvas[5], TAIL, '╯│');
+      put(canvas[6], TAIL + 1, '╰');
       break;
-    case 'BRACED':                       // straight out behind, balancing
-      put(canvas[4], 16, '~~~~');
+    case 'BRACED':                         // straight out behind, balancing
+      put(canvas[5], TAIL, '══╗');
+      put(canvas[6], TAIL + 2, '╰');
       break;
-    case 'HALTED':                       // lowered, still
-      put(canvas[5], 16, '\\');
-      put(canvas[6], 17, '\\');
+    case 'HALTED':                         // lowered, still
+      put(canvas[5], TAIL, '╮');
+      put(canvas[6], TAIL, '╰╮');
       break;
-    default:                             // BENCH: curled in against the body
-      put(canvas[6], 16, '_,');
+    default:                               // BENCH: curled in tight, resting
+      put(canvas[5], TAIL, '╯');
       break;
   }
 }
 
 /**
- * Draw the dog.
+ * Draw the pup.
  *
  * Every part is present only if the module that justifies it is installed, so
  * the drawing cannot claim capability the configuration does not have.
@@ -132,38 +134,63 @@ export function drawMachine(state: MachinePetState): string[] {
   const has = (m: MachineModuleId) => state.installed.includes(m);
   const p = posture(state);
   const canvas = [row(), row(), row(), row(), row(), row(), row(), row()];
-  const eyes = eyesFor(state, has('MONITORING'));
+  const [eyeL, eyeR] = eyesFor(state, has('MONITORING'));
+  const nose = has('ELIGIBILITY') ? 'ᴥ' : '·';
 
-  // ── Head. SIGNAL is what it hears a regime with, so SIGNAL gives it the
-  // floppy ears — which are also most of what stops it reading as a cat.
+  // ── Head. SIGNAL gives it the long floppy ears, which hang past the eyes to
+  // the jaw. Short ears sitting on the corners of the skull read as a bear;
+  // the length is what makes it a dog.
   const ears = has('SIGNAL');
-  put(canvas[0], HEAD_L, ears ? ',-._____,-.' : '.---------.');
-  put(canvas[1], HEAD_L, ears ? `(  ${eyes}  )` : `|  ${eyes}  |`);
-  // ELIGIBILITY is the intake screen; on a dog, that is its nose.
-  put(canvas[2], HEAD_L, ` \\  ${has('ELIGIBILITY') ? '(@)' : '   '}   /`);
-  put(canvas[3], HEAD_L, "  '--\\_/--'");
+  put(canvas[0], L, ears ? '╭╮╭───────╮╭╮' : '  ╭───────╮  ');
+  put(canvas[1], L, ears ? `│││ ${eyeL}   ${eyeR} │││` : `  │ ${eyeL}   ${eyeR} │  `);
+  put(canvas[2], L, ears ? `│││   ${nose}   │││` : `  │   ${nose}   │  `);
+  put(canvas[3], L, ears ? '╰╯╰─┬───┬─╯╰╯' : '  ╰─┬───┬─╯  ');
 
   // ── Body. UNIVERSE is the frame everything else hangs off.
   if (!has('UNIVERSE')) {
-    put(canvas[5], BODY_L, 'no chassis');
+    put(canvas[5], L, ' no chassis ');
     return canvas.map(r => r.join(''));
   }
 
-  // GUARDRAILS thicken the shell.
-  const h = has('GUARDRAILS') ? '=' : '-';
-  put(canvas[4], BODY_L, ',' + h.repeat(BODY_W - 2) + '.');
-  put(canvas[5], BODY_L, `(  ${has('CONSTRUCTION') ? '######' : '......'}  )`);
-  put(canvas[6], BODY_L, '`' + h.repeat(BODY_W - 2) + "'");
+  const g = has('GUARDRAILS');
+  const [h, v, tl, tr, bl, br, join] = g
+    ? ['═', '║', '╔', '╗', '╚', '╝', '╠']
+    : ['─', '│', '╭', '╮', '╰', '╯', '├'];
+
+  // Back, with the two neck posts the head sits on.
+  const back = Array<string>(HEAD_W).fill(h);
+  back[0] = tl; back[HEAD_W - 1] = tr;
+  back[4] = '╧'; back[8] = '╧';
+  put(canvas[4], L, back.join(''));
+
+  // The barrel, carrying whatever the machine holds. Its right wall is a
+  // junction, because that is where the tail attaches.
+  put(canvas[5], L, v + `   ${has('CONSTRUCTION') ? '█████' : '·····'}   ` + join);
+
+  // Belly, with the four leg sockets.
+  const belly = Array<string>(HEAD_W).fill(h);
+  belly[0] = bl; belly[HEAD_W - 1] = br;
+  MOUNTS.forEach(c => { belly[c - L] = '╤'; });
+  put(canvas[6], L, belly.join(''));
 
   drawTail(canvas, state);
 
   // ── Legs. EXECUTION is the ability to act at all.
-  const paw = !has('EXECUTION') ? '.'
-    : p === 'BENCH' ? ','
-      : p === 'BRACED' ? '/'
-        : p === 'HALTED' ? '.'
-          : "'";
-  MOUNTS.forEach(c => { canvas[7][c] = paw; });
+  if (!has('EXECUTION')) {
+    MOUNTS.forEach(c => { canvas[7][c] = '╌'; });
+    return canvas.map(r => r.join(''));
+  }
+
+  if (p === 'BRACED') {
+    // A wider stance under load. Bracing is competence, not injury.
+    put(canvas[7], MOUNTS[0] - 1, '╱');
+    canvas[7][MOUNTS[1]] = '║';
+    canvas[7][MOUNTS[2]] = '║';
+    put(canvas[7], MOUNTS[3] + 1, '╲');
+  } else {
+    const paw = p === 'BENCH' ? '╘' : p === 'HALTED' ? '▬' : '╨';
+    MOUNTS.forEach(c => { canvas[7][c] = paw; });
+  }
 
   return canvas.map(r => r.join(''));
 }
