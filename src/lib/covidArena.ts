@@ -26,7 +26,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 1,
-    machinePar: 60,
+    machinePar: 64,
     phase: 'BACKGROUND_NOISE',
     crisisDay: 'JAN 22',
     signalTitle: 'WUHAN CLUSTER: EARLY REPORTS',
@@ -116,7 +116,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 2,
-    machinePar: 64,
+    machinePar: 63,
     phase: 'BACKGROUND_NOISE',
     crisisDay: 'JAN 30',
     signalTitle: 'WHO GLOBAL HEALTH EMERGENCY',
@@ -209,7 +209,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 3,
-    machinePar: 63,
+    machinePar: 64,
     phase: 'BACKGROUND_NOISE',
     crisisDay: 'FEB 12',
     signalTitle: 'DIAMOND PRINCESS: SPREAD MECHANICS VISIBLE',
@@ -394,7 +394,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 5,
-    machinePar: 74,
+    machinePar: 69,
     phase: 'REGIME_RECOGNITION',
     crisisDay: 'FEB 27',
     signalTitle: 'FASTEST CORRECTION IN HISTORY: -10% IN 6 DAYS',
@@ -485,7 +485,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 6,
-    machinePar: 66,
+    machinePar: 63,
     phase: 'REGIME_RECOGNITION',
     crisisDay: 'MAR 2',
     signalTitle: 'EMERGENCY FED CUT: RALLY FADES TO FLAT',
@@ -575,7 +575,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 7,
-    machinePar: 76,
+    machinePar: 64,
     phase: 'PANIC',
     crisisDay: 'MAR 9',
     signalTitle: 'CIRCUIT BREAKER #1: TRADING HALTED',
@@ -666,7 +666,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 8,
-    machinePar: 78,
+    machinePar: 60,
     phase: 'PANIC',
     crisisDay: 'MAR 11',
     signalTitle: 'WHO PANDEMIC DECLARATION: TRAVEL BAN',
@@ -760,7 +760,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 9,
-    machinePar: 80,
+    machinePar: 56,
     phase: 'PANIC',
     crisisDay: 'MAR 16',
     signalTitle: 'CIRCUIT BREAKER #3: WORST DAY SINCE 1987',
@@ -851,7 +851,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 10,
-    machinePar: 79,
+    machinePar: 52,
     phase: 'POLICY_INTERVENTION',
     crisisDay: 'MAR 23',
     signalTitle: 'FED UNLIMITED QE: CARES ACT IMMINENT',
@@ -945,7 +945,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 11,
-    machinePar: 81,
+    machinePar: 52,
     phase: 'BOTTOMING',
     crisisDay: 'MAR 26',
     signalTitle: 'LARGEST SINGLE-DAY GAIN SINCE 1933: +9.4%',
@@ -1036,7 +1036,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 12,
-    machinePar: 80,
+    machinePar: 56,
     phase: 'BOTTOMING',
     crisisDay: 'APR 9',
     signalTitle: 'S&P +25% FROM TROUGH: STRUCTURAL VS. SPECULATIVE',
@@ -1131,7 +1131,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 13,
-    machinePar: 82,
+    machinePar: 55,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'MAY 14',
     signalTitle: 'CONCENTRATION AUDIT: FIVE STOCKS, THREE RISKS',
@@ -1225,7 +1225,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
   // ───────────────────────────────────────────────────────────────────────────
   {
     sequence: 14,
-    machinePar: 82,
+    machinePar: 59,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'JUN 8',
     signalTitle: 'RECOVERY ROTATION: WHICH RECOVERY DO YOU OWN?',
@@ -1326,7 +1326,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
 
   {
     sequence: 15,
-    machinePar: 78,
+    machinePar: 59,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'JUL 2',
     signalTitle: 'THE CASH QUESTION: STILL WAITING FOR CONFIRMATION?',
@@ -1413,7 +1413,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
 
   {
     sequence: 16,
-    machinePar: 76,
+    machinePar: 61,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'AUG 18',
     signalTitle: 'INDEX RECOVERS EVERYTHING. THE AVERAGE STOCK DOES NOT.',
@@ -1499,7 +1499,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
 
   {
     sequence: 17,
-    machinePar: 79,
+    machinePar: 66,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'SEP 8',
     signalTitle: 'TECH CORRECTION: -11% IN THREE SESSIONS',
@@ -1585,7 +1585,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
 
   {
     sequence: 18,
-    machinePar: 77,
+    machinePar: 62,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'OCT 28',
     signalTitle: 'SECOND WAVE AND AN ELECTION: TWO UNKNOWNS AT ONCE',
@@ -1672,7 +1672,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
 
   {
     sequence: 19,
-    machinePar: 83,
+    machinePar: 64,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'NOV 9',
     signalTitle: 'VACCINE EFFICACY 90%: THE ROTATION ARRIVES IN ONE DAY',
@@ -1759,7 +1759,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
 
   {
     sequence: 20,
-    machinePar: 80,
+    machinePar: 62,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'DEC 4',
     signalTitle: 'DRAWDOWN RECOVERED. THE PORTFOLIO IS NOT THE ONE YOU STARTED WITH.',
@@ -1845,7 +1845,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
 
   {
     sequence: 21,
-    machinePar: 81,
+    machinePar: 65,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'DEC 18',
     signalTitle: 'STRUCTURE NORMALISING. POSITIONING CROWDED.',
@@ -1931,7 +1931,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
 
   {
     sequence: 22,
-    machinePar: 84,
+    machinePar: 67,
     phase: 'RECOVERY_REENTRY',
     crisisDay: 'DEC 31',
     signalTitle: 'HISTORICAL WINDOW CLOSED',
