@@ -1,5 +1,6 @@
 import type { ArenaId } from '../lib/gameTypes';
-import { getArena } from '../lib/arenas';
+import { ArenaEmblem } from '../components/game/AsciiPlates';
+import { getArena, getTotalCheckpoints } from '../lib/arenas';
 
 // The briefing describes the arena the player is about to enter.
 //
@@ -20,6 +21,9 @@ export default function ArenaBriefingScreen({
   arenaId = 'covid_black_swan', onStart, onViewMachineCard, onBack,
 }: Props) {
   const arena = getArena(arenaId);
+  // Was hardcoded to 22, which is COVID's count. Every other arena is shorter,
+  // so the briefing promised decision points that do not exist.
+  const checkpointCount = getTotalCheckpoints(arenaId);
   const name = arena?.name ?? 'ARENA';
   // Split on the last space so a two-word regime stacks the way the plate was
   // designed for, and a one-word regime simply does not stack.
@@ -126,24 +130,21 @@ export default function ArenaBriefingScreen({
               </div>
             </div>
 
-            {/* ASCII arena icon */}
+            {/* Arena emblem. Every arena used to draw the same blob
+                with its name stamped inside it, so five different regimes
+                arrived looking identical; the emblem is a picture of what the
+                arena is about. */}
             <div className="terminal-panel-deep p-4">
-              <pre className="ascii-art text-phosphor-dim text-center" style={{ fontSize: '9px', lineHeight: '1.1' }}>
-{`       ___
-   ___/   \\___
-  /           \\
- |   ${(arena?.name ?? '').slice(0, 11).padStart(6 + Math.ceil((arena?.name ?? '').slice(0, 11).length / 2)).padEnd(11)} |
-  \\           /
-   \\___   ___/
-       \\_/
-${(arena?.window ?? '').padStart(8 + Math.ceil((arena?.window ?? '').length / 2)).padEnd(16)}`}
-              </pre>
+              <ArenaEmblem arenaId={arenaId} className="text-phosphor-dim" />
+              <div className="font-mono text-xs text-phosphor-dim text-center mt-2 tracking-widest">
+                {arena?.window}
+              </div>
             </div>
 
             <div className="terminal-panel p-4 space-y-2">
               <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-2">CHECKPOINTS</div>
               <div className="flex items-center gap-1">
-                {Array.from({ length: 22 }, (_, i) => (
+                {Array.from({ length: checkpointCount }, (_, i) => (
                   <div
                     key={i}
                     className="w-2 h-4"
@@ -151,7 +152,7 @@ ${(arena?.window ?? '').padStart(8 + Math.ceil((arena?.window ?? '').length / 2)
                   />
                 ))}
               </div>
-              <div className="font-mono text-xs text-phosphor-dim">22 DECISION POINTS</div>
+              <div className="font-mono text-xs text-phosphor-dim">{checkpointCount} DECISION POINTS</div>
             </div>
 
             {/* Actions */}

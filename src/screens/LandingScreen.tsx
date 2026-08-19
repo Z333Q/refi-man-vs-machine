@@ -1,4 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
+import BuildStamp from '../components/BuildStamp';
 import { useReveal } from '../components/landing/useReveal';
 
 interface Props {
@@ -100,6 +101,10 @@ export default function LandingScreen({ onEnter }: Props) {
         <div className="flex items-center gap-4">
           <span className="font-mono text-xs text-phosphor-mid tracking-widest">REFI ALPHA</span>
           <span className="font-mono text-xs text-phosphor-dim">v0.9.2-BETA</span>
+          {/* The version string is hand-maintained and says nothing about which
+              deployment this is. The build stamp does, which is what a bug
+              report needs. */}
+          <BuildStamp />
         </div>
         <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto">
           {TICKER_ITEMS.map((item) => (

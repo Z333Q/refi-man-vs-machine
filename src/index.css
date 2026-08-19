@@ -290,6 +290,61 @@
   box-shadow: 0 0 0 9999px rgba(5, 8, 6, 0.82);
 }
 
+/* ── Signal emphasis ──────────────────────────────────────────────────────────
+   The checkpoint screen presents the new information, the event feed, the
+   portfolio, the risk numbers and the machine card in the same weight of the
+   same green, so arriving at a checkpoint gave the eye nowhere to land and
+   players did not know the signal was the thing to read first.
+
+   §34 governs: this is not decoration, it marks WHAT CHANGED. The signal is
+   the only content on the screen that is new at this checkpoint; everything
+   else is state the player can already see. So it gets the one piece of
+   emphasis on the screen, and gets it once, on arrival.
+
+   The static treatment — hot left edge, lifted background — carries the
+   hierarchy on its own. The arrival sweep is an accent on top of it, which is
+   why reduced motion can drop the sweep entirely and lose nothing (§62). */
+.signal-block {
+  border-left: 2px solid #0CD4A0;
+  background: linear-gradient(
+    90deg,
+    rgba(12, 212, 160, 0.07) 0%,
+    rgba(12, 212, 160, 0.02) 45%,
+    transparent 100%
+  );
+}
+
+.signal-block-arriving {
+  animation: signalArrive 1500ms ease-out 1;
+}
+
+@keyframes signalArrive {
+  0% {
+    border-left-color: #79FFD7;
+    box-shadow: -3px 0 18px -2px rgba(121, 255, 215, 0.55);
+  }
+  55% {
+    border-left-color: #79FFD7;
+    box-shadow: -3px 0 14px -2px rgba(121, 255, 215, 0.38);
+  }
+  100% {
+    border-left-color: #0CD4A0;
+    box-shadow: none;
+  }
+}
+
+/* The eyebrow marker. Holds attention only until the player has read the
+   signal — it stops on its own rather than pulsing at them for the whole
+   checkpoint, which would become noise and defeat the point. */
+.signal-new-marker {
+  animation: signalMarker 1200ms ease-in-out 3;
+}
+
+@keyframes signalMarker {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
 /* ── App chrome gutters ───────────────────────────────────────────────────────
    The nav bar and the onboarding bridge are both fixed, so a screen laid out
    to fill the viewport puts its own footer CTA underneath them — which is how

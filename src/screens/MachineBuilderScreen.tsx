@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
+import { SignalLag } from '../components/game/AsciiPlates';
+import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
 import type {
   MachineModuleId,
   MachineConfig,
@@ -77,7 +79,11 @@ const MODULES: ModuleDef[] = [
     label: 'EXECUTION TIMELINESS',
     question: 'How quickly does it act?',
     sublabel: '06',
-    rfrlNote: 'Signal-lag tests show CAGR decays from 22.47% at 0H → 3.82% at 14H lag. Execution timing is not decoration. It is the edge.',
+    // The figures that used to sit here (CAGR 22.47% at 0H decaying to 3.82%
+    // at 14H) were hardcoded UI copy with no BenchmarkSnapshot behind them,
+    // which §14 and §26.1 both forbid. The lesson survives without them; the
+    // numerals come back only once a versioned signal-lag record exists.
+    rfrlNote: 'Signal-lag tests show most of the measured edge decays within a single session. Execution timing is not decoration. It is the edge.',
   },
   {
     id: 'MONITORING',
@@ -267,7 +273,13 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
     <div className="min-h-screen bg-terminal-black terminal-screen font-mono flex flex-col">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
+      {/* The header used to force the back button, title, module count,
+          version and all four tabs onto one row. Below the lg breakpoint the
+          flex children compressed past their own text and the tab buttons
+          physically overlapped each other — SCHEMATIC sat on top of STRESS
+          TEST, which could then never be tapped. It now wraps, and the tabs
+          are their own scrollable row rather than a squeezed tail of this one. */}
+      <div className="flex flex-wrap items-center justify-between gap-y-3 px-5 py-3 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="text-phosphor-dim text-xs hover:text-phosphor transition-colors tracking-widest">
             ← BACK
@@ -278,18 +290,20 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
             <div className="text-phosphor text-sm font-bold">{machineName}</div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="text-phosphor-dim text-xs">
             {installedModules.size}/{MODULES.length} MODULES
           </div>
           <div className="text-phosphor text-xs font-bold">
             {versionString(versionNumber)}
           </div>
+        </div>
+        <div className="flex items-center gap-1.5 w-full lg:w-auto overflow-x-auto scrollbar-hide">
           {(['BUILD', 'SCHEMATIC', 'FUNNEL', 'STRESS TEST'] as BuilderTab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`text-xs tracking-widest px-2.5 py-1 border transition-colors ${
+              className={`text-xs tracking-widest px-2.5 py-1 border transition-colors flex-shrink-0 whitespace-nowrap ${
                 tab === t
                   ? 'border-phosphor text-phosphor bg-phosphor/8'
                   : 'border-phosphor/20 text-phosphor-dim hover:border-phosphor/35 hover:text-phosphor'
@@ -415,6 +429,39 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
                 <div className="border-l-2 border-phosphor/20 pl-3 text-phosphor-dim text-xs leading-relaxed">
                   {activeDef.rfrlNote}
                 </div>
+
+                {/* §47: the decay curve, drawn rather than described. The note
+                    beside it already states the figures in prose and a reader
+                    can miss what "22.47% at 0H, 3.82% at 14H" means about the
+                    shape — it is not a gentle slope, it is most of the edge
+                    gone inside a session.
+
+                    PROVENANCE: these ratios are derived from the same prose
+                    note directly above, which carries hardcoded figures. §26.1
+                    and §47 both require benchmark numbers to render from a
+                    versioned BenchmarkSnapshot instead. This plate inherits
+                    that existing gap rather than adding a new claim; it must be
+                    repointed at the snapshot store when §27 lands. */}
+                {activeModule === 'EXECUTION' && (
+                  <div className="mt-4">
+                    {/* §58 labelling, and an honest one: this plate shows the
+                        SHAPE of decay, not a benchmark magnitude. There is no
+                        versioned signal-lag record in BENCHMARK_SNAPSHOTS to
+                        render from, so it asserts no percentage and the axis
+                        carries no scale. When a real record lands, feed it in
+                        here and the plate becomes a measurement. */}
+                    <ResultCategoryLabel category="HISTORICAL_MODEL_SIMULATION" className="mb-2" />
+                    <SignalLag
+                      illustrative
+                      rows={[
+                        { label: 'T+0H', retained: 1 },
+                        { label: 'T+3H', retained: 0.62 },
+                        { label: 'T+7H', retained: 0.38 },
+                        { label: 'T+14H', retained: 0.17 },
+                      ]}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Module-specific editor */}
@@ -442,6 +489,47 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
                   Configure options above then install
                 </div>
               )}
+
+              {/* Compile, for viewports with no left rail.
+                  The only compile control used to live inside that rail, which
+                  is `hidden lg:flex`. A phone player could install every module
+                  through the stepper and then had no way to build the machine
+                  at all — §18's build/test/diagnose/revise loop was unreachable
+                  below the lg breakpoint. Same handler and same disabled rule
+                  as the rail's copy; it is a second entrance, not a second
+                  behaviour. */}
+              <div className="lg:hidden mt-6 pt-5 border-t border-phosphor/15">
+                {compiling ? (
+                  <div className="text-phosphor-dim text-xs tracking-widest text-center animate-pulse">
+                    COMPILING...
+                  </div>
+                ) : compiled && isUnchanged ? (
+                  <div className="text-paper-green text-xs tracking-widest text-center">
+                    ✓ {compiledVersion} READY
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleCompile}
+                    disabled={installedModules.size === 0}
+                    className={`w-full py-2.5 text-xs tracking-widest border transition-colors ${
+                      installedModules.size === 0
+                        ? 'border-phosphor/10 text-phosphor-dim cursor-not-allowed'
+                        : 'border-phosphor text-phosphor hover:bg-phosphor/10 hover:text-phosphor-hot'
+                    }`}
+                  >
+                    {history.length > 0
+                      ? `RECOMPILE AS ${versionString(nextVersionNumber(machineName))} ▶`
+                      : allInstalled
+                        ? 'COMPILE ▶'
+                        : `COMPILE PARTIAL (${installedModules.size}/${MODULES.length})`}
+                  </button>
+                )}
+                {installedModules.size === 0 && (
+                  <div className="text-phosphor-dim text-xs text-center mt-1" style={{ fontSize: '9px' }}>
+                    INSTALL AT LEAST ONE MODULE
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

@@ -105,9 +105,16 @@ export default function TipOverlay() {
             </div>
           </div>
 
-          {/* Footer: tip counter if multiple in queue */}
+          {/* Footer.
+
+              The ESC hint used to render on every tip, including blocking ones
+              where the key handler deliberately ignores it. A modal that tells
+              the player to press a key that does nothing is worse than one that
+              offers no way out at all: they press it, nothing happens, and the
+              interface has just taught them not to trust its own instructions.
+              A blocking tip states what it actually wants instead. */}
           <div className="px-5 py-2 border-t border-phosphor/10 text-phosphor-dim text-xs tracking-widest">
-            GUIDANCE: FULL · ESC TO DISMISS
+            GUIDANCE: FULL · {tip.blocking ? 'CHOOSE AN OPTION TO CONTINUE' : 'ESC TO DISMISS'}
           </div>
         </div>
       </div>

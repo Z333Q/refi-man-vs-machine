@@ -23,3 +23,8 @@ dist-ssr
 .env
 .vercel
 .env*
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/

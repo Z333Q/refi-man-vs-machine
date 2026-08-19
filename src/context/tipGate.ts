@@ -16,6 +16,8 @@
 export type TipGameState =
   | 'IDLE'
   | 'DECISION_REQUIRED'
+  // The commit confirmation is open and awaiting a yes or no.
+  | 'COMMIT_CONFIRM'
   | 'THESIS_PROMPT'
   | 'MARKET_ADVANCING'
   | 'MACHINE_REVEAL'
@@ -38,7 +40,19 @@ export type TipGameState =
  * the exact opposite of what §11 wants, since those tips are written to land on
  * the result once it is sitting there readable.
  */
-export const BLOCKED_TIP_STATES: readonly TipGameState[] = ['MARKET_ADVANCING', 'THESIS_PROMPT'];
+/*
+ * COMMIT_CONFIRM joins them for the same reason THESIS_PROMPT is here. The
+ * confirmation is a question the player has been asked and must answer, and a
+ * tip opening over it covers the answer with something the player did not ask
+ * for. A module unlock lands exactly here — the unlock fires on the commit that
+ * earned it — so without this the reward for progressing was a blocking tip
+ * dropped on top of the dialog that produced it.
+ */
+export const BLOCKED_TIP_STATES: readonly TipGameState[] = [
+  'MARKET_ADVANCING',
+  'THESIS_PROMPT',
+  'COMMIT_CONFIRM',
+];
 
 /** Whether a tip may open right now. */
 export function isTipGateOpen(state: TipGameState): boolean {

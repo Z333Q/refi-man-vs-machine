@@ -154,7 +154,12 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
                   className={`flex items-center gap-4 py-3 cursor-pointer group transition-all duration-150 ${
                     selected.id === arena.id ? 'opacity-100' : 'opacity-70 hover:opacity-90'
                   }`}
-                  onClick={() => arena.state !== 'locked' && setSelected(arena)}
+                  // A locked arena is selectable, only not enterable. The
+                  // guard used to be on selection, which made clicking a locked
+                  // regime do nothing at all and left the panel's own [ LOCKED ]
+                  // branch unreachable. A player looking at the progression
+                  // should be able to read what is ahead of them.
+                  onClick={() => setSelected(arena)}
                 >
                   <div className={`font-mono text-lg w-6 flex-shrink-0 ${NODE_CLASS[arena.state]}`}>
                     {NODE_SYMBOL[arena.state]}
@@ -293,9 +298,17 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
                 [ ENTER ARENA ]
               </button>
             ) : (
-              <button className="cmd-button w-full tracking-widest opacity-40 cursor-not-allowed">
-                [ LOCKED ]
-              </button>
+              <div className="space-y-1">
+                <button
+                  disabled
+                  className="cmd-button w-full tracking-widest opacity-40 cursor-not-allowed"
+                >
+                  [ LOCKED ]
+                </button>
+                <div className="font-mono text-xs text-phosphor-dim text-center leading-snug">
+                  FINISH THE PREVIOUS ARENA TO UNLOCK THIS ONE.
+                </div>
+              </div>
             )}
           </div>
         </div>

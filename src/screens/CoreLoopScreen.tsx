@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import BuildStamp from '../components/BuildStamp';
 import { useGame } from '../context/GameContext';
 import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
 import { getArena } from '../lib/arenas';
 import { useTips, type TipGameState } from '../context/TipContext';
-import type { ActionBranch, ArenaId, ThesisCode } from '../lib/gameTypes';
+import type { ActionBranch, ArenaId, ModuleCode, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
@@ -19,6 +20,8 @@ import {
 } from '../lib/decisionContract';
 import { classifyDevice, type DeviceClass, type RegionBounds } from '../lib/gestureGeometry';
 import PullToCommit from '../components/game/PullToCommit';
+import { InflationCompression, BankingContagion, SupplyChain, Reflexivity, TacoPortrait } from '../components/game/AsciiPlates';
+import { CorrelationPanel, DrawdownPanel, RegimePanel } from '../components/game/ModulePanels';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
 import ResolutionRace from '../components/game/ResolutionRace';
@@ -30,7 +33,13 @@ import { ArcRail } from '../components/onboarding/ArcRail';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ActivePanel = 'SIGNAL' | 'PORTFOLIO' | 'RISK' | 'DECIDE';
+type ActivePanel =
+  | 'SIGNAL' | 'PORTFOLIO' | 'RISK' | 'DECIDE'
+  // Panels that exist only once their module is unlocked. Modules used to
+  // unlock into nothing at all — `activeModules` was read by the dot rack in
+  // the right rail and by nothing else — so earning one announced a module,
+  // ticked a counter, and gave the player nowhere to go and nothing to open.
+  | 'CORRELATION' | 'DRAWDOWN' | 'REGIME';
 
 const DIRECTION_COLORS = {
   up: 'text-paper-green',
@@ -358,13 +367,14 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
   useEffect(() => {
     const state: TipGameState =
       thesisPrompt ? 'THESIS_PROMPT'
+      : commitConfirm ? 'COMMIT_CONFIRM'
       : run?.phase === 'RESOLVING' && revealDelay === 0 ? 'MARKET_ADVANCING'
       : run?.phase === 'RESOLVING' ? 'MACHINE_REVEAL'
       : run?.phase === 'COMPLETE' ? 'COMPLETE'
       : run ? 'DECISION_REQUIRED'
       : 'IDLE';
     reportGameState(state);
-  }, [thesisPrompt, run?.phase, revealDelay, run, reportGameState]);
+  }, [thesisPrompt, commitConfirm, run?.phase, revealDelay, run, reportGameState]);
 
   // Leaving the run screen must reopen the gate, or a tip queued during a
   // resolution would be stuck behind a state nothing is going to change.
@@ -542,6 +552,11 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
       if (e.key === 'r' || e.key === 'R') { openPanel('RISK'); return; }
       if (e.key === 's' || e.key === 'S') { openPanel('SIGNAL'); return; }
       if (e.key === 'd' || e.key === 'D') { openPanel('DECIDE'); return; }
+      // Module keys only bind once the module is unlocked, so a key never
+      // opens a panel the player has not earned.
+      if ((e.key === 'c' || e.key === 'C') && run?.activeModules.includes('CORRELATION_MATRIX')) { openPanel('CORRELATION'); return; }
+      if ((e.key === 'w' || e.key === 'W') && run?.activeModules.includes('DRAWDOWN_MAP')) { openPanel('DRAWDOWN'); return; }
+      if ((e.key === 'g' || e.key === 'G') && run?.activeModules.includes('REGIME_SCANNER')) { openPanel('REGIME'); return; }
 
       // 1..4 select a stance card
       const n = Number(e.key);
@@ -754,6 +769,58 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
 
   // The arena's own name, so a run never announces itself as the wrong regime.
   const arenaName = getArena(run.arenaId)?.name ?? 'ARENA';
+
+  // §41/§42/§48 plates, chosen by what the arena is actually teaching. COVID
+  // and Recovery already carry their own signature visuals, so they get none
+  // here rather than a decorative one.
+  const correlation = cp.portfolioEffect.correlationLevel ?? 0;
+  const arenaPlate = (() => {
+    if (run.arenaId === 'banking_stress') {
+      const banks = portfolio.positions.filter(p => p.sector === 'FINANCIALS').slice(0, 6);
+      if (banks.length === 0) return null;
+      return (
+        <BankingContagion
+          nodes={banks.map(b => ({
+            symbol: b.symbol,
+            // Risk contribution above weight is the liquidity story: the name
+            // is carrying more of the portfolio's risk than of its capital.
+            liquidity: Math.max(0.1, Math.min(1, 1 - (b.riskContrib - b.weight) * 4)),
+          }))}
+          correlation={correlation}
+        />
+      );
+    }
+    if (run.arenaId === 'inflation_shift') {
+      const rows = portfolio.positions.slice(0, 5).map(p => ({
+        symbol: p.symbol,
+        before: p.weight,
+        // Higher risk contribution compresses harder: long-duration equity is
+        // what a rate move actually re-prices.
+        after: p.weight * Math.max(0.45, 1 - p.riskContrib * 1.6),
+      }));
+      return <InflationCompression rows={rows} />;
+    }
+    if (run.arenaId === 'taco_protocol') {
+      const sectors = [...new Set(portfolio.positions.map(p => p.sector))].slice(0, 4);
+      // §48: the portrait resolves as the player works through the episode,
+      // beside the plate for the round they are actually in.
+      return (
+        <div className="flex gap-4 items-start">
+          <TacoPortrait
+            round={run.currentCheckpoint}
+            totalRounds={run.totalCheckpoints}
+            className="flex-shrink-0 hidden sm:block"
+          />
+          <div className="min-w-0 flex-1">
+            {run.currentCheckpoint >= 4
+              ? <Reflexivity />
+              : <SupplyChain sectors={sectors} />}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  })();
   // The arena's own risk budget. Printed rather than assumed: these strings
   // said -20% on every arena, which misstates the rule on four of the five.
   const riskLimitPct = `${Math.round((getArena(run.arenaId)?.criticalDrawdown ?? -0.2) * 100)}%`;
@@ -761,18 +828,35 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
   // Risk-adjusted standing, reconstructed from the decision record each render.
   const riskAdjusted = runRiskAdjusted(run.decisions, run.arenaId);
 
+  // An unlocked module has to become somewhere the player can actually go.
+  // These tabs appear the moment the module is earned and carry the same
+  // access key the module has always advertised in TERMINAL_MODULES.
+  const MODULE_TABS: { id: ActivePanel; label: string; key: string; module: ModuleCode }[] = [
+    { id: 'CORRELATION', label: 'CORRELATION', key: 'C', module: 'CORRELATION_MATRIX' },
+    { id: 'DRAWDOWN', label: 'DRAWDOWN', key: 'W', module: 'DRAWDOWN_MAP' },
+    { id: 'REGIME', label: 'REGIME', key: 'G', module: 'REGIME_SCANNER' },
+  ];
+  const unlockedModuleTabs = MODULE_TABS.filter(t => run.activeModules.includes(t.module));
+
   const PANEL_TABS: { id: ActivePanel; label: string; key: string }[] = [
     { id: 'SIGNAL', label: 'SIGNAL', key: 'S' },
     { id: 'PORTFOLIO', label: 'PORTFOLIO', key: 'P' },
     { id: 'RISK', label: 'RISK', key: 'R' },
+    ...unlockedModuleTabs.map(({ id, label, key }) => ({ id, label, key })),
     { id: 'DECIDE', label: decisionReady ? 'DECIDE ✓' : 'DECIDE', key: 'D' },
   ];
 
   return (
     <div className="min-h-screen bg-terminal-black terminal-screen flex flex-col font-mono">
 
-      {/* ── Top bar ── */}
-      <div className="flex items-center justify-between gap-3 px-3 sm:px-4 py-2 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
+      {/* ── Top bar ──
+           Wraps rather than compressing. The left group could shrink but its
+           children are all `whitespace-nowrap`, and the right group refused to
+           shrink at all, so on a phone the two groups overran each other and
+           CP 01 / 22 was printed on top of YOU 50. Letting the bar take a
+           second row costs a few points of height and keeps every figure
+           legible. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 sm:px-4 py-2 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
             onClick={onBack}
@@ -798,7 +882,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0">
+        <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0 ml-auto">
           <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap tabular-nums">
             <span className={`text-xs font-bold ${run.playerScore >= run.machineScore ? 'text-paper-green' : 'text-risk-red'}`}>
               YOU {run.playerScore}
@@ -837,6 +921,11 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
               / MCH {fmtSharpe(riskAdjusted.machineSharpe)}
             </span>
           </div>
+          {/* The run screen is fullscreen: no nav bar and no ticker tape, and a
+              run is where a tester spends almost all of their time. Hidden on
+              the narrowest bar, which is already budgeted to the point of
+              wrapping. */}
+          <BuildStamp className="hidden sm:inline" />
           {onHelp && (
             <button
               onClick={onHelp}
@@ -869,9 +958,27 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
               <div className="text-xs tracking-widest text-paper-green truncate">
                 ▲ MODULE UNLOCKED: {moduleJustUnlocked.replace(/_/g, ' ')}
               </div>
-              <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">
-                ADDED TO YOUR TERMINAL
-              </div>
+              {/* "ADDED TO YOUR TERMINAL" was true and useless: it did not say
+                  where, and there was nowhere. Point at the tab it just
+                  created, and give the player a way to open it from here. */}
+              {(() => {
+                const dest = MODULE_TABS.find(t => t.module === moduleJustUnlocked);
+                if (!dest) {
+                  return (
+                    <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">
+                      ADDED TO YOUR MACHINE
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    onClick={() => { openPanel(dest.id); clearModuleUnlock(); }}
+                    className="text-phosphor text-xs tracking-widest mt-0.5 underline underline-offset-2 hover:text-phosphor-hot transition-colors"
+                  >
+                    OPEN {dest.label} · [{dest.key}]
+                  </button>
+                );
+              })()}
             </div>
             <button
               onClick={clearModuleUnlock}
@@ -885,6 +992,51 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
       )}
 
       {/* ── Main area ── */}
+      {/* Mobile status strip.
+
+          Cash, drawdown and the turnover meter live in the left rail, which
+          is hidden below lg. On a phone that left the player unable to see
+          the one constraint that silently removes their options: the budget
+          prices out stances, the cards stop responding, and nothing on
+          screen says why. The meter carries the same aria attributes as the
+          rail's, so assistive tech gets it at every width rather than only
+          on a desktop. */}
+      <div className="lg:hidden border-b border-phosphor/10 bg-terminal-deep/40 px-3 py-2">
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-phosphor-dim">CASH</span>
+          <span className="text-phosphor tabular-nums">{(portfolio.cashWeight * 100).toFixed(0)}%</span>
+          <span className="text-phosphor-dim">DD</span>
+          <span className={`tabular-nums ${
+            portfolio.drawdown < -0.10 ? 'text-risk-red'
+            : portfolio.drawdown < -0.05 ? 'text-alert-amber' : 'text-phosphor'
+          }`}>
+            {(portfolio.drawdown * 100).toFixed(1)}%
+          </span>
+          <span className="text-phosphor-dim ml-auto">TURNOVER</span>
+          <span className={`tabular-nums ${turnoverColor}`}>
+            {(portfolio.turnoverUsed * 100).toFixed(0)}% / {(turnoverBudget * 100).toFixed(0)}%
+          </span>
+        </div>
+        <div
+          className="mt-1 h-1 bg-phosphor/10"
+          role="meter"
+          aria-label="TURNOVER BUDGET SPENT"
+          aria-valuenow={Math.round(turnoverSpentPct * 100)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div
+            className={`h-full ${turnoverBarColor}`}
+            style={{ width: `${Math.min(100, turnoverSpentPct * 100)}%` }}
+          />
+        </div>
+        {turnoverExhausted && (
+          <div className="text-risk-red text-xs tracking-widest mt-1">
+            TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
+          </div>
+        )}
+      </div>
+
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left: signal sidebar ──
@@ -893,7 +1045,17 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
              every interactive control) to nothing behind an overflow-hidden
              parent. The signal headline and body are step 1 of the checkpoint
              loop, so they are re-rendered above the tabs on small screens
-             rather than dropped. */}
+             rather than dropped.
+
+             The rail used to print the signal body in full and repeat all four
+             event-feed items under a WIRE heading — the exact text the centre
+             panel was already showing under SUPPORTING DETAIL. The checkpoint
+             screen was therefore rendering the same paragraph twice and the
+             same four items twice, which is most of the reason players said
+             they could not tell where to look. The rail now keeps only what is
+             genuinely its own: where we are, the headline as orientation, the
+             market data table, and the standing portfolio numbers. The signal
+             itself has one home, in the centre. */}
         <div className="hidden lg:flex w-64 flex-shrink-0 border-r border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest mb-1">
@@ -902,9 +1064,6 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
             <div className="text-phosphor text-sm font-bold leading-tight">{cp.signalTitle}</div>
           </div>
 
-          <div className="px-4 py-3 border-b border-phosphor/10 text-phosphor-mid text-xs leading-relaxed overflow-y-auto max-h-36">
-            {cp.signalBody}
-          </div>
 
           <div className="px-4 py-3 border-b border-phosphor/10">
             <div className="text-phosphor-dim text-xs tracking-widest mb-2">MARKET DATA</div>
@@ -920,17 +1079,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
             </div>
           </div>
 
-          <div className="flex-1 px-4 py-3 overflow-y-auto">
-            <div className="text-phosphor-dim text-xs tracking-widest mb-2">WIRE</div>
-            <div className="space-y-2">
-              {cp.eventFeed.slice(0, 4).map((ev, i) => (
-                <div key={i} className="border-l-2 border-phosphor/20 pl-2">
-                  <div className="text-phosphor-dim text-xs tracking-widest">{ev.category}</div>
-                  <div className="text-phosphor-mid text-xs leading-snug mt-0.5">{ev.text}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <div className="flex-1" />
 
           <div className="px-4 py-2 border-t border-phosphor/10 bg-terminal-deep/40 text-xs space-y-0.5">
             <div className="flex justify-between">
@@ -988,7 +1137,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                   <div className="text-phosphor-dim text-xs tracking-widest">
                     {cp.phase.replace(/_/g, ' ')} · {cp.crisisDay}
                   </div>
-                  <div className="text-phosphor text-xs font-bold leading-tight mt-0.5">{cp.signalTitle}</div>
+                  <div className="text-phosphor-hot text-xs font-bold leading-tight mt-0.5">{cp.signalTitle}</div>
                 </div>
               )}
 
@@ -1012,21 +1161,61 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                 ))}
               </div>
 
-              {/* Panel content */}
-              <div className="flex-1 overflow-y-auto">
+              {/* Panel content.
+                  The bottom padding is not decorative. Without it the primary
+                  action of the screen — REVIEW & COMMIT — comes to rest flush
+                  against the bottom edge of a phone viewport, where the browser
+                  chrome and the home indicator sit on top of it and the button
+                  cannot reliably be tapped at all. The padding guarantees the
+                  commit control always scrolls clear of the edge; the safe-area
+                  inset covers notched devices. Desktop has the room already. */}
+              <div className="flex-1 overflow-y-auto pb-28 lg:pb-0"
+                   style={{ scrollPaddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
                 {/* SIGNAL panel */}
                 {activePanel === 'SIGNAL' && (
                   <div className="p-5" data-spotlight="cp-signal">
-                    <div className="text-phosphor-dim text-xs tracking-widest mb-1">TODAY'S SIGNAL</div>
-                    <div className="text-phosphor text-lg font-bold mb-3 leading-snug">{cp.signalTitle}</div>
-                    <div className="text-phosphor-mid text-xs leading-relaxed mb-5">{cp.signalBody}</div>
+                    {/* §34: the plate explains the state this arena is about,
+                        and is built from the run's own numbers rather than
+                        drawn once — a picture that disagrees with the portfolio
+                        beside it is worse than no picture. */}
+                    {arenaPlate && <div className="mb-5">{arenaPlate}</div>}
+                    {/* The signal is the only thing on this screen that is new
+                        at this checkpoint. Everything else — portfolio, risk,
+                        machine card, event feed — is state the player can
+                        already see, and it was all rendered at the same weight
+                        in the same green, so the eye had nowhere to land. This
+                        block now carries the screen's single piece of emphasis,
+                        and the feed below it is explicitly demoted to context. */}
+                    <div
+                      key={run.currentCheckpoint}
+                      className={`signal-block ${reducedMotion ? '' : 'signal-block-arriving'} pl-4 pr-3 py-3 mb-5`}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span
+                          className={`text-phosphor-hot text-xs ${reducedMotion ? '' : 'signal-new-marker'}`}
+                          aria-hidden="true"
+                        >
+                          ●
+                        </span>
+                        <span className="text-phosphor-hot text-xs tracking-widest">
+                          NEW INFORMATION · READ THIS FIRST
+                        </span>
+                      </div>
+                      <h2 className="text-phosphor-hot text-xl font-bold mb-2 leading-snug terminal-glow">
+                        {cp.signalTitle}
+                      </h2>
+                      <div className="text-phosphor text-sm leading-relaxed">{cp.signalBody}</div>
+                    </div>
 
-                    <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div className="text-phosphor-dim text-xs tracking-widest mb-2">
+                      SUPPORTING DETAIL
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
                       {cp.eventFeed.map((ev, i) => (
-                        <div key={i} className="border-l-2 border-phosphor/20 pl-3">
-                          <div className="text-phosphor-dim text-xs tracking-widest">{ev.category}</div>
-                          <div className="text-phosphor-mid text-xs mt-0.5 leading-snug">{ev.text}</div>
+                        <div key={i} className="border-l border-phosphor/15 pl-3">
+                          <div className="text-phosphor-dim/70 text-xs tracking-widest">{ev.category}</div>
+                          <div className="text-phosphor-dim text-xs mt-0.5 leading-snug">{ev.text}</div>
                         </div>
                       ))}
                     </div>
@@ -1050,6 +1239,22 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                       DECIDE ▶ [D]
                     </button>
                   </div>
+                )}
+
+                {/* Module panels. These exist only once earned, which is the
+                    whole point: the unlock now leads somewhere. */}
+                {activePanel === 'CORRELATION' && (
+                  <CorrelationPanel portfolio={portfolio} checkpoint={cp} />
+                )}
+                {activePanel === 'DRAWDOWN' && (
+                  <DrawdownPanel
+                    portfolio={portfolio}
+                    decisions={run.decisions}
+                    criticalDrawdown={getArena(run.arenaId)?.criticalDrawdown ?? -0.2}
+                  />
+                )}
+                {activePanel === 'REGIME' && (
+                  <RegimePanel portfolio={portfolio} checkpoint={cp} />
                 )}
 
                 {/* PORTFOLIO panel: read-only investigation */}
