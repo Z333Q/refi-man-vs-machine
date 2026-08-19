@@ -49,114 +49,136 @@ export function posture(state: MachinePetState): PetPosture {
   return 'STANDING';
 }
 
-const W = 23;          // canvas width
-const FRAME = 17;      // chassis outer width
-const INNER = FRAME - 2;
-// The four legs mount at these columns of the chassis, and the bottom rail
-// draws its sockets at the same indices. Sharing the constant is what keeps
-// the feet under the body instead of beside it.
-const MOUNTS = [2, 6, 10, 14];
+const W = 22;          // canvas width
+const L = 2;           // left edge of the dog's outline
+const R = 15;          // right edge of it
+// Four legs, paired front and back the way a dog's are. Evenly spaced legs
+// read as a table; paired legs read as an animal.
+const MOUNTS = [4, 6, 11, 13];
 
-const centre = (s: string, width: number) => {
-  const room = width - [...s].length;
-  const left = Math.max(0, Math.floor(room / 2));
-  return ' '.repeat(left) + s + ' '.repeat(Math.max(0, room - left));
+/** Blank canvas row. */
+const row = () => Array<string>(W).fill(' ');
+const put = (r: string[], col: number, text: string) => {
+  [...text].forEach((ch, i) => { r[col + i] = ch; });
 };
-const pad = (s: string) => centre(s, W);
 
 /**
- * A FRAME-wide row carrying a glyph at each leg mount.
+ * The face carries the state.
  *
- * The row keeps its full width rather than being trimmed: a trimmed row is
- * shorter than the chassis, so re-centring it shifts the legs a column away
- * from the sockets they are supposed to hang from.
+ * A reader looks at a dog's eye before anything else, so the posture should be
+ * legible there before a single label is read. HALTED deliberately gets no
+ * X-eye and no dead face: a guardrail stopping an order is a success condition
+ * (§45), and drawing it as roadkill would teach the opposite.
+ *
+ * Every glyph is half-width. A fullwidth character takes two columns while
+ * counting as one code point, which tears the drawing apart on its row.
  */
-const mountRow = (glyphs: string | string[]) => {
-  const row = Array<string>(FRAME).fill(' ');
-  MOUNTS.forEach((col, i) => {
-    row[col] = Array.isArray(glyphs) ? glyphs[i] : glyphs;
-  });
-  return pad(row.join(''));
-};
+function faceFor(state: MachinePetState, canSee: boolean): { eye: string; snout: string } {
+  if (!canSee) return { eye: '·', snout: 'ᴥ' };
+  switch (posture(state)) {
+    case 'BENCH':  return { eye: '^', snout: '‿' };   // dozing, content
+    case 'BRACED': return { eye: '◉', snout: 'ᴗ' };   // wide awake, watching
+    case 'HALTED': return { eye: '-', snout: '·' };   // stopped, calm
+    default:       return { eye: '◕', snout: 'ᴥ' };   // happy
+  }
+}
 
 /**
- * Draw the machine.
+ * The tail, drawn in half-blocks so it reads as thick and fluffy rather than as
+ * a scratch of line art. It is the loudest thing in the drawing on purpose:
+ * it is the fastest read of what the machine is doing.
+ */
+function drawTail(canvas: string[][], state: MachinePetState) {
+  switch (posture(state)) {
+    case 'STANDING':                    // up and wagging
+      put(canvas[0], 17, '▟▛');
+      put(canvas[1], 16, '▟▛');
+      put(canvas[2], 16, '▛');
+      break;
+    case 'BRACED':                      // out straight behind, balancing
+      put(canvas[1], 16, '▟▛');
+      put(canvas[2], 16, '▀▀▄');
+      break;
+    case 'HALTED':                      // lowered, still
+      put(canvas[2], 16, '▙');
+      put(canvas[3], 16, '▜▖');
+      break;
+    default:                            // BENCH: curled in against the body
+      put(canvas[3], 16, '▂▖');
+      break;
+  }
+}
+
+/**
+ * Draw the dog, in profile.
  *
- * Every part is present only if the module that justifies it is installed, so
- * the drawing cannot claim capability the configuration does not have — the
- * same rule the plates follow.
+ * A front view is a box with ears; a side view reads as an animal, and gives
+ * the tail somewhere to go. Every part is present only if the module that
+ * justifies it is installed, so the drawing cannot claim capability the
+ * configuration does not have.
  */
 export function drawMachine(state: MachinePetState): string[] {
   const has = (m: MachineModuleId) => state.installed.includes(m);
   const p = posture(state);
+  const { eye, snout } = faceFor(state, has('MONITORING'));
 
-  const lines: string[] = [];
+  // Six rows: ear, back, eye, muzzle, belly, paws.
+  const canvas = [row(), row(), row(), row(), row(), row()];
 
-  // ── Sensor mast: SIGNAL is how it perceives a regime at all.
-  if (has('SIGNAL')) {
-    const eyes = has('MONITORING') ? '◉ ◉' : '· ·';
-    lines.push(pad('╔═════╗'));
-    lines.push(pad(`║ ${eyes} ║`));
-    lines.push(pad('╚══╤══╝'));
-  } else {
-    lines.push(pad(''));
-    lines.push(pad('╷'));
-    lines.push(pad('╵'));
-  }
+  // ── Ear. SIGNAL is what it hears a regime with, so SIGNAL gives it one.
+  if (has('SIGNAL')) put(canvas[0], 3, '╭╮');
 
-  // ── Chassis: UNIVERSE is the frame everything else bolts to.
+  // ── Body. UNIVERSE is the frame everything else hangs off.
   if (!has('UNIVERSE')) {
-    lines.push(pad('┌─ ─ ─ ─ ─ ─ ─┐'));
-    lines.push(pad('│ NO CHASSIS  │'));
-    lines.push(pad('└─ ─ ─ ─ ─ ─ ─┘'));
-    return lines;
+    put(canvas[2], L, '╌ ╌ ╌ ╌ ╌ ╌');
+    put(canvas[3], L, 'NO CHASSIS');
+    return canvas.map(r => r.join('').replace(/\s+$/, '').padEnd(W));
   }
 
-  // GUARDRAILS armour the frame: a double rule where they exist, single where
-  // they do not.
   const g = has('GUARDRAILS');
-  const [h, v, tl, tr, bl, br] = g
-    ? ['═', '║', '╔', '╗', '╚', '╝']
-    : ['─', '│', '┌', '┐', '└', '┘'];
+  const [h, v, br] = g ? ['═', '║', '╝'] : ['─', '│', '╯'];
 
-  // Bottom rail carries the leg sockets at the shared mount columns.
-  const rail = Array<string>(FRAME).fill(h);
-  rail[0] = bl; rail[FRAME - 1] = br;
-  MOUNTS.forEach(i => { rail[i] = '╤'; });
+  // The back: head crown, then the spine running to the rump.
+  put(canvas[1], L, (has('SIGNAL') ? '╭╯╰' : '╭──') + h.repeat(R - L - 3) + (g ? '╗' : '╮'));
+  // The eye line, carrying whatever the machine is holding.
+  put(canvas[2], L, v);
+  put(canvas[2], L + 2, eye);
+  put(canvas[2], L + 6, has('CONSTRUCTION') ? '█████' : '·····');
+  put(canvas[2], R, v);
+  // The muzzle line. ELIGIBILITY is the intake screen; on a dog, its nose.
+  put(canvas[3], L - 1, '╰' + (has('ELIGIBILITY') ? snout : '·'));
+  put(canvas[3], L + 2, ' ');
+  put(canvas[3], R, v);
 
-  lines.push(pad(tl + h.repeat(INNER) + tr));
-  // Odd-length labels, because INNER is odd: an even label cannot sit centred
-  // in an odd space and ends up a column off from the frame around it.
-  lines.push(pad(v + centre(has('CONSTRUCTION') ? '███ PAYLOAD ███' : 'EMPTY PAYLOAD', INNER) + v));
-  lines.push(pad(v + centre(has('ELIGIBILITY') ? '▤▤▤ FILTERS ▤▤▤' : 'NO FILTER', INNER) + v));
-  lines.push(pad(rail.join('')));
+  // The belly, with the four leg sockets.
+  const belly = row();
+  put(belly, L, (g ? '╚' : '╰') + h.repeat(R - L - 1) + br);
+  MOUNTS.forEach(c => { belly[c] = '┬'; });
+  canvas[4] = belly;
 
-  // ── Legs: EXECUTION is the ability to act at all. Four of them, because a
-  // process that can only stand is not a process.
+  drawTail(canvas, state);
+
+  // ── Legs. EXECUTION is the ability to act at all.
   if (!has('EXECUTION')) {
-    lines.push(mountRow('╌'));
-    lines.push(pad('NO ACTUATORS'));
-    return lines;
+    MOUNTS.forEach(c => { canvas[5][c] = '╌'; });
+    return canvas.map(r => r.join('').replace(/\s+$/, '').padEnd(W));
   }
 
-  if (p === 'BENCH') {
-    // Folded on the bench: built, not compiled, so it has not stood up yet.
-    lines.push(mountRow('╘'));
-    lines.push(pad('ON THE BENCH'));
-  } else if (p === 'BRACED') {
-    // A wider stance under load: the outer legs splay to take it. Bracing is
-    // competence, not injury, and must not be drawn as damage.
-    lines.push(mountRow(['╱', '║', '║', '╲']));
-    lines.push(mountRow('╨'));
-  } else if (p === 'HALTED') {
-    lines.push(mountRow('║'));
-    lines.push(mountRow('▬'));
+  const paw =
+    p === 'BENCH' ? '╘'
+      : p === 'HALTED' ? '▬'
+        : '╨';
+  if (p === 'BRACED') {
+    // A wider stance under load. Bracing is competence, not injury.
+    put(canvas[5], MOUNTS[0] - 1, '╱');
+    canvas[5][MOUNTS[1]] = '║';
+    canvas[5][MOUNTS[2]] = '║';
+    put(canvas[5], MOUNTS[3] + 1, '╲');
   } else {
-    lines.push(mountRow('║'));
-    lines.push(mountRow('╨'));
+    MOUNTS.forEach(c => { canvas[5][c] = paw; });
   }
 
-  return lines;
+  return canvas.map(r => r.join('').replace(/\s+$/, '').padEnd(W));
 }
 
 /** One line of plain text saying what the drawing shows, for §62. */
@@ -164,9 +186,9 @@ export function describeMachine(state: MachinePetState): string {
   const n = state.installed.length;
   const p = posture(state);
   const stance =
-    p === 'BENCH' ? 'on the bench, not yet compiled'
+    p === 'BENCH' ? 'curled up on the bench, not yet compiled'
       : p === 'HALTED' ? 'halted by its own guardrail'
         : p === 'BRACED' ? 'braced, running under elevated risk'
-          : 'standing, running inside its limits';
-  return `Machine with ${n} of 7 modules installed, ${stance}.`;
+          : 'up on all four legs, running inside its limits';
+  return `Robot dog with ${n} of 7 modules installed, ${stance}.`;
 }
