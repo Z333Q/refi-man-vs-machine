@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import BuildStamp from '../components/BuildStamp';
 import { emitEvent, captureFunnelAttribution, getFunnelAttribution } from '../lib/events';
 
 // Arcade-style attract screen — the customized first step into the game.
@@ -134,6 +135,7 @@ export default function TitleScreen({ onEnter }: Props) {
           <span className="font-mono text-xs text-phosphor-dim tracking-widest flex-shrink-0">
             MARCH 2020 // LIVE TAPE
           </span>
+          <BuildStamp className="flex-shrink-0" />
           {TICKER.map(t => (
             <span key={t.symbol} className="font-mono text-xs flex-shrink-0">
               <span className="text-phosphor-mid">{t.symbol} </span>
