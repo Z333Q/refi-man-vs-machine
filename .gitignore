@@ -28,3 +28,7 @@ dist-ssr
 /test-results/
 /playwright-report/
 /blob-report/
+
+# Vite writes these while resolving the config and deletes them again; the
+# race means `git add -A` can catch one mid-build.
+vite.config.ts.timestamp-*
