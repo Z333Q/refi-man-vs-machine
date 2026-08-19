@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
+import MachinePet from '../components/game/MachinePet';
 import { SignalLag } from '../components/game/AsciiPlates';
 import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
 import type {
@@ -551,6 +552,19 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
           {tab === 'SCHEMATIC' && !compiling && (
             <div className="p-6">
               <div className="text-phosphor-dim text-xs tracking-widest mb-4">MACHINE SCHEMATIC · {versionString(versionNumber)}</div>
+
+              {/* The machine as a machine. §19 asks for visible evolution and
+                  §43 for an assembly that fills in module by module; a rack of
+                  dots reading 7/11 is a checklist, not a thing you built. */}
+              <div className="mb-6 pb-6 border-b border-phosphor/15">
+                <MachinePet
+                  state={{
+                    installed: [...installedModules],
+                    compiled: compiled && isUnchanged,
+                  }}
+                />
+              </div>
+
               <MachineSchematic config={config} installedModules={installedModules} />
             </div>
           )}
