@@ -42,9 +42,9 @@ test('nothing is drawn that the configuration does not have', () => {
 
   const full = drawMachine({ installed: ALL, compiled: true }).join('\n');
   assert.match(full, /######/, 'a built portfolio is carried');
-  assert.match(full, /> w </, 'eligibility gives it a nose');
-  assert.match(full, /o\.o/, 'monitoring opens both eyes');
-  assert.match(full, /\/\\_\/\\/, 'signal gives it ears');
+  assert.match(full, /\(@\)/, 'eligibility gives it a nose');
+  assert.match(full, /o {3}o/, 'monitoring opens both eyes');
+  assert.match(full, /,-\._____,-\./, 'signal gives it floppy ears');
   assert.match(full, /~~/, 'a standing dog wags its tail');
 });
 
@@ -70,16 +70,16 @@ test('without execution it has no legs, however much else is installed', () => {
 
 test('it only opens its eyes with monitoring installed', () => {
   const blind = drawMachine({ installed: ['UNIVERSE', 'SIGNAL'], compiled: false }).join('\n');
-  assert.match(blind, /\( \. \. \)/, 'no monitoring, no open eyes');
+  assert.match(blind, /\. {3}\./, 'no monitoring, no open eyes');
   const seeing = drawMachine({ installed: ['UNIVERSE', 'SIGNAL', 'MONITORING'], compiled: false }).join('\n');
-  assert.match(seeing, /u\.u/, 'uncompiled and watching: dozing on the bench');
+  assert.match(seeing, /u {3}u/, 'uncompiled and watching: dozing on the bench');
 });
 
 test('the face and tail read the posture before any label does', () => {
   const eyes = (s: Parameters<typeof drawMachine>[0]) => drawMachine(s).join('\n');
-  assert.match(eyes({ installed: ALL, compiled: true }), /o\.o/, 'standing: happy');
-  assert.match(eyes({ installed: ALL, compiled: true, riskUsed: 0.8 }), /O\.O/, 'braced: wide awake');
-  assert.match(eyes({ installed: ALL, compiled: true, breached: true }), /-\.-/, 'halted: calm');
+  assert.match(eyes({ installed: ALL, compiled: true }), /o {3}o/, 'standing: happy');
+  assert.match(eyes({ installed: ALL, compiled: true, riskUsed: 0.8 }), /O {3}O/, 'braced: wide awake');
+  assert.match(eyes({ installed: ALL, compiled: true, breached: true }), /- {3}-/, 'halted: calm');
 
   // The tail is the fastest read in the drawing, so it must differ per state.
   const tails = new Set([
@@ -93,6 +93,18 @@ test('the face and tail read the posture before any label does', () => {
   // A halted machine did its job. It must never be drawn as dead.
   const halted = eyes({ installed: ALL, compiled: true, breached: true });
   assert.ok(!halted.includes('x') && !halted.includes('X'), 'no X-eyes on a working guardrail');
+});
+
+test('it is a dog, not a cat', () => {
+  // The previous face was ` /\_/\ ` over `( o.o )` over ` > w < `, which is
+  // the canonical ASCII cat: pointed ears on top of the skull, triangle nose,
+  // whisker mouth. What separates a dog is ears hanging down the SIDES and a
+  // blunt muzzle with a round nose, so both are pinned here.
+  const dog = drawMachine({ installed: ALL, compiled: true }).join('\n');
+  assert.ok(!dog.includes('/\\_/\\'), 'no pointed cat ears on top of the head');
+  assert.ok(!dog.includes('> w <'), 'no whisker mouth');
+  assert.match(dog, /\(@\)/, 'a blunt muzzle with a round nose');
+  assert.match(dog, /\( {2}o {3}o {2}\)/, 'ears wrapping down the sides of the face');
 });
 
 test('the drawing is actual ASCII', () => {
