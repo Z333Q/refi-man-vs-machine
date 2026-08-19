@@ -1,5 +1,5 @@
 import type { ArenaId } from '../lib/gameTypes';
-import { ArenaEmblem } from '../components/game/AsciiPlates';
+import ArenaEmblem from '../components/game/ArenaEmblem';
 import { getArena, getTotalCheckpoints } from '../lib/arenas';
 
 // The briefing describes the arena the player is about to enter.
@@ -135,7 +135,7 @@ export default function ArenaBriefingScreen({
                 arrived looking identical; the emblem is a picture of what the
                 arena is about. */}
             <div className="terminal-panel-deep p-4">
-              <ArenaEmblem arenaId={arenaId} className="text-phosphor-dim" />
+              <ArenaEmblem arenaId={arenaId} />
               <div className="font-mono text-xs text-phosphor-dim text-center mt-2 tracking-widest">
                 {arena?.window}
               </div>
