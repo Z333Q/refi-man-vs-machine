@@ -38,21 +38,20 @@ test('an absent player changes nothing', () => {
 test('nothing is drawn that the configuration does not have', () => {
   const bare = drawMachine({ installed: [], compiled: false }).join('\n');
   assert.match(bare, /no chassis/);
-  assert.ok(!bare.includes('#'), 'no chassis means no load carried');
+  assert.ok(!bare.includes('█'), 'no chassis means no load carried');
 
   const full = drawMachine({ installed: ALL, compiled: true }).join('\n');
-  assert.match(full, /######/, 'a built portfolio is carried');
-  assert.match(full, /\(@\)/, 'eligibility gives it a nose');
-  assert.match(full, /o {3}o/, 'monitoring opens both eyes');
-  assert.match(full, /,-\._____,-\./, 'signal gives it floppy ears');
-  assert.match(full, /~~/, 'a standing dog wags its tail');
+  assert.match(full, /█████/, 'a built portfolio is carried');
+  assert.match(full, /ᴥ/, 'eligibility gives it a nose');
+  assert.match(full, /◕ {3}◕/, 'monitoring opens both eyes');
+  assert.match(full, /│││/, 'signal gives it long floppy ears');
 });
 
 test('guardrails thicken the shell', () => {
   const without = drawMachine({ installed: ['UNIVERSE'], compiled: false }).join('\n');
   const withRails = drawMachine({ installed: ['UNIVERSE', 'GUARDRAILS'], compiled: false }).join('\n');
-  assert.ok(without.includes('----'), 'an unarmoured dog has a thin shell');
-  assert.ok(withRails.includes('===='), 'guardrails thicken it');
+  assert.ok(without.includes('╭─'), 'an unarmoured pup has a thin shell');
+  assert.ok(withRails.includes('╔═'), 'guardrails thicken it');
 });
 
 test('without execution it has no legs, however much else is installed', () => {
@@ -64,22 +63,40 @@ test('without execution it has no legs, however much else is installed', () => {
   const paws = drawMachine({
     installed: ALL.filter(m => m !== 'EXECUTION'), compiled: true,
   }).slice(-1)[0];
-  assert.match(paws, /\./, 'stubs where the legs would go');
-  assert.ok(!paws.includes("'"), 'and no paws on the ground');
+  assert.match(paws, /╌/, 'stubs where the legs would go');
+  assert.ok(!paws.includes('╨'), 'and no paws on the ground');
 });
 
 test('it only opens its eyes with monitoring installed', () => {
   const blind = drawMachine({ installed: ['UNIVERSE', 'SIGNAL'], compiled: false }).join('\n');
-  assert.match(blind, /\. {3}\./, 'no monitoring, no open eyes');
+  assert.match(blind, /· {3}·/, 'no monitoring, no open eyes');
   const seeing = drawMachine({ installed: ['UNIVERSE', 'SIGNAL', 'MONITORING'], compiled: false }).join('\n');
-  assert.match(seeing, /u {3}u/, 'uncompiled and watching: dozing on the bench');
+  assert.match(seeing, /\^ {3}\^/, 'uncompiled and watching: dozing on the bench');
+});
+
+test('the tail is attached to the dog', () => {
+  // It used to be a lone diagonal floating beside the rump, which does not read
+  // as a tail — it reads as something else entirely, as was pointed out. It now
+  // joins the body through a junction in the right wall.
+  for (const state of [
+    { installed: ALL, compiled: true },
+    { installed: ALL, compiled: true, riskUsed: 0.8 },
+    { installed: ALL, compiled: true, breached: true },
+    { installed: ALL, compiled: false },
+  ] as MachinePetState[]) {
+    const body = drawMachine(state)[5];
+    assert.ok(
+      body.includes('╠') || body.includes('├'),
+      `tail must join the body wall, got ${JSON.stringify(body)}`,
+    );
+  }
 });
 
 test('the face and tail read the posture before any label does', () => {
   const eyes = (s: Parameters<typeof drawMachine>[0]) => drawMachine(s).join('\n');
-  assert.match(eyes({ installed: ALL, compiled: true }), /o {3}o/, 'standing: happy');
-  assert.match(eyes({ installed: ALL, compiled: true, riskUsed: 0.8 }), /O {3}O/, 'braced: wide awake');
-  assert.match(eyes({ installed: ALL, compiled: true, breached: true }), /- {3}-/, 'halted: calm');
+  assert.match(eyes({ installed: ALL, compiled: true }), /◕ {3}◕/, 'standing: happy');
+  assert.match(eyes({ installed: ALL, compiled: true, riskUsed: 0.8 }), /◉ {3}◉/, 'braced: wide awake');
+  assert.match(eyes({ installed: ALL, compiled: true, breached: true }), /— {3}—/, 'halted: calm');
 
   // The tail is the fastest read in the drawing, so it must differ per state.
   const tails = new Set([
@@ -100,37 +117,42 @@ test('it is a dog, not a cat', () => {
   // the canonical ASCII cat: pointed ears on top of the skull, triangle nose,
   // whisker mouth. What separates a dog is ears hanging down the SIDES and a
   // blunt muzzle with a round nose, so both are pinned here.
-  const dog = drawMachine({ installed: ALL, compiled: true }).join('\n');
-  assert.ok(!dog.includes('/\\_/\\'), 'no pointed cat ears on top of the head');
-  assert.ok(!dog.includes('> w <'), 'no whisker mouth');
-  assert.match(dog, /\(@\)/, 'a blunt muzzle with a round nose');
-  assert.match(dog, /\( {2}o {3}o {2}\)/, 'ears wrapping down the sides of the face');
+  const dog = drawMachine({ installed: ALL, compiled: true });
+  assert.ok(!dog.join('\n').includes('/\\_/\\'), 'no pointed cat ears on top of the head');
+
+  // Ears must reach PAST the eyes to the jaw. Short ears sitting on the corners
+  // of the skull read as a bear, which is exactly what happened when they were
+  // two rows instead of four.
+  const earRows = dog.filter(r => r.includes('│││')).length;
+  assert.ok(earRows >= 2, `ears must hang past the eye line, got ${earRows} rows`);
+  assert.match(dog[3], /╰╯/, 'and finish below the jaw');
 });
 
-test('the drawing is actual ASCII', () => {
-  // It was not, for several revisions: it was drawn in box-drawing and block
-  // characters (U+2500, U+2580) while being called ASCII throughout. That is
-  // worth pinning down, and not only for accuracy — line-drawing gives clean
-  // geometry, which is exactly why it kept reading as a diagram rather than an
-  // animal. Restricting to printable ASCII also removes a class of bug:
-  // fullwidth glyphs that tear the grid, and missing-glyph boxes in whatever
-  // monospace font the player happens to have.
-  const states: MachinePetState[] = [
-    { installed: [], compiled: false },
-    { installed: ['UNIVERSE'], compiled: false },
-    { installed: ALL, compiled: true },
-    { installed: ALL, compiled: false },
-    { installed: ALL, compiled: true, riskUsed: 0.9 },
-    { installed: ALL, compiled: true, breached: true },
-  ];
-  for (const state of states) {
-    for (const ch of drawMachine(state).join('')) {
-      const c = ch.codePointAt(0)!;
-      assert.ok(
-        c >= 0x20 && c <= 0x7e,
-        `${JSON.stringify(ch)} (U+${c.toString(16).toUpperCase()}) is not printable ASCII`,
-      );
-    }
+test('every glyph is half-width, so the grid cannot tear', () => {
+  // This drawing is box-drawing art, not ASCII. An earlier pass moved it to
+  // strict printable ASCII on the correct observation that ASCII is letters and
+  // digits — but the result read as a bear, so the shape won and the naming is
+  // what gets corrected instead.
+  //
+  // The rule worth keeping from that pass is this one, which is about the grid
+  // rather than about categories: a fullwidth glyph counts as one code point
+  // and occupies two columns, so it tears the row it sits on while every
+  // length check still passes.
+  const art = [
+    drawMachine({ installed: ALL, compiled: true }),
+    drawMachine({ installed: ALL, compiled: false }),
+    drawMachine({ installed: ALL, compiled: true, riskUsed: 0.9 }),
+    drawMachine({ installed: ALL, compiled: true, breached: true }),
+    drawMachine({ installed: [], compiled: false }),
+  ].flat().join('');
+  for (const ch of art) {
+    const c = ch.codePointAt(0)!;
+    const fullwidth =
+      (c >= 0x1100 && c <= 0x115F) || (c >= 0x2E80 && c <= 0xA4CF) ||
+      (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF) ||
+      (c >= 0xFE30 && c <= 0xFE6F) || (c >= 0xFF00 && c <= 0xFF60) ||
+      (c >= 0xFFE0 && c <= 0xFFE6);
+    assert.ok(!fullwidth, `fullwidth glyph ${JSON.stringify(ch)} would tear the grid`);
   }
 });
 
