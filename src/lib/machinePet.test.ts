@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { drawMachine, posture, describeMachine } from './machinePet';
+import { drawMachine, posture, describeMachine, type MachinePetState } from './machinePet';
 import type { MachineModuleId } from './gameTypes';
 
 const ALL: MachineModuleId[] = [
@@ -37,47 +37,49 @@ test('an absent player changes nothing', () => {
 
 test('nothing is drawn that the configuration does not have', () => {
   const bare = drawMachine({ installed: [], compiled: false }).join('\n');
-  assert.match(bare, /NO CHASSIS/);
-  assert.ok(!bare.includes('█'), 'no chassis means no load carried');
+  assert.match(bare, /no chassis/);
+  assert.ok(!bare.includes('#'), 'no chassis means no load carried');
 
   const full = drawMachine({ installed: ALL, compiled: true }).join('\n');
-  assert.match(full, /█████/, 'a built portfolio is carried');
-  assert.match(full, /ᴥ/, 'eligibility gives it a nose');
-  assert.match(full, /◕/, 'monitoring opens its eye');
-  assert.match(full, /╭╮/, 'signal gives it an ear');
-  assert.match(full, /▟▛/, 'a standing dog wags its tail');
+  assert.match(full, /######/, 'a built portfolio is carried');
+  assert.match(full, /> w </, 'eligibility gives it a nose');
+  assert.match(full, /o\.o/, 'monitoring opens both eyes');
+  assert.match(full, /\/\\_\/\\/, 'signal gives it ears');
+  assert.match(full, /~~/, 'a standing dog wags its tail');
 });
 
-test('guardrails armour the outline', () => {
+test('guardrails thicken the shell', () => {
   const without = drawMachine({ installed: ['UNIVERSE'], compiled: false }).join('\n');
   const withRails = drawMachine({ installed: ['UNIVERSE', 'GUARDRAILS'], compiled: false }).join('\n');
-  assert.ok(without.includes('╭─'), 'an unarmoured dog is drawn in a single rule');
-  assert.ok(withRails.includes('╔═') || withRails.includes('═'), 'guardrails draw a double rule');
+  assert.ok(without.includes('----'), 'an unarmoured dog has a thin shell');
+  assert.ok(withRails.includes('===='), 'guardrails thicken it');
 });
 
 test('without execution it has no legs, however much else is installed', () => {
   // The drawing carries no words now that it is a dog rather than a diagram:
   // stub mounts say it cannot act, and the posture line beside it says so in
   // English for anyone who cannot see the picture.
-  const legless = drawMachine({
+  // The paw row is the last one; the body's own outline uses an apostrophe, so
+  // asserting against the whole drawing would match that instead.
+  const paws = drawMachine({
     installed: ALL.filter(m => m !== 'EXECUTION'), compiled: true,
-  }).join('\n');
-  assert.match(legless, /╌/, 'stub mounts where the legs would go');
-  assert.ok(!legless.includes('╨'), 'and no paws on the ground');
+  }).slice(-1)[0];
+  assert.match(paws, /\./, 'stubs where the legs would go');
+  assert.ok(!paws.includes("'"), 'and no paws on the ground');
 });
 
-test('it only opens its eye with monitoring installed', () => {
+test('it only opens its eyes with monitoring installed', () => {
   const blind = drawMachine({ installed: ['UNIVERSE', 'SIGNAL'], compiled: false }).join('\n');
-  assert.ok(!blind.includes('◕') && !blind.includes('^'), 'no monitoring, no open eye');
+  assert.match(blind, /\( \. \. \)/, 'no monitoring, no open eyes');
   const seeing = drawMachine({ installed: ['UNIVERSE', 'SIGNAL', 'MONITORING'], compiled: false }).join('\n');
-  assert.match(seeing, /\^/, 'uncompiled and watching: dozing on the bench');
+  assert.match(seeing, /u\.u/, 'uncompiled and watching: dozing on the bench');
 });
 
 test('the face and tail read the posture before any label does', () => {
   const eyes = (s: Parameters<typeof drawMachine>[0]) => drawMachine(s).join('\n');
-  assert.match(eyes({ installed: ALL, compiled: true }), /◕/, 'standing: happy');
-  assert.match(eyes({ installed: ALL, compiled: true, riskUsed: 0.8 }), /◉/, 'braced: wide awake');
-  assert.match(eyes({ installed: ALL, compiled: true, breached: true }), /-/, 'halted: calm');
+  assert.match(eyes({ installed: ALL, compiled: true }), /o\.o/, 'standing: happy');
+  assert.match(eyes({ installed: ALL, compiled: true, riskUsed: 0.8 }), /O\.O/, 'braced: wide awake');
+  assert.match(eyes({ installed: ALL, compiled: true, breached: true }), /-\.-/, 'halted: calm');
 
   // The tail is the fastest read in the drawing, so it must differ per state.
   const tails = new Set([
@@ -93,23 +95,30 @@ test('the face and tail read the posture before any label does', () => {
   assert.ok(!halted.includes('x') && !halted.includes('X'), 'no X-eyes on a working guardrail');
 });
 
-test('every glyph is half-width, so the grid cannot tear', () => {
-  // A fullwidth character counts as one code point but occupies two columns,
-  // which the rectangularity test below cannot see. Catch them by codepoint.
-  const art = [
-    drawMachine({ installed: ALL, compiled: true }),
-    drawMachine({ installed: ALL, compiled: false }),
-    drawMachine({ installed: ALL, compiled: true, riskUsed: 0.9 }),
-    drawMachine({ installed: ALL, compiled: true, breached: true }),
-  ].flat().join('');
-  for (const ch of art) {
-    const c = ch.codePointAt(0)!;
-    const fullwidth =
-      (c >= 0x1100 && c <= 0x115F) || (c >= 0x2E80 && c <= 0xA4CF) ||
-      (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF) ||
-      (c >= 0xFE30 && c <= 0xFE6F) || (c >= 0xFF00 && c <= 0xFF60) ||
-      (c >= 0xFFE0 && c <= 0xFFE6);
-    assert.ok(!fullwidth, `fullwidth glyph ${JSON.stringify(ch)} would tear the grid`);
+test('the drawing is actual ASCII', () => {
+  // It was not, for several revisions: it was drawn in box-drawing and block
+  // characters (U+2500, U+2580) while being called ASCII throughout. That is
+  // worth pinning down, and not only for accuracy — line-drawing gives clean
+  // geometry, which is exactly why it kept reading as a diagram rather than an
+  // animal. Restricting to printable ASCII also removes a class of bug:
+  // fullwidth glyphs that tear the grid, and missing-glyph boxes in whatever
+  // monospace font the player happens to have.
+  const states: MachinePetState[] = [
+    { installed: [], compiled: false },
+    { installed: ['UNIVERSE'], compiled: false },
+    { installed: ALL, compiled: true },
+    { installed: ALL, compiled: false },
+    { installed: ALL, compiled: true, riskUsed: 0.9 },
+    { installed: ALL, compiled: true, breached: true },
+  ];
+  for (const state of states) {
+    for (const ch of drawMachine(state).join('')) {
+      const c = ch.codePointAt(0)!;
+      assert.ok(
+        c >= 0x20 && c <= 0x7e,
+        `${JSON.stringify(ch)} (U+${c.toString(16).toUpperCase()}) is not printable ASCII`,
+      );
+    }
   }
 });
 
