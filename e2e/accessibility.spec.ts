@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { gotoScreen, resetProgress, dismissOverlays } from './helpers';
+import { gotoScreen, resetProgress, dismissOverlays, skipFirstRunCoaching } from './helpers';
 
 // §62 makes specific, checkable claims. They have never been checked.
 
@@ -52,6 +52,12 @@ test('reduced motion is honoured rather than advertised', async ({ page }) => {
 });
 
 test('the run screen never uses colour alone for pass and fail (§62)', async ({ page }) => {
+  // Guidance off. Tips are a queue: dismissing one lets the next open, so a
+  // spec that dismisses and then clicks is racing the queue rather than
+  // testing anything. On a laptop the click usually won; on a clean CI runner
+  // it lost, and the tip's backdrop swallowed it. This spec is about colour
+  // never carrying meaning alone — the tips have their own spec.
+  await skipFirstRunCoaching(page);
   await resetProgress(page);
   await gotoScreen(page, 'CORE LOOP');
   await dismissOverlays(page);
