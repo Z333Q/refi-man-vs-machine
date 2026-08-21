@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { claimHandoff, type IntendedDestination } from '../lib/handoff';
+import { claimHandoff, HANDOFF_MODE, type IntendedDestination } from '../lib/handoff';
 
 interface Props {
   destination?: IntendedDestination;
@@ -11,9 +11,15 @@ interface Props {
  * shell's onboarding funnel. On success the browser navigates away; on failure
  * it surfaces a terminal-styled error and lets the player retry.
  */
+// Claiming progress is what the minted token does. Without it this control
+// still opens ReFi, so it says that instead (see HANDOFF_MODE).
+const DEFAULT_LABEL = HANDOFF_MODE === 'MINTED'
+  ? '[ CLAIM YOUR PROGRESS ON REFI ]'
+  : '[ CONTINUE TO REFI ]';
+
 export default function ClaimHandoffButton({
   destination = 'ELIGIBILITY',
-  label = '[ CLAIM YOUR PROGRESS ON REFI ]',
+  label = DEFAULT_LABEL,
 }: Props) {
   const [minting, setMinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +43,7 @@ export default function ClaimHandoffButton({
         disabled={minting}
         className="cmd-button cmd-button-primary w-full tracking-widest"
       >
-        {minting ? 'CLAIMING…' : label}
+        {minting ? (HANDOFF_MODE === 'MINTED' ? 'CLAIMING…' : 'OPENING…') : label}
       </button>
       {error && (
         <div className="font-mono text-xs text-red-400" role="alert">

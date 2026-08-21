@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { isProgressSaved, markProgressSaved } from '../../lib/alphaIdentity';
-import { claimHandoff, type IntendedDestination } from '../../lib/handoff';
+import { claimHandoff, HANDOFF_MODE, type IntendedDestination } from '../../lib/handoff';
 import { emitEvent } from '../../lib/events';
 
 // Never-trap onboarding bridge (§4.1) — a persistent, unobtrusive surface
@@ -10,9 +10,27 @@ import { emitEvent } from '../../lib/events';
 // not leak top-of-funnel traffic; it is intentionally absent from the
 // attract screen and hidden during an active checkpoint decision.
 
+// The note under each exit states what this build can actually do.
+//
+// "Your game progress is preserved" is a promise only the minted handoff can
+// keep: the token is what binds this player's progress to a formal account
+// (§4.4). In link mode there is no token, so the copy says where the progress
+// stays instead of claiming it travels. Telling a player their run carried
+// over when it did not is the kind of small lie that costs the whole record's
+// credibility (§57).
 const EXITS: { dest: IntendedDestination; label: string; note: string }[] = [
-  { dest: 'PAPER', label: 'RUN IN PAPER MODE', note: 'History is closed. The live market is not.' },
-  { dest: 'ELIGIBILITY', label: 'ENTER REFI ONBOARDING', note: 'Your game progress is preserved.' },
+  {
+    dest: 'PAPER',
+    label: 'RUN IN PAPER MODE',
+    note: 'History is closed. The live market is not.',
+  },
+  {
+    dest: 'ELIGIBILITY',
+    label: 'ENTER REFI ONBOARDING',
+    note: HANDOFF_MODE === 'MINTED'
+      ? 'Your game progress is preserved.'
+      : 'Your run stays saved on this device.',
+  },
 ];
 
 export function OnboardingBridge() {
@@ -33,6 +51,13 @@ export function OnboardingBridge() {
     if (handoffPending) return;
 
     if (dest === 'PAPER') emitEvent('conversion.paper_started', { surface: 'onboarding_bridge' });
+    // Which door was taken matters to the funnel: a minted handoff and a
+    // marketing link convert at different rates and mean different things.
+    emitEvent('conversion.refi_handoff_started', {
+      surface: 'onboarding_bridge',
+      destination: dest,
+      mode: HANDOFF_MODE,
+    });
 
     setHandoffPending(true);
     setError(null);
@@ -74,7 +99,9 @@ export function OnboardingBridge() {
             </div>
           )}
           <div className="text-phosphor-dim/70 text-xs mt-2 leading-snug" style={{ fontSize: '10px' }}>
-            OPTIONAL · YOUR FORMAL PROFILE IS COLLECTED SEPARATELY
+            {HANDOFF_MODE === 'MINTED'
+              ? 'OPTIONAL · YOUR FORMAL PROFILE IS COLLECTED SEPARATELY'
+              : 'OPTIONAL · OPENS THE REFI SITE · YOUR FORMAL PROFILE IS COLLECTED SEPARATELY'}
           </div>
         </div>
       )}
