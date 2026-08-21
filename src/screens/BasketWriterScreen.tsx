@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useState } from 'react';
 
 interface Props {
@@ -197,17 +198,21 @@ export default function BasketWriterScreen({ onBack, onComplete }: Props) {
             </div>
           </div>
 
-          <div className="space-y-2 mt-4">
-            <button onClick={onComplete} className="cmd-button cmd-button-primary w-full tracking-widest text-xs">
-              [ LOCK BASKET ]
-            </button>
-            <div className="font-mono text-xs text-phosphor-dim text-center leading-4">
-              A PORTFOLIO IS A THESIS.
-              A POLICY IS HOW YOU KEEP IT.
-            </div>
-          </div>
         </div>
       </div>
+
+      {/* Basket edits are the decision; locking the basket is the commit. */}
+      <ActionZone
+        variant="inline"
+        note="A PORTFOLIO IS A THESIS. A POLICY IS HOW YOU KEEP IT."
+        primary={{
+          label: 'LOCK BASKET',
+          onClick: onComplete,
+          disabled: basket.length === 0,
+          disabledHint: 'ADD AT LEAST ONE POSITION',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

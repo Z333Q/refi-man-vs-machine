@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useMemo, useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { latestFinishedRun, latestUnfinishedRun, projectRun, type RunRecord } from '../lib/runRecord';
@@ -359,14 +360,10 @@ export default function AutopsyScreen({ onContinue }: Props) {
         )}
       </div>
 
-      <div className="border-t border-phosphor/20 px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
-        <div className="font-mono text-xs text-phosphor-dim leading-5 hidden md:block">
-          REFI IS BUILT AROUND THIS GAP: GOOD THESIS, CONSISTENT EXECUTION.
-        </div>
-        <button onClick={onContinue} className="cmd-button cmd-button-primary tracking-widest flex-shrink-0 ml-auto">
-          [ CONTINUE ]
-        </button>
-      </div>
+      <ActionZone
+        note="REFI IS BUILT AROUND THIS GAP: GOOD THESIS, CONSISTENT EXECUTION."
+        primary={{ label: 'CONTINUE', onClick: onContinue, keyHint: '[ENTER]' }}
+      />
     </div>
   );
 }

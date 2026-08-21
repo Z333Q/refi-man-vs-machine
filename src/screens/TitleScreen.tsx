@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import BuildStamp from '../components/BuildStamp';
 import { emitEvent, captureFunnelAttribution, getFunnelAttribution } from '../lib/events';
@@ -128,7 +129,7 @@ export default function TitleScreen({ onEnter }: Props) {
   const blink = reduced ? '' : 'animate-[cursorBlink_1.1s_steps(1,end)_infinite]';
 
   return (
-    <div className="terminal-screen min-h-screen flex flex-col select-none">
+    <div className="terminal-screen screen-fit flex flex-col select-none">
       {/* Arcade marquee ticker */}
       <div className="border-b border-phosphor/20 overflow-hidden">
         <div className="flex items-center gap-8 px-4 py-1.5 whitespace-nowrap">
@@ -150,7 +151,7 @@ export default function TitleScreen({ onEnter }: Props) {
         type="button"
         onClick={start}
         aria-label="Press start: enter the market"
-        className="flex-1 w-full flex items-center justify-center px-5 py-8 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-phosphor/50"
+        className="flex-1 min-h-0 w-full flex items-center justify-center overflow-y-auto px-5 py-6 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-phosphor/50"
       >
         <div className="w-full max-w-3xl mx-auto">
           {panel === 'title' && <TitlePanel blink={blink} />}
@@ -159,66 +160,56 @@ export default function TitleScreen({ onEnter }: Props) {
         </div>
       </button>
 
-      {/* Persistent control bar: pointer + keyboard, does not bubble to start.
-          Sticky because the page is min-h-screen and the attract cards vary in
-          height, so on a short viewport the primary action was rendering below
-          the fold. The one button a first-time visitor must find cannot depend
-          on them scrolling to look for it. */}
-      <div
-        className="sticky bottom-0 z-20 border-t border-phosphor/20 bg-terminal-black px-4 py-3"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="max-w-3xl mx-auto flex flex-col sm:flex-row sm:items-center gap-3 sm:pr-44">
-          {/* Panel dots + prev/next */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => step(-1)}
-              aria-label="Previous card"
-              className="font-mono text-xs text-phosphor-dim hover:text-phosphor px-2 py-1 border border-phosphor/20 rounded-terminal"
-            >
-              ◄
-            </button>
-            <div className="flex items-center gap-2" role="tablist" aria-label="Attract screens">
-              {PANELS.map(p => (
-                <button
-                  key={p}
-                  type="button"
-                  role="tab"
-                  aria-selected={panel === p}
-                  aria-label={PANEL_LABEL[p]}
-                  onClick={() => setPanel(p)}
-                  className={`h-2 rounded-full transition-all ${
-                    panel === p ? 'w-6 bg-phosphor shadow-phosphor' : 'w-2 bg-phosphor/25 hover:bg-phosphor/50'
-                  }`}
-                />
-              ))}
+      {/* Primary action zone. The attract cards vary in height and the page
+          is min-h-screen, so the one control a first-time visitor must find
+          cannot depend on scrolling (the fault fixed ad-hoc in #26). The zone
+          is the shared primitive that guarantees it here and everywhere else:
+          same territory, same weight, on every screen. */}
+      <div onClick={e => e.stopPropagation()}>
+        <ActionZone
+          note="NO ACCOUNT NEEDED · 3 FREE DECISIONS · 18+ · SIMULATION ON HISTORICAL U.S. EQUITY DATA"
+          primary={{
+            label: 'ENTER THE MARKET',
+            onClick: start,
+            keyHint: '[ENTER]',
+            bindEnter: false, // this screen already binds Enter/Space itself
+          }}
+          secondaryLeft={
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => step(-1)}
+                aria-label="Previous card"
+                className="font-mono text-xs text-phosphor-dim hover:text-phosphor px-2 py-1 border border-phosphor/20 rounded-terminal"
+              >
+                ◄
+              </button>
+              <div className="flex items-center gap-2" role="tablist" aria-label="Attract screens">
+                {PANELS.map(p => (
+                  <button
+                    key={p}
+                    type="button"
+                    role="tab"
+                    aria-selected={panel === p}
+                    aria-label={PANEL_LABEL[p]}
+                    onClick={() => setPanel(p)}
+                    className={`h-2 rounded-full transition-all ${
+                      panel === p ? 'w-6 bg-phosphor shadow-phosphor' : 'w-2 bg-phosphor/25 hover:bg-phosphor/50'
+                    }`}
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => step(1)}
+                aria-label="Next card"
+                className="font-mono text-xs text-phosphor-dim hover:text-phosphor px-2 py-1 border border-phosphor/20 rounded-terminal"
+              >
+                ►
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => step(1)}
-              aria-label="Next card"
-              className="font-mono text-xs text-phosphor-dim hover:text-phosphor px-2 py-1 border border-phosphor/20 rounded-terminal"
-            >
-              ►
-            </button>
-          </div>
-
-          {/* Start CTA */}
-          <div className="sm:ml-auto flex items-center gap-4">
-            <div className="font-mono text-phosphor-dim leading-tight" style={{ fontSize: '10px' }}>
-              <div>NO ACCOUNT NEEDED · 3 FREE DECISIONS · 18+</div>
-              <div className="text-phosphor-dim/70">SIMULATION · U.S. EQUITIES · HISTORICAL DATA</div>
-            </div>
-            <button
-              type="button"
-              onClick={start}
-              className="cmd-button cmd-button-primary font-mono text-sm tracking-widest px-6 py-3 flex-shrink-0"
-            >
-              [ ENTER THE MARKET ]
-            </button>
-          </div>
-        </div>
+          }
+        />
       </div>
     </div>
   );

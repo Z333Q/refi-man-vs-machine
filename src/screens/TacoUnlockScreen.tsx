@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useEffect, useState } from 'react';
 
 interface Props {
@@ -146,12 +147,6 @@ export default function TacoUnlockScreen({ onEnter }: Props) {
                       <div className="font-mono text-xs text-phosphor-mid mt-2">DO YOU?</div>
                     </div>
 
-                    <button
-                      onClick={onEnter}
-                      className="cmd-button cmd-button-primary w-full tracking-widest py-3 text-sm"
-                    >
-                      [ ENTER FINAL BOSS ]
-                    </button>
                   </div>
                 )}
               </div>
@@ -159,6 +154,19 @@ export default function TacoUnlockScreen({ onEnter }: Props) {
           )}
         </div>
       )}
+
+      {/* The unlock sequence plays above; the action keeps its territory
+          throughout and says what it is waiting for. */}
+      <ActionZone
+        note="5 POLICY ROUNDS · DATES HIDDEN · OUTCOME UNKNOWN"
+        primary={{
+          label: 'ENTER FINAL BOSS',
+          onClick: onEnter,
+          disabled: phase < 3,
+          disabledHint: 'VERIFYING PREREQUISITES',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

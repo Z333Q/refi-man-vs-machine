@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useState, useEffect } from 'react';
 import { getTodaysTape, getYesterdaysTape, scoreTapeDecision } from '../lib/dailyTape';
 import { useGame } from '../context/GameContext';
@@ -83,8 +84,8 @@ export default function DailyTapeScreen({ onBack }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-terminal-black terminal-screen font-mono">
-      <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-terminal-black terminal-screen font-mono flex flex-col">
+      <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -173,19 +174,6 @@ export default function DailyTapeScreen({ onBack }: Props) {
               ))}
             </div>
 
-            <button
-              onClick={handleCommit}
-              disabled={!selectedAction}
-              className={`cmd-button-primary w-full py-3 text-sm tracking-widest ${
-                !selectedAction ? 'opacity-40 cursor-not-allowed' : ''
-              }`}
-            >
-              SUBMIT DAILY CALL ▶
-            </button>
-
-            <div className="text-phosphor-dim text-xs text-center mt-3">
-              RESULT REVEALED AT CLOSE · ONE SUBMISSION PER DAY
-            </div>
           </div>
         )}
 
@@ -265,12 +253,29 @@ export default function DailyTapeScreen({ onBack }: Props) {
               </div>
             </div>
 
-            <div className="text-center text-phosphor-dim text-xs tracking-widest pt-2">
-              NEXT TAPE TOMORROW · {state.profile.alphaXp} ALPHA XP TOTAL
-            </div>
           </div>
         )}
       </div>
+
+      {/* One decision, one commit: the tape keeps the same action territory as
+          every arena checkpoint. */}
+      {phase !== 'REVEAL' && !alreadySubmitted ? (
+        <ActionZone
+          note="RESULT REVEALED AT CLOSE · ONE SUBMISSION PER DAY"
+          primary={{
+            label: 'SUBMIT DAILY CALL',
+            onClick: handleCommit,
+            disabled: !selectedAction,
+            disabledHint: 'SELECT YOUR CALL FIRST',
+            keyHint: '[ENTER]',
+          }}
+        />
+      ) : (
+        <ActionZone
+          note={`NEXT TAPE TOMORROW · ${state.profile.alphaXp} ALPHA XP TOTAL`}
+          primary={{ label: 'BACK TO HUB', onClick: onBack, keyHint: '[ENTER]' }}
+        />
+      )}
     </div>
   );
 }

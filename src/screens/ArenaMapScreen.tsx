@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useMemo, useState } from 'react';
 import type { ArenaId } from '../lib/gameTypes';
 import { allArenas } from '../lib/arenas';
@@ -130,6 +131,7 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
     ?? [...ARENAS].reverse().find(a => a.state !== 'locked')
     ?? ARENAS[0];
   const setSelected = (a: ArenaNode) => setSelectedId(a.id);
+  const isSelectable = selected.state === 'active' || selected.state === 'available';
 
   return (
     <div className="terminal-screen min-h-screen flex flex-col">
@@ -285,32 +287,6 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
             <div className="font-mono text-xs text-phosphor leading-5">{selected.lesson}</div>
           </div>
 
-          {/* Sticky to the bottom of this scrolling column. It previously sat
-              after the briefing content inside an overflow-y-auto panel, so on
-              a short viewport the primary action was below the scroll fold and
-              had to be hunted for. */}
-          <div className="mt-auto sticky bottom-0 -mx-6 -mb-6 px-6 pt-3 pb-24 bg-terminal-black border-t border-phosphor/15 space-y-2">
-            {selected.state === 'active' || selected.state === 'available' ? (
-              <button
-                onClick={() => onSelectArena(selected.id)}
-                className="cmd-button cmd-button-primary w-full tracking-widest"
-              >
-                [ ENTER ARENA ]
-              </button>
-            ) : (
-              <div className="space-y-1">
-                <button
-                  disabled
-                  className="cmd-button w-full tracking-widest opacity-40 cursor-not-allowed"
-                >
-                  [ LOCKED ]
-                </button>
-                <div className="font-mono text-xs text-phosphor-dim text-center leading-snug">
-                  FINISH THE PREVIOUS ARENA TO UNLOCK THIS ONE.
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -323,6 +299,21 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
           <span className="nav-key">F9</span> LEADERBOARD
         </span>
       </div>
+
+      {/* The arena you select is the decision; entering it is the commit. This
+          generalises the ad-hoc sticky block the screen carried (#26): the
+          primary action now occupies the same territory as every other screen,
+          and the locked state stays visible instead of hiding the way forward. */}
+      <ActionZone
+        note={`SELECTED: ${selected.code} ${selected.label}`}
+        primary={{
+          label: isSelectable ? 'ENTER ARENA' : 'LOCKED',
+          onClick: () => onSelectArena(selected.id),
+          disabled: !isSelectable,
+          disabledHint: 'FINISH THE PREVIOUS ARENA TO UNLOCK THIS ONE',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

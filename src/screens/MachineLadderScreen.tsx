@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useGame } from '../context/GameContext';
+import ActionZone from '../components/ui/ActionZone';
 import { MACHINE_LADDER } from '../lib/progressionEngine';
 import type { BenchmarkSnapshot } from '../lib/gameTypes';
 import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
@@ -66,6 +68,17 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
   const { state } = useGame();
   const { profile } = state;
 
+  // The ladder row is the decision (which machine); the action zone below is
+  // the commit. Defaults to the first machine actually available to challenge.
+  const firstAvailable = MACHINE_LADDER.find(
+    m => (profile.machineLadder[m.id]?.status ?? 'LOCKED') === 'ACTIVE',
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(firstAvailable?.id ?? null);
+  const selectedMachine = MACHINE_LADDER.find(m => m.id === selectedId) ?? null;
+  const canChallenge =
+    !!selectedMachine &&
+    (profile.machineLadder[selectedMachine.id]?.status ?? 'LOCKED') === 'ACTIVE';
+
   const nextXpTarget = MACHINE_LADDER.find(m =>
     profile.machineLadder[m.id]?.status === 'LOCKED',
   )?.xpRequired ?? null;
@@ -75,8 +88,8 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
   const winRate = totalAttempts > 0 ? Math.round((totalBeats / totalAttempts) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-terminal-black terminal-screen font-mono">
-      <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-terminal-black terminal-screen font-mono flex flex-col">
+      <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
 
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
@@ -135,6 +148,7 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
             const isDefeated = status === 'DEFEATED';
             const isLocked = status === 'LOCKED';
             const isTaco = machine.id === 'taco_protocol';
+            const isSelected = machine.id === selectedId;
             const isExhibition = machine.contestType === 'EXHIBITION';
 
             return (
@@ -241,14 +255,15 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
                     )}
                     {isActive && (
                       <button
-                        onClick={() => onChallenge(machine.id)}
-                        className={`cmd-button text-xs px-4 py-2 tracking-widest ${
-                          isTaco
-                            ? 'border-alert-amber text-alert-amber bg-alert-amber/10 hover:bg-alert-amber/20'
-                            : 'cmd-button-primary'
+                        onClick={() => setSelectedId(machine.id)}
+                        aria-pressed={isSelected}
+                        className={`text-xs px-4 py-2 tracking-widest border transition-colors ${
+                          isSelected
+                            ? 'border-phosphor text-phosphor bg-phosphor/10'
+                            : 'border-phosphor/25 text-phosphor-dim hover:text-phosphor hover:border-phosphor/50'
                         }`}
                       >
-                        {isTaco ? 'CHALLENGE ▶' : 'CHALLENGE ▶'}
+                        {isSelected ? '✓ SELECTED' : 'SELECT'}
                       </button>
                     )}
                   </div>
@@ -272,6 +287,21 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
           </div>
         </div>
       </div>
+
+      <ActionZone
+        note={
+          selectedMachine
+            ? `SELECTED: ${selectedMachine.label} · ${(selectedMachine.contestType ?? 'FAIR_MATCH').replace(/_/g, ' ')}`
+            : 'NO MACHINE AVAILABLE YET'
+        }
+        primary={{
+          label: 'CHALLENGE MACHINE',
+          onClick: () => selectedMachine && onChallenge(selectedMachine.id),
+          disabled: !canChallenge,
+          disabledHint: selectedMachine ? 'EARN XP TO UNLOCK THIS RANK' : 'SELECT AN AVAILABLE MACHINE',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

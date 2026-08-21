@@ -1,3 +1,4 @@
+import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 import type { ArenaId } from '../lib/gameTypes';
 import ArenaEmblem from '../components/game/ArenaEmblem';
 import { getArena, getTotalCheckpoints } from '../lib/arenas';
@@ -155,21 +156,6 @@ export default function ArenaBriefingScreen({
               <div className="font-mono text-xs text-phosphor-dim">{checkpointCount} DECISION POINTS</div>
             </div>
 
-            {/* Actions */}
-            <div className="space-y-3">
-              <button
-                onClick={onStart}
-                className="cmd-button cmd-button-primary w-full tracking-widest py-3 text-sm"
-              >
-                [ START RUN ]
-              </button>
-              <button
-                onClick={onViewMachineCard}
-                className="cmd-button w-full tracking-widest"
-              >
-                [ VIEW MACHINE CARD ]
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -179,6 +165,12 @@ export default function ArenaBriefingScreen({
         <span className="nav-key">ESC</span> ARENA MAP &nbsp;
         <span className="nav-key">ENTER</span> START RUN
       </div>
+
+      <ActionZone
+        note={`${checkpointCount} DECISIONS · DATES HIDDEN · NO RESTART ONCE COMMITTED`}
+        primary={{ label: 'START RUN', onClick: onStart, keyHint: '[ENTER]' }}
+        secondaryRight={<SecondaryAction label="View machine card" onClick={onViewMachineCard} />}
+      />
     </div>
   );
 }
