@@ -1,4 +1,4 @@
-import { getSessionId } from './supabase';
+import { getSessionId } from './identity';
 import { getFunnelAttribution } from './events';
 import {
   marketingHandoffUrl, DEFAULT_SITE_URL, type IntendedDestination,

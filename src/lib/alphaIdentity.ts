@@ -7,13 +7,15 @@
 // a stable `alpha_player_id` persisted locally, plus the player.* funnel
 // events (§52/§59) that let the marketing funnel measure save-progress.
 //
-// Persistence note: the `alpha_players` row is owner-scoped (§3.1 RLS keyed
-// to auth.uid()), so a durable DB row is only written once magic-link auth
-// lands (G2). Until then the identity lives in localStorage and the funnel
-// events flow through the append-only game_events sink (anon INSERT). This
-// keeps game identity separate from any formal advisory data (rule 11).
+// Persistence note: this identity lives in localStorage until an account
+// exists. There used to be a "best-effort" durable insert here too, which
+// could never succeed: the row is owner-scoped to an authenticated user and
+// nothing in the game authenticates. It has been removed rather than left to
+// fail quietly, because a write that always fails is not persistence, it is
+// noise in the console. When the ReFi API owns accounts, the player id is
+// adopted there through the handoff. Game identity stays separate from any
+// formal advisory data either way (rule 11).
 
-import { supabase } from './supabase';
 import { emitEvent, getFunnelAttribution } from './events';
 
 const PLAYER_KEY = 'refi_alpha_player_id';
@@ -49,15 +51,6 @@ export function ensureAlphaPlayer(): string {
   }
 
   emitEvent('player.created', { attribution: getFunnelAttribution() }, { alphaPlayerId: id });
-
-  // Best-effort durable row. Anon RLS blocks this pre-auth; the insert
-  // simply no-ops until the G2 auth/handoff binds a real owner.
-  void supabase
-    .from('alpha_players')
-    .insert({ id, status: 'anonymous' })
-    .then(({ error }) => {
-      if (error) console.debug('alpha_players insert deferred to auth:', error.message);
-    });
 
   return id;
 }

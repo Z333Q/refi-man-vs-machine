@@ -14,7 +14,8 @@
 // checkpoint represents. Their separation is what makes "the machine never
 // sees the future" auditable (§69 / §4.2).
 
-import { supabase, getSessionId } from './supabase';
+import { getSessionId } from './identity';
+import { persistence } from './persistence';
 import {
   bufferEvent, drainBuffer, restoreBuffer, sinkConfigStatus, describeSinkStatus,
   type BufferStorage, type EventEnvelope,
@@ -204,19 +205,15 @@ function reportSinkOnce(): void {
   if (status !== 'OK') console.warn(`[refi telemetry] ${describeSinkStatus(status)}`);
 }
 
-/** Send one envelope. Returns false on any failure, without throwing. */
+/**
+ * Send one envelope. Returns false on any failure, without throwing.
+ *
+ * The transport is whatever the persistence port resolved to, so telemetry
+ * follows the same store the rest of the game does rather than naming a vendor
+ * here.
+ */
 async function deliver(envelope: EventEnvelope): Promise<boolean> {
-  try {
-    const { error } = await supabase.from('game_events').insert(envelope);
-    if (error) {
-      console.debug('game_events insert failed', error.message);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.debug('game_events insert threw', err);
-    return false;
-  }
+  return persistence.deliverEvent(envelope);
 }
 
 /**
