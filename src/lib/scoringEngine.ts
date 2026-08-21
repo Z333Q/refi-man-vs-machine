@@ -12,6 +12,23 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
+/**
+ * §29.1 weights, as one exported record.
+ *
+ * The checkpoint screen decomposes the score using these, so they have to be a
+ * single source: an inline literal here and a copy over there is how a screen
+ * ends up explaining a score the engine no longer computes.
+ */
+export const SCORE_WEIGHTS = {
+  raerScore: 0.25,
+  drawdownScore: 0.20,
+  downsideScore: 0.10,
+  recoveryScore: 0.10,
+  regimeAdaptScore: 0.15,
+  turnoverScore: 0.10,
+  consistencyScore: 0.10,
+} as const;
+
 // ─── Component scores ─────────────────────────────────────────────────────────
 
 function computeRAERScore(playerReturn: number, machineReturn: number): number {
@@ -207,13 +224,13 @@ export function scoreCheckpoint(params: {
   // §29.1, seven weighted components. Position sizing is deliberately absent
   // from the checkpoint score; it is a profile dimension, not a score term.
   const processScore =
-    0.25 * raerScore +
-    0.20 * drawdownScore +
-    0.10 * downsideScore +
-    0.10 * recoveryScore +
-    0.15 * regimeAdaptScore +
-    0.10 * turnoverScore +
-    0.10 * consistencyScore;
+    SCORE_WEIGHTS.raerScore * raerScore +
+    SCORE_WEIGHTS.drawdownScore * drawdownScore +
+    SCORE_WEIGHTS.downsideScore * downsideScore +
+    SCORE_WEIGHTS.recoveryScore * recoveryScore +
+    SCORE_WEIGHTS.regimeAdaptScore * regimeAdaptScore +
+    SCORE_WEIGHTS.turnoverScore * turnoverScore +
+    SCORE_WEIGHTS.consistencyScore * consistencyScore;
 
   const machineScore = getMachinePar(checkpoint);
 
