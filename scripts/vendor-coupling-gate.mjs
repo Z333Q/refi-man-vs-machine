@@ -35,16 +35,14 @@ const VENDOR_CLIENT_ALLOWLIST = new Set([
 ]);
 
 /**
- * Migrations written before this rule, awaiting replacement by a
- * provider-neutral schema. Nothing may be added to this list.
+ * Migrations exempt from rule 2.
+ *
+ * Empty, and meant to stay that way. The five vendor-coupled migrations that
+ * were listed here have been replaced by db/migrations/0001_founding_schema.sql,
+ * so the rule now applies to every line of SQL in the repository without
+ * exception.
  */
-const LEGACY_SQL = new Set([
-  'supabase/migrations/20260707233113_refi_alpha_game_schema.sql',
-  'supabase/migrations/20260708002624_refi_alpha_equity_scope.sql',
-  'supabase/migrations/20260708030048_refi_alpha_tip_states.sql',
-  'supabase/migrations/20260716140000_owner_scoped_rls_rewrite.sql',
-  'supabase/migrations/20260716150000_canonical_objects.sql',
-]);
+const LEGACY_SQL = new Set([]);
 
 const VENDOR_IMPORT = /@supabase\/supabase-js/;
 const VENDOR_SQL = [
@@ -114,4 +112,6 @@ if (findings.length > 0) {
 
 console.log('vendor-coupling-gate OK');
 console.log(`  ✓ no vendor database client outside ${VENDOR_CLIENT_ALLOWLIST.size} quarantined file(s)`);
-console.log(`  ✓ no vendor auth in SQL outside ${LEGACY_SQL.size} legacy migration(s) awaiting replacement`);
+console.log(LEGACY_SQL.size === 0
+  ? '  ✓ no vendor auth in any SQL in the repository'
+  : `  ✓ no vendor auth in SQL outside ${LEGACY_SQL.size} legacy migration(s)`);

@@ -4,22 +4,21 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // ─── Migration literal validation ─────────────────────────────────────────────
-// The defect this exists to prevent: the owner-scoped RLS rewrite carried a
-// sentinel UUID with 13 hex digits in its final group instead of 12. Postgres
-// rejected it with 22P02, and because the surrounding handler only catches
-// `insufficient_privilege`, the malformed literal aborted the entire migration.
+// The defect this exists to prevent: a migration carried a sentinel UUID with
+// 13 hex digits in its final group instead of 12. Postgres rejected it with
+// 22P02 and the malformed literal aborted the entire migration, which at the
+// time was the one installing the security floor. Nothing reported it, because
+// no migration had ever been run against a real instance.
 //
-// The consequence was larger than a failed script. That migration installs the
-// owner-scoped row-level security floor, so for as long as the typo existed the
-// security model could not be applied to any database at all, and nothing
-// reported it: the project's Supabase credentials were placeholders, so no
-// migration had ever been run against a real instance.
+// The migration in question is gone, replaced by a provider-neutral founding
+// schema, but the class of defect is not: a literal that only a database can
+// reject still costs a failed deploy to discover. This is the cheapest check
+// that catches it without a database.
 //
-// SQL is not exercised by any other test in this repo. This is the cheapest
-// check that catches the whole class: every UUID-shaped literal in every
-// migration must actually parse as a UUID.
+// db/schema.test.ts covers what this cannot, by applying the schema to a real
+// PostgreSQL, and is skipped when DATABASE_URL is unset.
 
-const MIGRATIONS_DIR = join(process.cwd(), 'supabase', 'migrations');
+const MIGRATIONS_DIR = join(process.cwd(), 'db', 'migrations');
 
 function migrationFiles(): string[] {
   return readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith('.sql')).sort();
@@ -53,25 +52,10 @@ test('every UUID-shaped literal in every migration is a valid UUID', () => {
 });
 
 test('migrations are named so alphabetical order is execution order', () => {
-  // They are applied by hand through the SQL editor, so the filename is the
-  // only thing carrying the ordering. A file that does not lead with a
-  // sortable timestamp would silently run in the wrong place.
+  // The filename is the only thing carrying the ordering, so it has to lead
+  // with a zero-padded sequence. A file without one would silently run in the
+  // wrong place.
   for (const file of migrationFiles()) {
-    assert.match(file, /^\d{14}_[a-z0-9_]+\.sql$/, `${file} is not timestamp-prefixed`);
+    assert.match(file, /^\d{4,}_[a-z0-9_]+\.sql$/, `${file} is not sequence-prefixed`);
   }
-});
-
-test('the quarantine sentinel is identical everywhere it appears', () => {
-  // It is written three times in one file: a comment, the auth.users insert,
-  // and the orphan-row backfill. If the insert and the backfill ever disagree,
-  // the backfill points at a row that does not exist and the FK fails.
-  const file = migrationFiles().find(f => f.includes('owner_scoped_rls_rewrite'));
-  assert.ok(file, 'owner_scoped_rls_rewrite migration not found');
-
-  const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
-  const sentinels = [...sql.matchAll(/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/g)]
-    .map(m => m[1]);
-
-  assert.ok(sentinels.length >= 3, `expected at least 3 sentinel occurrences, found ${sentinels.length}`);
-  assert.equal(new Set(sentinels).size, 1, `sentinel disagrees across occurrences: ${[...new Set(sentinels)].join(', ')}`);
 });
