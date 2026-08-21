@@ -180,6 +180,214 @@
   .node-passed { color: #79FFD7; }
   .node-machine-beaten { color: #B8FFD9; }
 
+  /* Screens whose panes scroll internally must fit the viewport exactly, so
+     the action zone is always on screen without page scrolling. It measures
+     against the same --chrome-top / --chrome-bottom the shell declares in
+     .app-chrome, so the fixed nav bar and onboarding bridge are accounted for
+     exactly once. */
+  .screen-fit {
+    height: calc(100dvh - var(--chrome-top, 0px) - var(--chrome-bottom, 0px));
+    max-height: calc(100dvh - var(--chrome-top, 0px) - var(--chrome-bottom, 0px));
+    overflow: hidden;
+  }
+
+  /* ── Primary action zone ──────────────────────────────────────────────────
+     Design-system rule: the action that advances game state appears
+     immediately after the active interaction or result, centred within the
+     main game column. Its position stays visually stable from state to state.
+     Secondary actions never share equal emphasis or the same zone.
+
+         EVENT / CONTEXT
+              ↓
+         PLAYER DECISION
+              ↓
+         [ PRIMARY ACTION ]
+
+     The invariant is structural, not a fixed screen coordinate — screens have
+     different content heights, and pinning every button to the same absolute
+     position produces bad spacing. `margin-top: auto` only claims leftover
+     space: with tall content the zone sits directly under the decision block
+     (proximity); with short content it settles into the lower region so
+     placement stays stable across states (motor memory).
+
+     Desktop and mobile share the hierarchy, not the geometry. On mobile the
+     zone stays in the lower portion within thumb reach and clears the browser
+     chrome via the safe-area inset. */
+  .action-zone {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: end;
+    gap: 1rem;
+    width: 100%;
+    padding: 2rem 1.5rem 2.5rem;
+  }
+
+  /* On a page taller than the viewport the zone stays reachable without
+     hunting for it; when the content fits, sticky has no effect and the zone
+     simply sits below the decision block. Document order never changes. */
+  .action-zone-page {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    padding-bottom: calc(2.5rem + env(safe-area-inset-bottom, 0px));
+    /* The scrim must be opaque before the note line, or scrolled content
+       shows through the text. */
+    background: linear-gradient(
+      to bottom,
+      rgba(5, 8, 6, 0) 0%,
+      rgba(5, 8, 6, 0.92) 14%,
+      #050806 24%
+    );
+  }
+
+  /* For panes that own their own scrolling (the run terminal): the pane is
+     already bottom-anchored, so the zone reads as the foot of the workspace. */
+  .action-zone-inline {
+    /* Pinned to the foot of its pane so the action does not move between the
+       states of a single screen (drafting → confirming → resolving). */
+    margin-top: auto;
+    padding: 1.25rem 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid rgba(12, 212, 160, 0.12);
+    background: rgba(8, 17, 13, 0.55);
+    flex-shrink: 0;
+  }
+
+  .action-zone-core {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: min(24rem, 100%);
+    /* The capped width has to be centred inside its grid cell, or the action
+       sits off the game axis: the cell is centred, the box inside it was not. */
+    justify-self: center;
+    margin-inline: auto;
+  }
+
+  .action-zone-note {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #0A8F68;
+    text-align: center;
+  }
+
+  .action-zone-hint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #27634E;
+    text-align: center;
+    min-height: 0.9rem;
+  }
+
+  .action-zone-edge {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-bottom: 1.6rem;
+  }
+  .action-zone-edge-left { justify-content: flex-start; }
+  .action-zone-edge-right { justify-content: flex-end; }
+
+  /* Fitts's Law: the single loudest and largest control on the screen, and
+     the only one with a filled, full-strength border. */
+  .action-primary {
+    width: 100%;
+    min-width: 15rem;
+    min-height: 3rem;
+    padding: 0.85rem 2.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #B8FFD9;
+    background: rgba(12, 212, 160, 0.1);
+    border: 1px solid #0CD4A0;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .action-primary:hover:not(:disabled) {
+    background-color: rgba(12, 212, 160, 0.2);
+    color: #B8FFD9;
+    box-shadow: 0 0 6px rgba(12, 212, 160, 0.3), 0 0 18px rgba(12, 212, 160, 0.12);
+  }
+
+  .action-primary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(121, 255, 215, 0.85);
+  }
+
+  /* Visible, not hidden. The disabled state says "this is where you are
+     going — finish the current task first." Shape carries the state as well
+     as colour (dashed border), never colour alone. */
+  .action-primary:disabled {
+    color: #27634E;
+    border-color: rgba(12, 212, 160, 0.2);
+    border-style: dashed;
+    background: transparent;
+    cursor: not-allowed;
+  }
+
+  .action-primary-key {
+    margin-left: 0.75rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: #0A8F68;
+  }
+
+  /* Progressive disclosure: optional controls stay out of the action path and
+     are materially quieter — no fill, no box, text weight only. */
+  .action-secondary {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #0A8F68;
+    background: none;
+    border: none;
+    border-bottom: 1px solid rgba(12, 212, 160, 0.25);
+    min-height: 2.75rem; /* tap target on coarse pointers */
+    padding: 0.25rem 0;
+    cursor: pointer;
+    transition: color 150ms ease, border-color 150ms ease;
+  }
+
+  .action-secondary:hover {
+    color: #0CD4A0;
+    border-color: rgba(12, 212, 160, 0.6);
+  }
+
+  .action-secondary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(12, 212, 160, 0.5);
+  }
+
+  /* Mobile-first: one column, primary first in the reading order below the
+     decision, secondary actions beneath it — never beside it. */
+  @media (max-width: 639px) {
+    .action-zone {
+      grid-template-columns: 1fr;
+      gap: 0.5rem;
+      padding: 1.5rem 1rem calc(1.75rem + env(safe-area-inset-bottom, 0px));
+    }
+    .action-zone-core { order: -1; width: 100%; }
+    .action-zone-edge { padding-bottom: 0; justify-content: center; }
+    .action-primary { min-width: 0; letter-spacing: 0.16em; }
+  }
+
+  /* Short landscape phones: keep the action reachable without eating the
+     decision block above it. */
+  @media (max-height: 500px) {
+    .action-zone { padding-top: 1rem; padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+    .action-primary { min-height: 2.5rem; padding-top: 0.6rem; padding-bottom: 0.6rem; }
+  }
+
   .nav-key {
     display: inline-flex;
     align-items: center;
@@ -367,6 +575,16 @@
 .app-chrome .min-h-screen,
 .app-chrome .terminal-screen {
   min-height: calc(100vh - var(--chrome-top) - var(--chrome-bottom));
+}
+
+/* .screen-fit screens scroll inside their own panes, so they take the chrome
+   height as an exact height rather than a minimum. Stated after the rule above
+   at equal specificity so it wins for the screens that opt in. */
+.app-chrome .screen-fit,
+.app-chrome .terminal-screen.screen-fit {
+  min-height: 0;
+  height: calc(100dvh - var(--chrome-top) - var(--chrome-bottom));
+  max-height: calc(100dvh - var(--chrome-top) - var(--chrome-bottom));
 }
 
 @media (prefers-reduced-motion: reduce) {

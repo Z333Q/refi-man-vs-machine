@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import ClaimHandoffButton from '../components/ClaimHandoffButton';
 import { useGame } from '../context/GameContext';
 import type { DimensionCode } from '../lib/gameTypes';
@@ -188,12 +189,6 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
                 <div className="font-mono text-sm text-phosphor leading-6">
                   WRITE RULES AROUND YOUR WEAKNESSES.
                 </div>
-                <button
-                  onClick={onBasketWriter}
-                  className="cmd-button cmd-button-primary w-full tracking-widest mt-2"
-                >
-                  [ BASKET WRITER ]
-                </button>
               </div>
             </div>
           </div>
@@ -235,6 +230,11 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
           </div>
         </div>
       </div>
+
+      <ActionZone
+        note="BUILD A BASKET AROUND YOUR STRENGTHS. WRITE RULES AROUND YOUR WEAKNESSES."
+        primary={{ label: 'BASKET WRITER', onClick: onBasketWriter, keyHint: '[ENTER]' }}
+      />
     </div>
   );
 }

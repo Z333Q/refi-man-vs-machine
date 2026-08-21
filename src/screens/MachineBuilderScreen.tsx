@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import MachinePet from '../components/game/MachinePet';
 import { SignalLag } from '../components/game/AsciiPlates';
@@ -370,44 +371,6 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
             })}
           </div>
 
-          {/* Compile button */}
-          <div className="border-t border-phosphor/15 p-4">
-            {/* READY means "this configuration is compiled", not "a compile has
-                happened at some point". The two were conflated, so the button
-                was replaced by ✓ READY forever after the first compile and the
-                player could change every layer with no way to rebuild — §18's
-                build, test, diagnose, revise loop had no revise. */}
-            {compiling ? (
-              <div className="text-phosphor-dim text-xs tracking-widest text-center animate-pulse">
-                COMPILING...
-              </div>
-            ) : compiled && isUnchanged ? (
-              <div className="text-paper-green text-xs tracking-widest text-center">
-                ✓ {compiledVersion} READY
-              </div>
-            ) : (
-              <button
-                onClick={handleCompile}
-                disabled={installedModules.size === 0}
-                className={`w-full py-2.5 text-xs tracking-widest border transition-colors ${
-                  installedModules.size === 0
-                    ? 'border-phosphor/10 text-phosphor-dim cursor-not-allowed'
-                    : 'border-phosphor text-phosphor hover:bg-phosphor/10 hover:text-phosphor-hot'
-                }`}
-              >
-                {history.length > 0
-                  ? `RECOMPILE AS ${versionString(nextVersionNumber(machineName))} ▶`
-                  : allInstalled
-                    ? 'COMPILE ▶'
-                    : `COMPILE PARTIAL (${installedModules.size}/${MODULES.length})`}
-              </button>
-            )}
-            {installedModules.size === 0 && (
-              <div className="text-phosphor-dim text-xs text-center mt-1" style={{ fontSize: '9px' }}>
-                INSTALL AT LEAST ONE MODULE
-              </div>
-            )}
-          </div>
         </div>
 
         {/* ── Center: module editor / compile / schematic ── */}
@@ -491,47 +454,7 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
                 </div>
               )}
 
-              {/* Compile, for viewports with no left rail.
-                  The only compile control used to live inside that rail, which
-                  is `hidden lg:flex`. A phone player could install every module
-                  through the stepper and then had no way to build the machine
-                  at all — §18's build/test/diagnose/revise loop was unreachable
-                  below the lg breakpoint. Same handler and same disabled rule
-                  as the rail's copy; it is a second entrance, not a second
-                  behaviour. */}
-              <div className="lg:hidden mt-6 pt-5 border-t border-phosphor/15">
-                {compiling ? (
-                  <div className="text-phosphor-dim text-xs tracking-widest text-center animate-pulse">
-                    COMPILING...
-                  </div>
-                ) : compiled && isUnchanged ? (
-                  <div className="text-paper-green text-xs tracking-widest text-center">
-                    ✓ {compiledVersion} READY
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleCompile}
-                    disabled={installedModules.size === 0}
-                    className={`w-full py-2.5 text-xs tracking-widest border transition-colors ${
-                      installedModules.size === 0
-                        ? 'border-phosphor/10 text-phosphor-dim cursor-not-allowed'
-                        : 'border-phosphor text-phosphor hover:bg-phosphor/10 hover:text-phosphor-hot'
-                    }`}
-                  >
-                    {history.length > 0
-                      ? `RECOMPILE AS ${versionString(nextVersionNumber(machineName))} ▶`
-                      : allInstalled
-                        ? 'COMPILE ▶'
-                        : `COMPILE PARTIAL (${installedModules.size}/${MODULES.length})`}
-                  </button>
-                )}
-                {installedModules.size === 0 && (
-                  <div className="text-phosphor-dim text-xs text-center mt-1" style={{ fontSize: '9px' }}>
-                    INSTALL AT LEAST ONE MODULE
-                  </div>
-                )}
-              </div>
-            </div>
+                          </div>
           )}
 
           {/* ── COMPILE ANIMATION ── */}
@@ -663,6 +586,42 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Installing a module is the decision; compiling the version is the
+          commit. This is now the only compile entrance. There used to be two,
+          one in the desktop rail and a `lg:hidden` copy for phones, because the
+          rail is hidden below lg and a phone player could otherwise install
+          every module with no way to build the machine. A single action zone,
+          visible at every width, removes the need for the duplicate.
+
+          READY means "this configuration is compiled", not "a compile happened
+          at some point": the control returns as soon as the config changes, so
+          §18's build, test, diagnose, revise loop keeps its revise. */}
+      <ActionZone
+        variant="inline"
+        note={
+          compiling
+            ? 'COMPILING…'
+            : compiled && isUnchanged
+              ? `✓ ${compiledVersion} READY`
+              : `${installedModules.size}/${MODULES.length} MODULES INSTALLED`
+        }
+        primary={{
+          label: history.length > 0
+            ? `RECOMPILE AS ${versionString(nextVersionNumber(machineName))}`
+            : allInstalled
+              ? 'COMPILE MACHINE'
+              : `COMPILE PARTIAL (${installedModules.size}/${MODULES.length})`,
+          onClick: handleCompile,
+          disabled: installedModules.size === 0 || compiling || (compiled && isUnchanged),
+          disabledHint: compiling
+            ? 'BUILD IN PROGRESS'
+            : compiled && isUnchanged
+              ? 'CHANGE A MODULE TO BUILD A NEW VERSION'
+              : 'INSTALL AT LEAST ONE MODULE',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

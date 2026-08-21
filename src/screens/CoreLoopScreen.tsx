@@ -28,6 +28,8 @@ import ResolutionRace from '../components/game/ResolutionRace';
 import MachineEvolution from '../components/game/MachineEvolution';
 import { useVisualEvents, visualRegistry } from '../components/game/VisualEventLayer';
 import { Spotlight } from '../components/onboarding/Spotlight';
+import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
+import CheckpointAnalysis from '../components/game/CheckpointAnalysis';
 import { FiveQuestionSpine } from '../components/onboarding/FiveQuestionSpine';
 import { ArcRail } from '../components/onboarding/ArcRail';
 
@@ -700,6 +702,54 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
   const governor = convictionGovernor(run.currentCheckpoint);
   const governed = isGovernorActive(run.currentCheckpoint);
   const decisionReady = Boolean(stance);
+
+  // ─── Primary action ─────────────────────────────────────────────────────────
+  // One control advances the run, in the same territory below the workspace in
+  // every phase. Only its label and availability change.
+  //
+  // It does not replace the pull gesture: pulling a stance card is still the
+  // signature commit, and this is the button door the gesture has always had
+  // (§9 keyboard parity, and the destination of a timid release). Having both
+  // end in the same territory is the point.
+  const isResolvePhase = phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING';
+  const isFinalCheckpoint = run.currentCheckpoint >= run.totalCheckpoints;
+
+  const primaryAction = commitConfirm
+    ? {
+        label: 'COMMIT',
+        onClick: handleFinalCommit,
+        keyHint: '[ENTER]',
+        bindEnter: false, // the screen already binds ENTER while confirming
+      }
+    : decisionPhase
+      ? {
+          // The label states the blocker rather than the destination while
+          // there is nothing to review. A control that reads REVIEW & COMMIT
+          // and does nothing when pressed teaches the player that the screen is
+          // broken; this says what the screen is waiting for, which is also
+          // what main's copy said before the zone existed.
+          label: stance ? 'REVIEW & COMMIT' : 'SELECT A STANCE TO CONTINUE',
+          onClick: handleReview,
+          disabled: !decisionReady,
+          keyHint: '[ENTER]',
+          bindEnter: false, // the decision keymap owns ENTER in this phase
+        }
+      : isResolvePhase
+        ? {
+            label: isFinalCheckpoint ? 'VIEW RUN RESULTS' : 'NEXT SIGNAL',
+            onClick: handleLearnNext,
+            keyHint: '[ENTER]',
+          }
+        : { label: 'VIEW AUTOPSY', onClick: onComplete, keyHint: '[ENTER]' };
+
+  const primaryNote = commitConfirm
+    ? 'THIS DECISION BECOMES PART OF YOUR RUN RECORD.'
+    : decisionPhase
+      ? `CP ${String(run.currentCheckpoint).padStart(2, '0')} · ${stance ? 'STANCE SELECTED' : 'NO STANCE SELECTED'}`
+      : isResolvePhase
+        ? 'THE MACHINE FACED THE SAME INFORMATION CUTOFF.'
+        : undefined;
+
   const selectedBranch = branches.find(b => b.actionCode === stance) ?? null;
 
   // The conviction committed at the previous checkpoint, drawn as a faint
@@ -1161,15 +1211,13 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                 ))}
               </div>
 
-              {/* Panel content.
-                  The bottom padding is not decorative. Without it the primary
-                  action of the screen — REVIEW & COMMIT — comes to rest flush
-                  against the bottom edge of a phone viewport, where the browser
-                  chrome and the home indicator sit on top of it and the button
-                  cannot reliably be tapped at all. The padding guarantees the
-                  commit control always scrolls clear of the edge; the safe-area
-                  inset covers notched devices. Desktop has the room already. */}
-              <div className="flex-1 overflow-y-auto pb-28 lg:pb-0"
+              {/* Panel content. The commit control used to live inside this
+                  scroller, which is why it needed 28 units of bottom padding to
+                  stay clear of the phone's browser chrome and home indicator.
+                  It now sits in the action zone below, outside the scroller and
+                  carrying its own safe-area inset, so the padding here is back
+                  to ordinary breathing room. */}
+              <div className="flex-1 overflow-y-auto pb-6"
                    style={{ scrollPaddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
                 {/* SIGNAL panel */}
@@ -1527,8 +1575,10 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                       <div className="mb-6" />
                     </div>
 
-                    {/* ── Commit ── */}
-                    {commitConfirm ? (
+                    {/* The confirmation reads here; the control that acts on
+                        it lives in the screen's action zone with every other
+                        primary action. */}
+                    {commitConfirm && (
                       <div className="border border-phosphor/40 bg-phosphor/5 p-4 animate-boot-fade">
                         <div className="text-phosphor-dim text-xs tracking-widest mb-2">CONFIRM DECISION</div>
                         <div className="text-phosphor text-sm font-bold mb-1">
@@ -1537,36 +1587,10 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                         <div className="text-phosphor-mid text-xs mb-1">
                           CONVICTION {conviction}
                         </div>
-                        <div className="text-phosphor-dim text-xs mb-4">
+                        <div className="text-phosphor-dim text-xs">
                           TURNOVER COST {stance ? (turnoverCostFor(stance, cp) * 100).toFixed(0) : 0}%. THIS CANNOT BE UNDONE. THE MARKET WILL RESOLVE.
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleFinalCommit}
-                            className="flex-1 py-2.5 text-xs tracking-widest border border-phosphor text-phosphor hover:bg-phosphor/15 transition-colors"
-                          >
-                            COMMIT ▶ [ENTER]
-                          </button>
-                          <button
-                            onClick={() => setCommitConfirm(false)}
-                            className="px-4 py-2.5 text-xs tracking-widest border border-phosphor/20 text-phosphor-dim hover:border-phosphor/40 transition-colors"
-                          >
-                            REVISE
-                          </button>
-                        </div>
                       </div>
-                    ) : (
-                      <button
-                        onClick={handleReview}
-                        disabled={!decisionReady}
-                        className={`w-full py-3 text-xs tracking-widest border transition-colors ${
-                          decisionReady
-                            ? 'border-phosphor text-phosphor hover:bg-phosphor/10'
-                            : 'border-phosphor/10 text-phosphor-dim cursor-not-allowed'
-                        }`}
-                      >
-                        {stance ? 'REVIEW & COMMIT ▶ [ENTER]' : 'SELECT A STANCE TO CONTINUE'}
-                      </button>
                     )}
                   </div>
                 )}
@@ -1745,27 +1769,25 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                 </button>
 
                 {showBreakdown && (
-                  <div className="mt-3 border-t border-phosphor/15 pt-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-3">
-                      {[
-                        { label: 'RAER', val: lastCheckpointScore.raerScore },
-                        { label: 'DRAWDOWN', val: lastCheckpointScore.drawdownScore },
-                        { label: 'DOWNSIDE', val: lastCheckpointScore.downsideScore },
-                        { label: 'REGIME', val: lastCheckpointScore.regimeAdaptScore },
-                        { label: 'TURNOVER', val: lastCheckpointScore.turnoverScore },
-                        { label: 'CONSISTENCY', val: lastCheckpointScore.consistencyScore },
-                      ].map(({ label, val }) => (
-                        <div key={label}>
-                          <div className="text-phosphor-dim">{label}</div>
-                          <div className="text-phosphor font-bold">{val}</div>
-                        </div>
-                      ))}
+                  <div className="mt-3 border-t border-phosphor/15 pt-3 space-y-3">
+                    {/* The six bare component numbers that used to sit here were
+                        a scoreboard, not an explanation: nothing said what they
+                        measure, what they are weighted at, or which of them
+                        moved the total. This is the same data, decomposed and
+                        attributed, because a player who opens a breakdown is
+                        asking to be taught. */}
+                    <CheckpointAnalysis
+                      score={lastCheckpointScore}
+                      confidence={lastDecision?.confidence ?? 0.5}
+                    />
+
+                    <div>
+                      <div className="text-phosphor-dim text-xs tracking-widest mb-1">PROCESS NOTE</div>
+                      <div className="text-phosphor-mid text-xs leading-relaxed">{cp.teachingPoint}</div>
+                      {cp.isHoldValid && lastDecision?.actionCode === 'HOLD' && cp.holdTeaching && (
+                        <div className="mt-2 text-paper-green text-xs">✓ {cp.holdTeaching}</div>
+                      )}
                     </div>
-                    <div className="text-phosphor-dim text-xs tracking-widest mb-1">PROCESS NOTE</div>
-                    <div className="text-phosphor-mid text-xs leading-relaxed">{cp.teachingPoint}</div>
-                    {cp.isHoldValid && lastDecision?.actionCode === 'HOLD' && cp.holdTeaching && (
-                      <div className="mt-2 text-paper-green text-xs">✓ {cp.holdTeaching}</div>
-                    )}
                   </div>
                 )}
               </div>
@@ -1786,23 +1808,6 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                 </div>
               )}
 
-              {/* Advance */}
-              {run.currentCheckpoint >= run.totalCheckpoints ? (
-                <button
-                  onClick={() => {
-                    const won = run.playerScore > run.machineScore;
-                    completeRun(won ? 'MACHINE_BEATEN' : 'PASSED');
-                    onComplete();
-                  }}
-                  className="cmd-button-primary w-full py-3 text-sm tracking-widest"
-                >
-                  VIEW RUN RESULTS ▶
-                </button>
-              ) : (
-                <button onClick={handleLearnNext} className="cmd-button-primary w-full py-3 text-sm tracking-widest">
-                  NEXT SIGNAL ▶
-                </button>
-              )}
             </div>
           )}
 
@@ -1821,11 +1826,24 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                   {observationReason}
                 </div>
               )}
-              <div className="mb-2" />
-              <button onClick={onComplete} className="cmd-button-primary px-8 py-3 tracking-widest text-sm">
-                VIEW AUTOPSY ▶
-              </button>
             </div>
+          )}
+
+          {/* ── Primary action ──
+               Below the workspace, centred on the game axis, in every phase of
+               the loop, so the control that advances the run is never the thing
+               the player has to hunt for. */}
+          {!thesisPrompt && (
+            <ActionZone
+              variant="inline"
+              note={primaryNote}
+              primary={primaryAction}
+              secondaryLeft={
+                commitConfirm ? (
+                  <SecondaryAction label="Revise decision" onClick={() => setCommitConfirm(false)} />
+                ) : undefined
+              }
+            />
           )}
         </div>
 
@@ -1905,14 +1923,6 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
             </button>
           )}
           <div className="flex-1" />
-          {decisionReady && !commitConfirm && (
-            <button
-              onClick={handleReview}
-              className="text-xs tracking-widest text-phosphor border border-phosphor/60 px-4 py-1.5 hover:bg-phosphor/10 transition-colors"
-            >
-              REVIEW DECISION →
-            </button>
-          )}
         </div>
       )}
 

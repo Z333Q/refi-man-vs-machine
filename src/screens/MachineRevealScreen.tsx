@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useState, useEffect } from 'react';
 
 interface Props {
@@ -155,15 +156,21 @@ export default function MachineRevealScreen({ onContinue }: Props) {
             </div>
           )}
 
-          {showAnalysis && (
-            <div className="flex justify-end animate-fade-in">
-              <button onClick={onContinue} className="cmd-button cmd-button-primary tracking-widest">
-                [ VIEW CHECKPOINT SCORE ]
-              </button>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* The action holds its territory through the reveal; it is simply not
+          available until the comparison has finished reading (§10). */}
+      <ActionZone
+        note="YOU AND THE MACHINE SHARED ONE INFORMATION CUTOFF."
+        primary={{
+          label: 'VIEW CHECKPOINT SCORE',
+          onClick: onContinue,
+          disabled: !showAnalysis,
+          disabledHint: 'REVEAL IN PROGRESS',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

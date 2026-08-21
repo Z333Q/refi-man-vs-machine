@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { BENCHMARK_SNAPSHOTS } from '../lib/progressionEngine';
 import type { BenchmarkSnapshot } from '../lib/gameTypes';
 import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
@@ -204,13 +205,13 @@ export default function MachineCardScreen({ onReturn }: Props) {
             </div>
           </div>
 
-          <div className="flex gap-4">
-            <button onClick={onReturn} className="cmd-button cmd-button-primary tracking-widest">
-              [ RETURN ]
-            </button>
-          </div>
         </div>
       </div>
+
+      <ActionZone
+        note="TRUST THE RECORD. NOT THE CLAIM."
+        primary={{ label: 'RETURN TO BRIEFING', onClick: onReturn, keyHint: '[ENTER]' }}
+      />
     </div>
   );
 }
