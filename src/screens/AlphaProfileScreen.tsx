@@ -1,5 +1,6 @@
 import ActionZone from '../components/ui/ActionZone';
 import ClaimHandoffButton from '../components/ClaimHandoffButton';
+import { HANDOFF_MODE } from '../lib/handoff';
 import { useGame } from '../context/GameContext';
 import type { DimensionCode } from '../lib/gameTypes';
 import { isDimensionProvisional, PROVISIONAL_UNTIL_DECISIONS } from '../lib/decisionContract';
@@ -222,9 +223,13 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
               TAKE YOUR ALPHA TO THE REAL PRODUCT
             </div>
             <div className="font-mono text-xs text-phosphor-mid leading-6">
-              Carry your progress into ReFi and continue to eligibility. Your
-              in-game behavioral scores stay in the game: only your arena and
-              machine milestones travel.
+              {HANDOFF_MODE === 'MINTED'
+                ? `Carry your progress into ReFi and continue to eligibility. Your
+                   in-game behavioral scores stay in the game: only your arena and
+                   machine milestones travel.`
+                : `Continue to ReFi and start eligibility there. Your run stays saved
+                   on this device: nothing from the game travels with you yet, and
+                   your in-game behavioral scores never do.`}
             </div>
             <ClaimHandoffButton destination="ELIGIBILITY" />
           </div>
