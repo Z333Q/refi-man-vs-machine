@@ -25,18 +25,23 @@ export interface LoadProgressArgs {
  * Claims are SERVER-derived (never client-asserted), so a tampered client
  * cannot inflate its alpha achievements on the token.
  *
- * SQL verified against the live migrations (20260707233113 game schema +
- * 20260716150000 canonical objects):
+ * SQL verified against db/migrations/0001_founding_schema.sql, which every
+ * query here is exercised against by progress.integration.test.ts:
  *   - arena_runs(session_id, arena_id, state) — state vocabulary is
  *     schema-defaulted 'ACTIVE'; matched case-insensitively.
  *   - player_profiles(session_id, machine_beats, machine_attempts).
  *   - module_unlocks(session_id, module_code) — column is module_code.
- *   - player_machine_versions counted via the alpha_sessions link
- *     (session → alpha_player_id); there is no machine_version_count column.
+ *   - player_machine_versions(session_id) — progress is keyed to the session
+ *     directly. This used to join through an alpha_sessions link table that
+ *     the founding schema does not have, and the failure mode is the reason
+ *     the integration test exists: the join would throw, failSoft would
+ *     swallow it, and every token would carry machineVersionCount 0 with
+ *     nothing on fire.
  *
  * Each read FAILS SOFT to zero progress: the token is the funnel credential,
  * progress is only a waitlist-scoring bonus, so a schema drift must degrade
- * the score — never 500 the mint. Failures are logged for detection.
+ * the score — never 500 the mint. Failures are logged for detection, and the
+ * integration test is what stops that softness from hiding drift.
  * Behavioral DimensionCode scores are deliberately NOT read — they never leave
  * the game (spec §6.6).
  */
@@ -98,9 +103,8 @@ export async function loadProgress(
     async () => {
       const versions = await db.query<{ n: number }>(
         `select count(*)::int as n
-           from player_machine_versions v
-           join alpha_sessions s on s.alpha_player_id = v.alpha_player_id
-          where s.id::text = $1`,
+           from player_machine_versions
+          where session_id = $1`,
         [sessionId],
       );
       return versions.rows[0]?.n ?? 0;

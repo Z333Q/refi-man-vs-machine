@@ -131,6 +131,24 @@ jobs:
     defaults:
       run:
         working-directory: services/handoff
+    # A real database, because the mocked tests cannot see schema drift. The
+    # service's progress reads fail soft to zero by design, so a query that no
+    # longer matches the schema does not crash: it silently mints tokens
+    # claiming the player has done nothing. Only a real query catches that.
+    services:
+      postgres:
+        image: postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685 # 16-alpine
+        env:
+          POSTGRES_USER: refi
+          POSTGRES_PASSWORD: refi
+          POSTGRES_DB: refi_handoff_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U refi"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -143,6 +161,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Tests
+        env:
+          # Present, so the integration tests run rather than skip. They apply
+          # db/migrations/0001_founding_schema.sql themselves.
+          DATABASE_URL: postgresql://refi:refi@localhost:5432/refi_handoff_test
         run: npm test
 
   security:

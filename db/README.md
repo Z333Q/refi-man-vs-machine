@@ -47,6 +47,26 @@ a user, and scopes every query. Row-level security is ordinary PostgreSQL and
 stays available as defence in depth, but it would key on a ReFi-owned session
 variable set by the API rather than on a vendor's function.
 
+## The rule for service SQL
+
+Every SQL query a production service issues must have at least one integration
+test against `0001_founding_schema.sql`, not only a mocked `Queryable`.
+
+A mock agrees with whatever SQL it is handed, so it cannot tell you the schema
+moved underneath it. That is not theoretical: the handoff service counted a
+player's machine versions through a link table this schema does not have, and
+because those reads fail soft to zero, nothing crashed. Every token would have
+carried `machineVersionCount: 0` for exactly the players who had built the
+most.
+
+Two layers enforce it:
+
+- `npm run schema-drift-gate` fails if any table a service references is absent
+  from the schema. It is static and takes a second, so it catches drift while
+  the change is being written.
+- The integration tests catch what table names cannot: wrong columns, wrong
+  joins, wrong filters, wrong results.
+
 ## Tests
 
 `db/schema.test.ts` runs against a real PostgreSQL and is skipped when
