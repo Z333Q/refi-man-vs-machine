@@ -6,7 +6,8 @@ import {
   getTipsByTrigger, isVisibleInMode,
   type TipDef, type TipState, type GuidanceMode, type TipTriggerEvent, type TipAction,
 } from '../lib/tipDefinitions';
-import { supabase, getSessionId } from '../lib/supabase';
+import { getSessionId } from '../lib/identity';
+import { persistence } from '../lib/persistence';
 import { isTipGateOpen, type TipGameState } from './tipGate';
 
 // ─── Context types ────────────────────────────────────────────────────────────
@@ -66,39 +67,26 @@ function loadModeFromStorage(): GuidanceMode {
   return (localStorage.getItem(LS_MODE_KEY) as GuidanceMode | null) ?? 'FULL';
 }
 
-// ─── Supabase sync helpers (fire-and-forget) ──────────────────────────────────
+// ─── Remote sync (fire-and-forget) ───────────────────────────────────────────
+//
+// Seen-state is authoritative in local storage; these calls are a copy for
+// whatever store the port resolves to. They are deliberately not awaited: a
+// tip must appear at the speed of the interaction, not the network.
 
 function syncTipShown(code: string) {
-  const sessionId = getSessionId();
-  supabase
-    .from('user_tip_states')
-    .upsert(
-      {
-        session_id: sessionId,
-        tip_code: code,
-        tip_state: 'SHOWN',
-        last_shown_at: new Date().toISOString(),
-        show_count: 1,
-      },
-      { onConflict: 'session_id,tip_code', ignoreDuplicates: false }
-    )
-    .then(() => {});
+  void persistence.saveTipState(getSessionId(), {
+    tipCode: code,
+    state: 'SHOWN',
+    lastShownAt: new Date().toISOString(),
+  });
 }
 
 function syncTipCompleted(code: string, state: TipState) {
-  const sessionId = getSessionId();
-  supabase
-    .from('user_tip_states')
-    .upsert(
-      {
-        session_id: sessionId,
-        tip_code: code,
-        tip_state: state,
-        completed_at: new Date().toISOString(),
-      },
-      { onConflict: 'session_id,tip_code', ignoreDuplicates: false }
-    )
-    .then(() => {});
+  void persistence.saveTipState(getSessionId(), {
+    tipCode: code,
+    state,
+    completedAt: new Date().toISOString(),
+  });
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -183,14 +171,7 @@ export function TipProvider({ children }: { children: ReactNode }) {
     setGuidanceModeState(mode);
     localStorage.setItem(LS_MODE_KEY, mode);
 
-    // Sync to Supabase guidance_settings
-    supabase
-      .from('guidance_settings')
-      .upsert(
-        { session_id: getSessionId(), guidance_mode: mode, updated_at: new Date().toISOString() },
-        { onConflict: 'session_id' }
-      )
-      .then(() => {});
+    void persistence.saveGuidanceMode(getSessionId(), mode);
   }, []);
 
   const resetTips = useCallback(() => {

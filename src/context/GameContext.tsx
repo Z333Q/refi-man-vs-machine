@@ -8,7 +8,8 @@ import { createDefaultProfile } from '../lib/progressionEngine';
 import {
   reducer, mintSeed, type GameState,
 } from './gameReducer';
-import { supabase, getSessionId } from '../lib/supabase';
+import { getSessionId } from '../lib/identity';
+import { persistence } from '../lib/persistence';
 import {
   emitEvent, beginRunTelemetry, endRunTelemetry, setRunTelemetryId, covidCrisisDayToISO,
 } from '../lib/events';
@@ -63,114 +64,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const profileRef = useRef(state.profile);
   profileRef.current = state.profile;
 
-  // Load profile from Supabase on mount
+  // Load the saved profile on mount.
+  //
+  // This used to read four tables from a database the browser talked to
+  // directly, and to insert a fresh row when it found nothing. It always found
+  // nothing: the insert was rejected by owner-scoped policies the game cannot
+  // satisfy, because no player ever authenticates. The rejection was swallowed,
+  // so every reload silently started from zero XP.
   useEffect(() => {
     const sessionId = getSessionId();
 
     const load = async () => {
-      const { data } = await supabase
-        .from('player_profiles')
-        .select('*')
-        .eq('session_id', sessionId)
-        .maybeSingle();
-
-      if (data) {
-        const { data: dims } = await supabase
-          .from('alpha_profile_dimensions')
-          .select('*')
-          .eq('session_id', sessionId);
-
-        const { data: modules } = await supabase
-          .from('module_unlocks')
-          .select('module_code')
-          .eq('session_id', sessionId);
-
-        const { data: ladder } = await supabase
-          .from('machine_ladder_progress')
-          .select('*')
-          .eq('session_id', sessionId);
-
-        const dimensionMap: PlayerProfile['dimensions'] = {
-          STOCK_SELECTION: { score: 50, sampleSize: 0 },
-          POSITION_SIZING: { score: 50, sampleSize: 0 },
-          LOSS_CONTROL: { score: 50, sampleSize: 0 },
-          REENTRY_DISCIPLINE: { score: 50, sampleSize: 0 },
-          TURNOVER_DISCIPLINE: { score: 50, sampleSize: 0 },
-          REGIME_ADAPTATION: { score: 50, sampleSize: 0 },
-          RULE_ADHERENCE: { score: 50, sampleSize: 0 },
-          ACTION_BIAS_SCORE: { score: 50, sampleSize: 0 },
-          CONCENTRATION_CONTROL: { score: 50, sampleSize: 0 },
-          DECISION_CONSISTENCY: { score: 50, sampleSize: 0 },
-        };
-
-        dims?.forEach(d => {
-          const key = d.dimension_code as keyof typeof dimensionMap;
-          if (key in dimensionMap) {
-            dimensionMap[key] = { score: parseFloat(d.score), sampleSize: d.sample_size };
-          }
-        });
-
-        const unlockedModules = (modules ?? []).map((m: { module_code: ModuleCode }) => m.module_code);
-
-        const machineLadder: PlayerProfile['machineLadder'] = {
-          market_index: { wins: 0, losses: 0, status: 'ACTIVE' },
-          refi_rules: { wins: 0, losses: 0, status: 'ACTIVE' },
-          crisis_machine: { wins: 0, losses: 0, status: 'LOCKED' },
-          regime_machine: { wins: 0, losses: 0, status: 'LOCKED' },
-          refi_alpha: { wins: 0, losses: 0, status: 'LOCKED' },
-          refi_ensemble: { wins: 0, losses: 0, status: 'LOCKED' },
-          taco_protocol: { wins: 0, losses: 0, status: 'LOCKED' },
-        };
-
-        ladder?.forEach((l: { machine_id: string; wins: number; losses: number; status: string }) => {
-          if (l.machine_id in machineLadder) {
-            machineLadder[l.machine_id] = {
-              wins: l.wins,
-              losses: l.losses,
-              status: l.status as 'LOCKED' | 'ACTIVE' | 'DEFEATED',
-            };
-          }
-        });
-
-        const profile: PlayerProfile = {
-          sessionId,
-          handle: data.handle,
-          alphaXp: data.alpha_xp,
-          rankCode: data.rank_code,
-          machineBeats: data.machine_beats,
-          machineAttempts: data.machine_attempts,
-          currentStreak: data.current_streak,
-          bestStreak: data.best_streak,
-          archetype: data.archetype ?? 'UNCLASSIFIED',
-          decisionStreak: data.decision_streak,
-          lastActiveDate: data.last_active_date,
-          dimensions: dimensionMap,
-          unlockedModules,
-          machineLadder,
-        };
-
-        dispatch({ type: 'LOAD_PROFILE', profile });
-      } else {
-        // Create new profile
-        const newProfile = createDefaultProfile(sessionId);
-        await supabase.from('player_profiles').insert({
-          session_id: sessionId,
-          alpha_xp: 0,
-          rank_code: 'INITIATE',
-          machine_beats: 0,
-          machine_attempts: 0,
-          current_streak: 0,
-          best_streak: 0,
-          decision_streak: 0,
-        });
-        dispatch({ type: 'LOAD_PROFILE', profile: newProfile });
-      }
+      const saved = await persistence.loadProfile(sessionId);
+      const profile: PlayerProfile = saved
+        ? { ...createDefaultProfile(sessionId), ...saved, sessionId }
+        : createDefaultProfile(sessionId);
+      dispatch({ type: 'LOAD_PROFILE', profile });
     };
 
-    load();
+    void load();
   }, []);
 
-  // Persist profile changes to Supabase
+  // Persist profile changes.
   const progressSavedRef = useRef(false);
   useEffect(() => {
     if (!state.loaded) return;
@@ -183,38 +98,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       markProgressSaved();
     }
 
-    const sessionId = getSessionId();
-
-    const save = async () => {
-      await supabase.from('player_profiles').upsert({
-        session_id: sessionId,
-        alpha_xp: state.profile.alphaXp,
-        rank_code: state.profile.rankCode,
-        machine_beats: state.profile.machineBeats,
-        machine_attempts: state.profile.machineAttempts,
-        current_streak: state.profile.currentStreak,
-        best_streak: state.profile.bestStreak,
-        archetype: state.profile.archetype,
-        decision_streak: state.profile.decisionStreak,
-        last_active_date: new Date().toISOString().split('T')[0],
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'session_id' });
-
-      // Save dimensions
-      await Promise.all(
-        Object.entries(state.profile.dimensions).map(([code, data]) =>
-          supabase.from('alpha_profile_dimensions').upsert({
-            session_id: sessionId,
-            dimension_code: code,
-            score: data.score,
-            sample_size: data.sampleSize,
-            last_updated: new Date().toISOString(),
-          }, { onConflict: 'session_id,dimension_code' })
-        )
-      );
-    };
-
-    save();
+    const { sessionId: _sessionId, ...snapshot } = state.profile;
+    void persistence.saveProfile(getSessionId(), snapshot);
   }, [state.profile, state.loaded]);
 
   // ─── Event-envelope emission (§56 / §4.2) ────────────────────────────────

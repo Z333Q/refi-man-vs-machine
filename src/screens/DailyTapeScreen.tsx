@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { getTodaysTape, getYesterdaysTape, scoreTapeDecision } from '../lib/dailyTape';
 import { useGame } from '../context/GameContext';
 import type { ActionCode } from '../lib/gameTypes';
-import { supabase, getSessionId } from '../lib/supabase';
+import { getSessionId } from '../lib/identity';
+import { persistence } from '../lib/persistence';
 
 type TapePhase = 'INTRO' | 'READING' | 'COMMITTED' | 'REVEAL';
 
@@ -30,17 +31,12 @@ export default function DailyTapeScreen({ onBack }: Props) {
 
   useEffect(() => {
     const checkSubmission = async () => {
-      const { data } = await supabase
-        .from('daily_tape_submissions')
-        .select('player_action, score')
-        .eq('session_id', getSessionId())
-        .eq('tape_date', today.date)
-        .maybeSingle();
+      const submission = await persistence.loadDailyTape(getSessionId(), today.date);
 
-      if (data) {
+      if (submission) {
         setAlreadySubmitted(true);
-        setSelectedAction(data.player_action as ActionCode);
-        setScore(data.score);
+        setSelectedAction(submission.playerAction as ActionCode);
+        setScore(submission.score);
         setPhase('REVEAL');
       }
       setLoading(false);
@@ -52,14 +48,10 @@ export default function DailyTapeScreen({ onBack }: Props) {
     if (!selectedAction) return;
     const tapeScore = scoreTapeDecision(selectedAction, today);
 
-    await supabase.from('daily_tape_submissions').insert({
-      session_id: getSessionId(),
-      tape_id: today.id,
-      tape_date: today.date,
-      player_action: selectedAction,
-      correct_action: today.correctAction,
+    await persistence.saveDailyTape(getSessionId(), {
+      tapeDate: today.date,
+      playerAction: selectedAction,
       score: tapeScore,
-      machine_action: today.machineAction,
     });
 
     setScore(tapeScore);
