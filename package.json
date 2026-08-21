@@ -18,7 +18,8 @@
     "e2e": "playwright test",
     "e2e:desktop": "playwright test --project=desktop",
     "e2e:mobile": "playwright test --project=mobile",
-    "vendor-gate": "node scripts/vendor-coupling-gate.mjs"
+    "vendor-gate": "node scripts/vendor-coupling-gate.mjs",
+    "test:schema": "node --import tsx --test db/schema.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@eslint/js": "^9.9.1",
     "@playwright/test": "^1.62.1",
+    "@types/pg": "^8.23.1",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
@@ -37,6 +39,7 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.11",
     "globals": "^15.9.0",
+    "pg": "^8.23.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.19.2",
