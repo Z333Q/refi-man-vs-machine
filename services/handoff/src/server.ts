@@ -10,7 +10,7 @@ const SHELL_BASE_URL =
 // Default to the game origin, not "*": the mint endpoint is public, so CORS
 // is one of the few browser-side abuse dampeners it has.
 const ALLOWED_ORIGIN =
-  process.env["ALLOWED_ORIGIN"] ?? "https://play.refi.trading";
+  process.env["ALLOWED_ORIGIN"] ?? "https://game.refi.trading";
 const MAX_BODY_BYTES = 16 * 1024;
 
 // Per-IP mint rate limit: fixed window, in-memory (per instance — a first

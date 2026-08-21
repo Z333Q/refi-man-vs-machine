@@ -27,5 +27,5 @@ variable "shell_base_url" {
 variable "allowed_origin" {
   type        = string
   description = "CORS allow-origin for the game frontend that calls the service."
-  default     = "https://play.refi.trading"
+  default     = "https://game.refi.trading"
 }
