@@ -222,6 +222,28 @@ export function actionReturnMultiplier(action: ActionCode): number {
   );
 }
 
+// ─── Cash authority ───────────────────────────────────────────────────────────
+//
+// One place owns what a stance does to cash and where cash may sit. The Block
+// Field preview renders from these same functions, so the preview and the
+// commit cannot disagree: a duplicated delta or clamp elsewhere is exactly how
+// the historical #30 preview drifted from the engine (its clamp said 2..90
+// while the engine said 5..60).
+
+/** Hard bounds on cash weight. The single source; never restate these. */
+export const CASH_WEIGHT_MIN = 0.05;
+export const CASH_WEIGHT_MAX = 0.60;
+
+/** What a stance does to cash, before clamping. */
+export function stanceCashDelta(action: ActionCode): number {
+  return action === 'RAISE_CASH' ? 0.10 : action === 'ADD_RISK' ? -0.05 : action === 'REDUCE' ? 0.05 : 0;
+}
+
+/** The cash weight a stance produces, clamped to the engine's bounds. */
+export function nextCashWeight(currentCash: number, action: ActionCode): number {
+  return Math.max(CASH_WEIGHT_MIN, Math.min(CASH_WEIGHT_MAX, currentCash + stanceCashDelta(action)));
+}
+
 export function simulatePortfolioAdvance(
   portfolio: PortfolioState,
   action: ActionCode,
@@ -239,8 +261,7 @@ export function simulatePortfolioAdvance(
   const peakValue = Math.max(portfolio.peakValue, newValue);
   const newDrawdown = Math.min(0, (newValue - peakValue) / peakValue);
   const newVolatility = Math.max(0.08, portfolio.volatility + volatilityDelta);
-  const cashDelta = action === 'RAISE_CASH' ? 0.10 : action === 'ADD_RISK' ? -0.05 : action === 'REDUCE' ? 0.05 : 0;
-  const newCash = Math.max(0.05, Math.min(0.60, portfolio.cashWeight + cashDelta));
+  const newCash = nextCashWeight(portfolio.cashWeight, action);
   const newTurnover = portfolio.turnoverUsed + turnoverCostFor(action, cp);
 
   return {

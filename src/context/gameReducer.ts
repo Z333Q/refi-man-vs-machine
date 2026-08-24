@@ -161,7 +161,7 @@ export function reducer(state: GameState, action: GameAction): GameState {
       const xpEarned = computeXpAward(score, checkpoint.isRegimeChange);
       const newDimensions = updateDimensions(state.profile.dimensions, getDimensionUpdates(flags, dimUpdates));
       const newXp = state.profile.alphaXp + xpEarned;
-      const newModuleUnlocks = checkModuleUnlocks({ ...state.profile, alphaXp: newXp }, run.currentCheckpoint);
+      const newModuleUnlocks = checkModuleUnlocks({ ...state.profile, alphaXp: newXp }, run.currentCheckpoint, run.arenaId);
       const newUnlocked = [...state.profile.unlockedModules, ...newModuleUnlocks];
 
       return {

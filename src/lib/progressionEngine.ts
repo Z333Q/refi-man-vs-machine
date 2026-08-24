@@ -1,4 +1,4 @@
-import type { ModuleCode, TerminalModule, MachineBenchmark, BenchmarkSnapshot, RankCode, PlayerProfile, DimensionCode } from './gameTypes';
+import type { ArenaId, ModuleCode, TerminalModule, MachineBenchmark, BenchmarkSnapshot, RankCode, PlayerProfile, DimensionCode } from './gameTypes';
 
 // ─── Terminal modules ─────────────────────────────────────────────────────────
 
@@ -36,6 +36,14 @@ export const TERMINAL_MODULES: TerminalModule[] = [
     description: 'Equity event wire service — earnings, guidance, M&A, management',
     unlockRequirement: 'Always available',
     alwaysAvailable: true,
+  },
+  {
+    code: 'BLOCK_FIELD',
+    label: 'BLOCK FIELD',
+    key: 'L',
+    description: 'The portfolio as area: allocation blocks with cash drawn hollow, and a stance preview',
+    unlockRequirement: 'Complete the first three COVID decisions',
+    alwaysAvailable: false,
   },
   {
     code: 'CORRELATION_MATRIX',
@@ -103,10 +111,39 @@ export function getAvailableModules(unlockedModules: ModuleCode[]): TerminalModu
   return TERMINAL_MODULES.filter(m => m.alwaysAvailable || unlockedModules.includes(m.code));
 }
 
-export function checkModuleUnlocks(profile: PlayerProfile, checkpointReached: number): ModuleCode[] {
+/**
+ * Modules earned by a committed decision.
+ *
+ * `checkpointCompleted` is the checkpoint the player just committed: the
+ * reducer evaluates unlocks during COMMIT_DECISION, before ADVANCE_CHECKPOINT,
+ * so a rule written `>= N` fires at the moment CP N's decision locks and the
+ * module is active when the player enters CP N+1.
+ *
+ * `arenaId` is required, not optional, because a global checkpoint number is
+ * not a law in a five-arena game (2026-08-25 #30 re-audit): once any unlock
+ * rule is arena-specific, a caller without arena identity does not have
+ * enough information to evaluate the canonical unlock law, and that must be
+ * a compile-time error rather than a silent partial result.
+ */
+export function checkModuleUnlocks(
+  profile: PlayerProfile,
+  checkpointCompleted: number,
+  arenaId: ArenaId,
+): ModuleCode[] {
   const newUnlocks: ModuleCode[] = [];
 
-  if (checkpointReached >= 6 && !profile.unlockedModules.includes('CORRELATION_MATRIX')) {
+  // Owner ruling: the Block Field is earned by completing the first three
+  // decisions of the COVID arena, win or lose. Other arenas do not
+  // independently grant it.
+  if (
+    arenaId === 'covid_black_swan' &&
+    checkpointCompleted >= 3 &&
+    !profile.unlockedModules.includes('BLOCK_FIELD')
+  ) {
+    newUnlocks.push('BLOCK_FIELD');
+  }
+
+  if (checkpointCompleted >= 6 && !profile.unlockedModules.includes('CORRELATION_MATRIX')) {
     newUnlocks.push('CORRELATION_MATRIX');
   }
   if (profile.alphaXp >= 100 && !profile.unlockedModules.includes('DRAWDOWN_MAP')) {
