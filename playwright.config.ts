@@ -30,7 +30,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: 'real-flow.spec.ts' },
     // §62 and the viewport gate both claim the game is reachable on a phone.
     // That claim is checked here rather than asserted.
     //
@@ -39,24 +39,53 @@ export default defineConfig({
     // separate WebKit download. The claim under test is the layout at phone
     // width, not WebKit's rendering, so this buys the coverage without making
     // the suite depend on a browser the machine may not have.
-    { name: 'mobile', use: { ...devices['Pixel 5'] } },
+    { name: 'mobile', use: { ...devices['Pixel 5'] }, testIgnore: 'real-flow.spec.ts' },
+    // The production build, played the way a player would.
+    //
+    // Every other project runs against the dev server, where the DEMO jump
+    // strip exists and the shared helpers use it. That verifies screens work
+    // when opened directly — it cannot verify a player can reach them. This
+    // project serves the real build (no dev strip) and its spec refuses
+    // developer navigation, so reachability defects fail here instead of
+    // hiding behind the shortcut.
+    {
+      name: 'real-flow',
+      testMatch: 'real-flow.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+        baseURL: 'http://127.0.0.1:5200',
+      },
+    },
   ],
-  webServer: {
-    command: 'npm run dev -- --port 5199 --host 127.0.0.1',
-    url: 'http://127.0.0.1:5199',
-    // Always reuse a server that is already up, including in CI.
-    //
-    // This was `!process.env.CI`, which is the documented default and which
-    // leaks locally: a run killed part-way — by a command timeout, a Ctrl-C, a
-    // crashed worker — never tears its dev server down, and the next run
-    // starts another one. Six accumulated over two days here, each holding an
-    // esbuild worker, and the machine's load average climbed until specs
-    // started timing out and looking like flakes. Reusing means repeated runs
-    // share one server instead of stacking new ones.
-    //
-    // CI starts clean every time, so there is never a server to reuse there and
-    // the flag costs nothing.
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: 'npm run dev -- --port 5199 --host 127.0.0.1',
+      url: 'http://127.0.0.1:5199',
+      // Always reuse a server that is already up, including in CI.
+      //
+      // This was `!process.env.CI`, which is the documented default and which
+      // leaks locally: a run killed part-way — by a command timeout, a Ctrl-C, a
+      // crashed worker — never tears its dev server down, and the next run
+      // starts another one. Six accumulated over two days here, each holding an
+      // esbuild worker, and the machine's load average climbed until specs
+      // started timing out and looking like flakes. Reusing means repeated runs
+      // share one server instead of stacking new ones.
+      //
+      // CI starts clean every time, so there is never a server to reuse there and
+      // the flag costs nothing.
+      reuseExistingServer: true,
+      timeout: 120_000,
+    },
+    {
+      // The production build for the real-flow project. Freshly built on every
+      // cold start; when reusing a warm server locally, re-run after source
+      // changes with the port freed (or `npm run build` first) — CI always
+      // starts cold, so CI always tests the current build.
+      command: 'npm run build && npm run preview -- --port 5200 --host 127.0.0.1 --strictPort',
+      url: 'http://127.0.0.1:5200',
+      reuseExistingServer: true,
+      timeout: 180_000,
+    },
+  ],
 });
