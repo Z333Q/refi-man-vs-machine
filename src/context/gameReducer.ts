@@ -38,7 +38,7 @@ export type GameAction =
   | { type: 'LOAD_PROFILE'; profile: PlayerProfile }
   // The identity and determinism anchor are minted here, not in the engine:
   // both need a clock or an RNG, which the engine may not read.
-  | { type: 'START_RUN'; runId: string; seed: number; arenaId: ArenaId }
+  | { type: 'START_RUN'; runId: string; seed: number; arenaId: ArenaId; machineId: string }
   // A run rebuilt from its record by replaying the decisions through the
   // engine. The run arrives whole; the reducer only adopts it.
   | { type: 'RESUME_RUN'; run: RunState }
@@ -93,7 +93,7 @@ export function reducer(state: GameState, action: GameAction): GameState {
       // A run opens with the base terminal plus everything the player has
       // already earned. Without this a returning player's unlocked modules
       // silently disappear the moment a new run starts.
-      const base = createInitialRun(action.seed, action.arenaId);
+      const base = createInitialRun(action.seed, action.arenaId, action.machineId);
       return {
         ...state,
         run: {
@@ -207,6 +207,22 @@ export function reducer(state: GameState, action: GameAction): GameState {
       // cannot bank a machine beat or extend a streak.
       const result = resolveRunResult(state.run, action.result);
       const won = result === 'MACHINE_BEATEN';
+      // The run knows which opponent it was against; the ladder entry for
+      // that opponent records the outcome. Before this, the per-machine
+      // records existed but were never written, so the ladder displayed a
+      // standing no run had ever produced (2026-08-25 audit P0).
+      const machineId = state.run.machineId;
+      const ladderEntry = state.profile.machineLadder[machineId];
+      const machineLadder = ladderEntry
+        ? {
+            ...state.profile.machineLadder,
+            [machineId]: {
+              wins: ladderEntry.wins + (won ? 1 : 0),
+              losses: ladderEntry.losses + (won ? 0 : 1),
+              status: won ? 'DEFEATED' as const : ladderEntry.status,
+            },
+          }
+        : state.profile.machineLadder;
       return {
         ...state,
         run: { ...state.run, result, phase: 'COMPLETE' },
@@ -218,6 +234,7 @@ export function reducer(state: GameState, action: GameAction): GameState {
           bestStreak: won
             ? Math.max(state.profile.bestStreak, state.profile.currentStreak + 1)
             : state.profile.bestStreak,
+          machineLadder,
         },
       };
     }

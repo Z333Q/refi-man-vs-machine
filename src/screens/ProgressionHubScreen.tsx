@@ -1,12 +1,16 @@
+import { useMemo } from 'react';
 import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 import { useGame } from '../context/GameContext';
-import { TERMINAL_MODULES, MACHINE_LADDER, getRankLabel, getXpToNextRank } from '../lib/progressionEngine';
+import { TERMINAL_MODULES, MACHINE_LADDER, getRankLabel, getXpToNextRank, currentOpponent } from '../lib/progressionEngine';
 import { getArchetypeLabel } from '../lib/scoringEngine';
+import { listRunRecords } from '../lib/runRecord';
+import { builderUnlocked, BUILDER_UNLOCK_REQUIREMENT } from '../lib/progressionLaw';
 
 interface Props {
   onStartRun: () => void;
   onDailyTape: () => void;
   onMachineLadder: () => void;
+  onMachineBuilder: () => void;
   onBack: () => void;
 }
 
@@ -46,9 +50,14 @@ function ScoreBar({ score, sampleSize }: { score: number; sampleSize: number }) 
   );
 }
 
-export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachineLadder, onBack }: Props) {
+export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachineLadder, onMachineBuilder, onBack }: Props) {
   const { state } = useGame();
   const { profile } = state;
+
+  // Builder gate (owner ruling 2026-08-25): visible from the start so the
+  // progression is legible, unlocked by Bronze. The locked entry states its
+  // requirement rather than hiding.
+  const builderOpen = useMemo(() => builderUnlocked(listRunRecords()), []);
 
   const rankLabel = getRankLabel(profile.rankCode);
   const xpProgress = getXpToNextRank(profile.alphaXp);
@@ -60,9 +69,10 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
     m => m.alwaysAvailable || profile.unlockedModules.includes(m.code)
   ).length;
 
-  const currentMachineOpponent = MACHINE_LADDER.find(m =>
-    profile.machineLadder[m.id]?.status === 'ACTIVE'
-  );
+  // The opponent shown is one the player can actually face: playable and
+  // ACTIVE, else playable and DEFEATED (the rematch). Never a rung whose
+  // runtime does not exist, however ACTIVE its status is.
+  const currentMachineOpponent = currentOpponent(profile.machineLadder);
 
   const archetypeLabel = getArchetypeLabel(profile.archetype);
 
@@ -198,6 +208,46 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
 
           {/* Right column */}
           <div className="space-y-5">
+
+            {/* Machine Builder: the central progression system (Sec 17), so
+                its door lives here on the hub. */}
+            <div className="terminal-panel p-4">
+              <div className="flex justify-between items-center mb-2">
+                <div className="text-phosphor-dim text-xs tracking-widest">MACHINE BUILDER</div>
+                <span className={`text-xs ${builderOpen ? 'text-phosphor' : 'text-phosphor-dim'}`}>
+                  {builderOpen ? '◉ UNLOCKED' : '○ LOCKED'}
+                </span>
+              </div>
+              {builderOpen ? (
+                <>
+                  <div className="text-phosphor-dim text-xs mb-3">
+                    YOU HAVE SEEN THE GAP. NOW BUILD THE PROCESS.
+                  </div>
+                  <button
+                    onClick={onMachineBuilder}
+                    className="w-full border border-phosphor/40 text-phosphor text-xs font-mono tracking-widest py-2.5 hover:bg-phosphor/10 transition-colors"
+                  >
+                    OPEN MACHINE BUILDER →
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="text-phosphor-dim text-xs mb-3">
+                    BUILD AND STRESS-TEST YOUR OWN MACHINE.
+                  </div>
+                  <div
+                    role="button"
+                    aria-disabled="true"
+                    className="w-full border border-phosphor/15 text-phosphor-dim text-xs font-mono tracking-widest py-2.5 text-center select-none"
+                  >
+                    MACHINE BUILDER
+                  </div>
+                  <div className="text-alert-amber text-xs mt-2">
+                    {BUILDER_UNLOCK_REQUIREMENT}
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Current opponent */}
             {currentMachineOpponent && (

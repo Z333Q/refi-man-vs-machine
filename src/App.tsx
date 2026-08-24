@@ -93,6 +93,9 @@ function AppInner() {
   const [showHelp, setShowHelp] = useState(false);
   // The arena the player picked on the map, carried into the run they start.
   const [pendingArena, setPendingArena] = useState<ArenaId>('covid_black_swan');
+  // The opponent the player challenged on the ladder, carried the same way.
+  // Entering through the map (not the ladder) faces the house rules machine.
+  const [pendingMachine, setPendingMachine] = useState<string>('refi_rules');
 
   const go = useCallback((s: Screen) => setScreen(s), []);
 
@@ -180,26 +183,41 @@ function AppInner() {
           fullscreen decision views. */}
       {bridgeVisible && <OnboardingBridge />}
 
-      {/* Dev nav bar */}
+      {/* Top chrome bar.
+          In development it carries the DEMO jump strip so any screen can be
+          opened directly. In production the strip does not exist: navigation
+          is the product's own flow, and a player who can jump anywhere would
+          mask every reachability defect the flow has (the e2e real-flow suite
+          runs against the production build for exactly this reason). The bar
+          itself remains in both modes because it is the permanent home of
+          [?] HELP (Sec 13) on non-fullscreen screens. */}
       {!isFullscreen && (
         <div className="fixed top-0 left-0 right-0 z-50 border-b border-phosphor/15 bg-terminal-black/95">
           <div className="flex items-center h-8 px-4 gap-0 overflow-x-auto scrollbar-hide">
-            <span className="font-mono text-xs text-phosphor-dim flex-shrink-0 mr-3 tracking-widest border-r border-phosphor/20 pr-3">
-              DEMO
-            </span>
-            {DEMO_FLOW.map((s, i) => (
-              <button
-                key={s}
-                onClick={() => go(s)}
-                className={`font-mono text-xs px-2.5 h-full border-r border-phosphor/10 flex-shrink-0 transition-colors whitespace-nowrap ${
-                  screen === s
-                    ? 'text-phosphor bg-phosphor/10'
-                    : 'text-phosphor-dim hover:text-phosphor-mid hover:bg-phosphor/5'
-                }`}
-              >
-                {String(i + 1).padStart(2, '0')} {NAV_LABELS[s]}
-              </button>
-            ))}
+            {import.meta.env.DEV ? (
+              <>
+                <span className="font-mono text-xs text-phosphor-dim flex-shrink-0 mr-3 tracking-widest border-r border-phosphor/20 pr-3">
+                  DEMO
+                </span>
+                {DEMO_FLOW.map((s, i) => (
+                  <button
+                    key={s}
+                    onClick={() => go(s)}
+                    className={`font-mono text-xs px-2.5 h-full border-r border-phosphor/10 flex-shrink-0 transition-colors whitespace-nowrap ${
+                      screen === s
+                        ? 'text-phosphor bg-phosphor/10'
+                        : 'text-phosphor-dim hover:text-phosphor-mid hover:bg-phosphor/5'
+                    }`}
+                  >
+                    {String(i + 1).padStart(2, '0')} {NAV_LABELS[s]}
+                  </button>
+                ))}
+              </>
+            ) : (
+              <span className="font-mono text-xs text-phosphor-dim flex-shrink-0 tracking-widest">
+                REFI ALPHA
+              </span>
+            )}
             <button
               onClick={toggleHelp}
               className="font-mono text-xs px-2.5 h-full text-phosphor-dim hover:text-phosphor-mid transition-colors whitespace-nowrap ml-auto"
@@ -239,18 +257,26 @@ function AppInner() {
             }}
             onDailyTape={() => go('daily-tape')}
             onMachineLadder={() => go('machine-ladder')}
+            onMachineBuilder={() => go('machine-builder')}
             onBack={() => go('landing')}
           />
         )}
         {screen === 'arena-map' && (
           <ArenaMapScreen
-            onSelectArena={(arenaId) => { setPendingArena(arenaId); go('arena-briefing'); }}
+            onSelectArena={(arenaId) => {
+              setPendingArena(arenaId);
+              // Entering through the map faces the house machine; a ladder
+              // challenge that was never started must not leak into it.
+              setPendingMachine('refi_rules');
+              go('arena-briefing');
+            }}
             onBack={() => go('progression-hub')}
           />
         )}
         {screen === 'arena-briefing' && (
           <ArenaBriefingScreen
             arenaId={pendingArena}
+            machineId={pendingMachine}
             onStart={() => go('core-loop')}
             onViewMachineCard={() => go('machine-card')}
             onBack={() => go('arena-map')}
@@ -262,6 +288,7 @@ function AppInner() {
         {screen === 'core-loop' && (
           <CoreLoopScreen
             arenaId={pendingArena}
+            machineId={pendingMachine}
             onComplete={() => go('autopsy')}
             onBack={() => go('arena-briefing')}
             onHelp={toggleHelp}
@@ -310,7 +337,12 @@ function AppInner() {
         )}
         {screen === 'machine-ladder' && (
           <MachineLadderScreen
-            onChallenge={() => go('arena-briefing')}
+            onChallenge={(machineId) => {
+              // The chosen opponent is part of run identity from here on
+              // (2026-08-25 audit P0: this callback used to discard it).
+              setPendingMachine(machineId);
+              go('arena-briefing');
+            }}
             onBack={() => go('progression-hub')}
           />
         )}

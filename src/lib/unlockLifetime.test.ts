@@ -95,7 +95,7 @@ test('clearing the announcement never removes the module itself', () => {
 
 test('a new run keeps the modules the player has already earned', () => {
   const s = withUnlock();
-  const next = reducer(s, { type: 'START_RUN', runId: 'run_next', seed: 7, arenaId: 'covid_black_swan' });
+  const next = reducer(s, { type: 'START_RUN', runId: 'run_next', seed: 7, arenaId: 'covid_black_swan', machineId: 'refi_rules' });
   assert.ok(
     next.run?.activeModules.includes('DRAWDOWN_MAP'),
     'a returning player must not lose earned modules at run start',
@@ -108,7 +108,7 @@ test('a new run keeps the modules the player has already earned', () => {
 });
 
 test('the run seed and id come from the action, never from the engine', () => {
-  const next = reducer(baseState(), { type: 'START_RUN', runId: 'run_abc', seed: 4242, arenaId: 'covid_black_swan' });
+  const next = reducer(baseState(), { type: 'START_RUN', runId: 'run_abc', seed: 4242, arenaId: 'covid_black_swan', machineId: 'refi_rules' });
   assert.equal(next.run?.id, 'run_abc');
   assert.equal(next.run?.seed, 4242);
 });
