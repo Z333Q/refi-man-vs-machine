@@ -82,8 +82,15 @@ export default function DailyTapeScreen({ onBack }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <div className="text-phosphor-dim text-xs tracking-widest mb-1">DAILY MARKET TAPE</div>
+            {/* This is a rotating authored scenario, and it says so. It used
+                to present itself as today's market with a measured crowd,
+                which was the 2026-08-25 audit's integrity blocker: a
+                statistic without a source is a performance claim. */}
+            <div className="text-phosphor-dim text-xs tracking-widest mb-1">DAILY PRACTICE TAPE</div>
             <div className="text-phosphor text-xl font-bold">{today.date}</div>
+            <div className="text-alert-amber text-xs tracking-widest mt-1">
+              SIMULATED HISTORICAL SCENARIO · NOT TODAY'S MARKET
+            </div>
           </div>
           <button
             onClick={onBack}
@@ -116,7 +123,7 @@ export default function DailyTapeScreen({ onBack }: Props) {
 
         {/* Today's tape */}
         <div className="terminal-panel p-5 mb-6">
-          <div className="text-phosphor-dim text-xs tracking-widest mb-1">TODAY'S TAPE</div>
+          <div className="text-phosphor-dim text-xs tracking-widest mb-1">PRACTICE SCENARIO</div>
           <div className="text-phosphor text-xl font-bold mb-4">{today.title}</div>
 
           {/* Signals */}
@@ -131,7 +138,7 @@ export default function DailyTapeScreen({ onBack }: Props) {
 
           {/* Market data */}
           <div className="border-t border-phosphor/10 pt-4">
-            <div className="text-phosphor-dim text-xs tracking-widest mb-3">MARKET DATA</div>
+            <div className="text-phosphor-dim text-xs tracking-widest mb-3">SCENARIO DATA · AUTHORED</div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {today.marketData.map((md, i) => (
                 <div key={i} className="text-center">
@@ -172,7 +179,7 @@ export default function DailyTapeScreen({ onBack }: Props) {
         {/* Reveal */}
         {phase === 'REVEAL' && (
           <div className="space-y-4 animate-boot-fade">
-            <div className="text-phosphor-dim text-xs tracking-widest mb-2">TODAY'S RESULT</div>
+            <div className="text-phosphor-dim text-xs tracking-widest mb-2">PRACTICE RESULT</div>
 
             {/* Score card */}
             <div className={`border p-5 ${
@@ -220,7 +227,9 @@ export default function DailyTapeScreen({ onBack }: Props) {
 
             {/* Crowd distribution */}
             <div className="terminal-panel p-4">
-              <div className="text-phosphor-dim text-xs tracking-widest mb-3">CROWD DISTRIBUTION</div>
+              {/* Authored constants, not measured players. The label says so
+                  until a real aggregation service exists. */}
+              <div className="text-phosphor-dim text-xs tracking-widest mb-3">SAMPLE DISTRIBUTION · AUTHORED, NOT MEASURED</div>
               <div className="space-y-2">
                 {today.availableActions.map(ac => {
                   const pct = crowdPct(ac.code);

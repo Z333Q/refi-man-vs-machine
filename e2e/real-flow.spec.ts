@@ -76,7 +76,9 @@ test('the hub, daily tape and machine ladder are reachable through the product',
   await gotoHub(page);
 
   await page.getByRole('button', { name: 'Daily tape' }).click();
-  await expect(page.getByText('DAILY MARKET TAPE')).toBeVisible();
+  await expect(page.getByText('DAILY PRACTICE TAPE')).toBeVisible();
+  // Its provenance is stated on the screen, not implied away (audit P0).
+  await expect(page.getByText(/SIMULATED HISTORICAL SCENARIO/)).toBeVisible();
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'Machine ladder' })
