@@ -4,7 +4,7 @@ import { useGame } from '../context/GameContext';
 import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
 import { getArena } from '../lib/arenas';
 import { useTips, type TipGameState } from '../context/TipContext';
-import type { ActionBranch, ArenaId, ModuleCode, ThesisCode } from '../lib/gameTypes';
+import type { ActionBranch, ActionCode, ArenaId, ModuleCode, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
@@ -23,6 +23,8 @@ import PullToCommit from '../components/game/PullToCommit';
 import { InflationCompression, BankingContagion, SupplyChain, Reflexivity, TacoPortrait } from '../components/game/AsciiPlates';
 import { CorrelationPanel, DrawdownPanel, RegimePanel } from '../components/game/ModulePanels';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
+import BlockField from '../components/game/BlockField';
+import { blocksFromPortfolio, previewStanceBlocks, type BlockInput } from '../lib/blockField';
 import MachineReveal from '../components/game/MachineReveal';
 import ResolutionRace from '../components/game/ResolutionRace';
 import MachineEvolution from '../components/game/MachineEvolution';
@@ -107,6 +109,12 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
   const [activePanel, setActivePanel] = useState<ActivePanel>('SIGNAL');
   const [commitConfirm, setCommitConfirm] = useState(false);
   const [revealDelay, setRevealDelay] = useState(0);
+  // The pre-commit allocation, snapshotted at the moment of commit so the
+  // reveal can ghost what the field looked like before the world moved.
+  const blocksBeforeRef = useRef<BlockInput[]>([]);
+  // Which stance the earned Block Field is previewing. Preview only: it never
+  // touches pending decision state, so looking cannot become deciding.
+  const [previewStance, setPreviewStance] = useState<ActionCode | null>(null);
   // The post-commit thesis prompt. Shown between the release and the reveal so
   // the player explains an instinct already exposed (Addendum B B2, C C.5).
   const [thesisPrompt, setThesisPrompt] = useState(false);
@@ -500,9 +508,15 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
    * half-applied stance or a stale conviction.
    */
   const submitDecision = useCallback((command: DecisionCommand) => {
+    // Freeze the pre-commit allocation for the reveal's ghost. Read from the
+    // run itself so the snapshot is the exact state the engine advances from.
+    if (run) {
+      blocksBeforeRef.current = blocksFromPortfolio(run.portfolio.positions, run.portfolio.cashWeight);
+    }
+    setPreviewStance(null);
     commitDecision(command);
     afterCommit();
-  }, [commitDecision, afterCommit]);
+  }, [commitDecision, afterCommit, run]);
 
   // The precise door: whatever the slider and keyboard have built becomes the
   // command. Same boundary as the gesture, same engine call.
@@ -1326,6 +1340,57 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                       </div>
                     )}
 
+                    {/* Block Field: the earned allocation view. Preview is
+                        allocation only, driven by the engine's own cash
+                        authority, and it never touches the pending decision.
+                        Absent until the module is earned in COVID. */}
+                    {run.activeModules.includes('BLOCK_FIELD') && (
+                      <div className="mb-4 border border-phosphor/10 bg-terminal-deep/40 p-3" data-testid="block-field-home">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-phosphor-dim text-xs tracking-widest">BLOCK FIELD · ALLOCATION</span>
+                          {previewStance && (
+                            <span className="text-alert-amber text-xs tracking-widest">PREVIEW · {previewStance.replace(/_/g, ' ')}</span>
+                          )}
+                        </div>
+                        <BlockField
+                          blocks={
+                            previewStance
+                              ? previewStanceBlocks(portfolio.positions, portfolio.cashWeight, previewStance)
+                              : blocksFromPortfolio(portfolio.positions, portfolio.cashWeight)
+                          }
+                          previous={previewStance ? blocksFromPortfolio(portfolio.positions, portfolio.cashWeight) : null}
+                          height={170}
+                          reducedMotion={reducedMotion}
+                          caption={previewStance ? 'ALLOCATION EFFECT ONLY. THE MARKET IS NOT IN THIS PICTURE.' : 'CASH DRAWN HOLLOW. AREA IS ALLOCATION.'}
+                        />
+                        {decisionPhase && branches.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {branches.map(branch => {
+                              const affordable = canAffordAction(run, branch.actionCode, currentCheckpointData);
+                              const active = previewStance === branch.actionCode;
+                              return (
+                                <button
+                                  key={branch.actionCode}
+                                  disabled={!affordable}
+                                  aria-pressed={active}
+                                  onClick={() => setPreviewStance(active ? null : branch.actionCode)}
+                                  className={`text-xs px-2 py-1 border tracking-widest transition-colors ${
+                                    !affordable
+                                      ? 'border-phosphor/10 text-phosphor-dim cursor-not-allowed opacity-50'
+                                      : active
+                                        ? 'border-alert-amber text-alert-amber'
+                                        : 'border-phosphor/25 text-phosphor-dim hover:text-phosphor'
+                                  }`}
+                                >
+                                  {branch.actionCode.replace(/_/g, ' ')}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
                       {portfolio.positions.map(pos => (
                         <div
@@ -1690,6 +1755,28 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                   />
                 </div>
               ) : (
+                <>
+                {/* The resolved field, with the pre-commit allocation ghosted
+                    beneath it. The channels are deliberately separate and the
+                    copy states them: the engine moves allocation only when
+                    the PLAYER acts (simulatePortfolioAdvance changes cash and
+                    PnL, it does not mark position weights to market), so
+                    area/outline carry the stance and PnL carries the market.
+                    Reveal side only, after resolution. */}
+                <div
+                  className="mb-5 border border-phosphor/10 bg-terminal-deep/40 p-3 transition-opacity duration-500"
+                  style={{ opacity: revealDelay }}
+                  data-testid="block-field-reveal"
+                >
+                  <div className="text-phosphor-dim text-xs tracking-widest mb-2">BLOCK FIELD · RESOLVED</div>
+                  <BlockField
+                    blocks={blocksFromPortfolio(portfolio.positions, portfolio.cashWeight)}
+                    previous={blocksBeforeRef.current.length > 0 ? blocksBeforeRef.current : null}
+                    height={150}
+                    reducedMotion={reducedMotion}
+                    caption="AREA IS YOUR ALLOCATION. OUTLINE IS BEFORE YOUR STANCE. PNL IS WHAT THE MARKET DID."
+                  />
+                </div>
                 <div
                   className="grid grid-cols-2 gap-4 mb-5 transition-opacity duration-500"
                   style={{ opacity: revealDelay }}
@@ -1709,6 +1796,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     reducedMotion={reducedMotion}
                   />
                 </div>
+                </>
               )}
 
               {/* Score card */}

@@ -55,6 +55,7 @@ export type ModuleCode =
   | 'SECTOR_EXPOSURE'       // Always unlocked
   | 'NEWS_FEED'             // Always unlocked
   | 'CORRELATION_MATRIX'    // Unlock 1: After COVID Phase 2
+  | 'BLOCK_FIELD'           // Educational: after the first three COVID decisions
   | 'DRAWDOWN_MAP'          // Unlock 2: After first crisis complete
   | 'REGIME_SCANNER'        // Unlock 3: After Recovery arena
   | 'STAGED_EXECUTION'      // Unlock 4: After 200 Alpha XP
