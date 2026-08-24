@@ -85,18 +85,57 @@ test('the hub, daily tape and machine ladder are reachable through the product',
   await expect(page.getByRole('button', { name: /CHALLENGE MACHINE/ })).toBeVisible();
 });
 
-test('the machine builder is reachable through the product', async ({ page }) => {
-  // AUDIT P0 (2026-08-25): the Builder has a route in App.tsx but the hub
-  // offers no way into it, so the only door is the dev-only DEMO strip. The
-  // spec walks the hub and every surface it links and expects a Builder
-  // affordance somewhere. Remove the fail() mark when the route ships.
-  test.fail();
-
+test('the machine builder gate follows the progression law', async ({ page }) => {
+  // Owner ruling 2026-08-25: the Builder is visible on the hub from the
+  // start, locked until Bronze (a completed run without critical risk
+  // failure). Completion alone opens the next arena but not the Builder.
   await asReturningPlayer(page);
+
+  // A player whose only finished run blew the risk budget: no Builder.
+  // Guarded, because init scripts re-run on reload and would otherwise
+  // erase the Bronze run the test adds later.
+  await page.addInitScript(() => {
+    if (localStorage.getItem('refi_run_records') !== null) return;
+    localStorage.setItem('refi_run_records', JSON.stringify([{
+      recordVersion: 1, runId: 'seed_blown', seed: 1, arenaId: 'covid_black_swan',
+      machineId: 'refi_rules', state: 'COMPLETE', result: 'FAILED',
+      currentCheckpoint: 5, totalCheckpoints: 14, playerScore: 40, machineScore: 70,
+      criticalFailure: true, criticalFailureCheckpoint: 5,
+      portfolioValue: 78000, cashWeight: 0.1, drawdown: -0.3, volatility: 0.4,
+      turnoverUsed: 0.8, decisions: [], startedAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z', completedAt: '2026-01-02T00:00:00.000Z',
+    }]));
+  });
   await bootToLanding(page);
   await gotoHub(page);
 
-  await expect(page.getByRole('button', { name: /BUILDER/ })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('MACHINE BUILDER', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('COMPLETE A REGIME WITHOUT A CRITICAL RISK FAILURE')).toBeVisible();
+  await expect(page.getByRole('button', { name: /OPEN MACHINE BUILDER/ })).toHaveCount(0);
+
+  // Earn Bronze and the same door opens.
+  await page.evaluate(() => {
+    const records = JSON.parse(localStorage.getItem('refi_run_records') || '[]');
+    records.push({
+      recordVersion: 1, runId: 'seed_bronze', seed: 2, arenaId: 'covid_black_swan',
+      machineId: 'refi_rules', state: 'COMPLETE', result: 'PASSED',
+      currentCheckpoint: 14, totalCheckpoints: 14, playerScore: 70, machineScore: 68,
+      criticalFailure: false, criticalFailureCheckpoint: null,
+      portfolioValue: 101000, cashWeight: 0.2, drawdown: -0.05, volatility: 0.16,
+      turnoverUsed: 0.3, decisions: [], startedAt: '2026-01-03T00:00:00.000Z',
+      updatedAt: '2026-01-04T00:00:00.000Z', completedAt: '2026-01-04T00:00:00.000Z',
+    });
+    localStorage.setItem('refi_run_records', JSON.stringify(records));
+  });
+  await page.reload();
+  await page.getByRole('button', { name: /ENTER THE MARKET/ })
+    .waitFor({ state: 'visible', timeout: 30_000 });
+  await gotoHub(page);
+
+  const open = page.getByRole('button', { name: /OPEN MACHINE BUILDER/ });
+  await expect(open).toBeVisible();
+  await open.click();
+  await expect(page.getByText('ARCHITECTURE')).toBeVisible({ timeout: 10_000 });
 });
 
 test('challenging a ladder opponent carries that opponent into the run', async ({ page }) => {

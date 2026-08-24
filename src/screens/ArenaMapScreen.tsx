@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import type { ArenaId } from '../lib/gameTypes';
 import { allArenas } from '../lib/arenas';
 import { listRunRecords } from '../lib/runRecord';
+import { nextArenaOpen } from '../lib/progressionLaw';
 
 interface Props {
   onSelectArena: (arena: ArenaId) => void;
@@ -45,13 +46,11 @@ function useArenaNodes(): ArenaNode[] {
       const beaten = runs.some(r => r.result === 'MACHINE_BEATEN');
       const passed = runs.some(r => r.result === 'PASSED' || r.result === 'MACHINE_BEATEN');
 
-      // Progression: the first arena is always open, and each later one opens
-      // once the previous has been finished. Unlocks are earned from the run
-      // record, so they survive a refresh like everything else.
+      // Progression law (owner ruling 2026-08-25): arenas chain on
+      // completion, win or lose. Derived through progressionLaw so the map
+      // and every other surface read the same rule.
       const prev = arenas[i - 1];
-      const prevDone = !prev || records.some(
-        r => r.arenaId === prev.id && r.completedAt !== null,
-      );
+      const prevDone = nextArenaOpen(records, prev ? prev.id : null);
 
       const state: NodeState =
         beaten ? 'machine-beaten'

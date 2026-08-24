@@ -254,6 +254,7 @@ function AppInner() {
             }}
             onDailyTape={() => go('daily-tape')}
             onMachineLadder={() => go('machine-ladder')}
+            onMachineBuilder={() => go('machine-builder')}
             onBack={() => go('landing')}
           />
         )}
