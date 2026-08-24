@@ -1,7 +1,7 @@
 import type { ActionCode } from './gameTypes';
 import { MIN_ENGAGEMENT_MS } from './gestureGeometry';
 import { clampConviction, isDetent, isLandmark, CONVICTION_MAX } from './decisionContract';
-import { convictionForDistance, type PullGeometry } from './gestureGeometry';
+import { convictionForDistanceArmed, type PullGeometry } from './gestureGeometry';
 
 // ─── Pull state machine ───────────────────────────────────────────────────────
 // Pure. Events in, state and effects out. No DOM, no timers, no rendering, so
@@ -168,10 +168,13 @@ export function gestureReducer(
       if (context.state !== 'GRIP' && context.state !== 'PULL') return { context, effects: [] };
       if (event.pointerId !== context.pointerId) return { context, effects: [] };
 
-      const raw = convictionForDistance(event.distance, geometry);
+      // Schmitt hysteresis: an armed pull holds through the band between the
+      // disarm and arm thresholds, reading the floor; an unarmed grip faces
+      // the dead zone absolutely. See DISARM_DISTANCE in gestureGeometry.
+      const raw = convictionForDistanceArmed(event.distance, geometry, context.state === 'PULL');
       const effects: GestureEffect[] = [];
 
-      // Back inside the dead zone: disarm. Re-gripping costs nothing, because
+      // Below the disarm threshold: disarm. Re-gripping costs nothing, because
       // exploring the pull without consequence is how the gesture teaches
       // itself. A release from here does nothing at all.
       if (raw === null) {

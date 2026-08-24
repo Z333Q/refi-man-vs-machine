@@ -73,6 +73,25 @@ const STANDARD: Omit<PullGeometry, 'deviceClass'> = {
  */
 export const MIN_ENGAGEMENT_MS = 350;
 
+/**
+ * Hysteresis on the arm point. Arm at the dead zone, disarm only below this.
+ *
+ * Without it the arm point is a knife edge and the bottom of the scale is not
+ * reachable by pull: conviction 50 maps to exactly the dead-zone boundary, and
+ * the jitter filter converges on that boundary asymptotically from below, so a
+ * draw that stops on 50 can hover a hundredth of a point under it and never
+ * arm. That breaks invariant 2, which requires the value shown to be the value
+ * committed and, before that, requires the shown value to exist at all.
+ *
+ * A Schmitt trigger fixes it without touching the mapping: crossing 28 arms,
+ * and only falling under 24 disarms. Between the two the pull stays armed and
+ * reads the floor. Deliberately asymmetric, because arming should take intent
+ * and disarming should take a decision.
+ *
+ * (Salvaged from historical PR #29 into current-main geometry, 2026-08-25.)
+ */
+export const DISARM_DISTANCE = 24;
+
 // Addendum C section C.3. One scale, two classes, decided once per run.
 export const COMPACT_SCALE = 0.85;
 
@@ -263,6 +282,29 @@ export function convictionForDistance(distance: number, geometry: PullGeometry):
   const clamped = Math.min(distance, fullDraw);
   const t = (clamped - knee) / (fullDraw - knee);
   return kneeConviction + t * (CONVICTION_MAX - kneeConviction);
+}
+
+/**
+ * The conviction a distance reports given whether the pull is already armed.
+ *
+ * Armed, anything at or above the disarm threshold still reports, clamped up
+ * to the floor of the scale. Unarmed, the dead zone is absolute: hysteresis
+ * widens the way out, never the way in, so a gesture that never armed cannot
+ * enter PULL from inside the band.
+ *
+ * The disarm threshold scales with the geometry's dead zone, so COMPACT keeps
+ * the same proportional band as STANDARD.
+ */
+export function convictionForDistanceArmed(
+  distance: number,
+  geometry: PullGeometry,
+  armed: boolean,
+): number | null {
+  const direct = convictionForDistance(distance, geometry);
+  if (direct !== null) return direct;
+  if (!armed) return null;
+  const disarmAt = DISARM_DISTANCE * (geometry.deadZone / STANDARD.deadZone);
+  return distance >= disarmAt ? CONVICTION_MIN : null;
 }
 
 /** The inverse, for drawing the meter, the ghost tick and the previous marker. */

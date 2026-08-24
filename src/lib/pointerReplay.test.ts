@@ -24,14 +24,6 @@ import type { RunState } from './gameTypes';
 // equivalence fixture elsewhere, extended to cover the governed range, HOLD,
 // a turnover-spending stance and the open range. When Addendum A lands, point
 // this at the authored F1 and delete this note.
-// NOTE on the floor. Conviction 50 maps to exactly the dead-zone boundary
-// (28.000 pt), so the mapping arms there, but the jitter filter converges on
-// that boundary asymptotically from below: a monotonic pull to exactly the arm
-// point may never register as armed. 50 is therefore reachable by the slider
-// and by an overshoot-and-return pull, but not by a clean draw that stops on
-// it. The fixture uses 52 for the gesture path and records the edge here
-// rather than hiding it. Still far under the retired 60 floor, so it proves
-// the governor is gone.
 //
 // AMENDED for Amendment 1. The previous CP1 to CP4 values were 70, 65, 60 and
 // 75: every one of them inside the retired 60 to 75 governor band, so the
@@ -40,7 +32,7 @@ import type { RunState } from './gameTypes';
 // of the scale, and a governor returning to CP1 to CP4 would fail this replay.
 const F1: { action: ActionCode; conviction: number }[] = [
   { action: 'HOLD', conviction: 95 },              // CP1, the ceiling on the first decision
-  { action: 'REDUCE', conviction: 52 },            // CP2, near the floor: see the note below
+  { action: 'REDUCE', conviction: 50 },            // CP2, the floor, reachable by pull
   { action: 'HOLD', conviction: 62 },              // CP3, off-detent, inside the old band
   { action: 'ROTATE_DEFENSIVE', conviction: 88 },  // CP4, last formerly governed checkpoint
   { action: 'RAISE_CASH', conviction: 75 },        // CP5, the knee
@@ -79,7 +71,12 @@ function pullTo(conviction: number, actionCode: ActionCode, checkpointSequence: 
 
   feed(session.down(sample(origin.x, origin.y), actionCode, true));
 
-  // Draw in 12 steps, then dwell so the filter settles on the target distance.
+  // Draw in 12 steps, then hold. The hold is sampled at 8 ms across the whole
+  // engagement window rather than skipped: a pull cannot commit before
+  // MIN_ENGAGEMENT_MS anyway, so a real finger delivers roughly this many
+  // samples while resting, and the filter needs them to settle. An earlier
+  // version of this helper jumped the clock instead of feeding the samples,
+  // which made a held finger look like it had never arrived.
   const steps = 12;
   for (let i = 1; i <= steps; i++) {
     t += 8;
@@ -87,14 +84,12 @@ function pullTo(conviction: number, actionCode: ActionCode, checkpointSequence: 
     const s = sample(origin.x, origin.y + d);
     feed(session.move([s], s));
   }
-  for (let i = 0; i < 14; i++) {
+  while (t < MIN_ENGAGEMENT_MS + 80) {
     t += 8;
     const s = sample(origin.x, origin.y + target);
     feed(session.move([s], s));
   }
 
-  // Clear the engagement floor, then release.
-  t = Math.max(t, MIN_ENGAGEMENT_MS + 50);
   feed(session.up(sample(origin.x, origin.y + target)));
 
   return committed;
@@ -197,4 +192,79 @@ test('release timestamps come from the input event, not a render clock', () => {
   const up = session.up({ pointerId: 1, clientX: 0, clientY: 200, timeStamp: 1900 });
   assert.equal(up.type, 'RELEASE');
   assert.equal(up.timestamp, 1900);
+});
+
+// ─── Arm hysteresis (salvaged from historical PR #29) ────────────────────────
+
+test('a filtered draw settling on exactly the arm point commits the floor', () => {
+  // The knife edge this closes: conviction 50 maps to exactly the dead-zone
+  // boundary, and the jitter filter converges on that boundary from below, so
+  // before hysteresis a draw that stopped on 50 could hover a hundredth under
+  // it and never arm. Invariant 2 requires the shown value to be the committed
+  // value; a value that cannot be shown at all fails it first.
+  for (const action of ['HOLD', 'REDUCE', 'RAISE_CASH'] as ActionCode[]) {
+    const got = pullTo(50, action, 9);
+    assert.equal(got, 50, `${action} settling on the arm point must commit 50`);
+  }
+});
+
+test('hysteresis holds the pull armed between the disarm and arm thresholds', () => {
+  // Between 24 and 28 pt an armed pull stays armed and reads the floor, so
+  // ordinary thumb tremor near the bottom of the scale cannot drop the meter.
+  const config: GestureConfig = { geometry: STD, checkpointSequence: 9 };
+  let ctx: GestureContext = initialGestureContext();
+  const feed = (e: Parameters<typeof gestureReducer>[1]) => {
+    const r = gestureReducer(ctx, e, config);
+    ctx = r.context;
+    return r.effects;
+  };
+
+  feed({ type: 'GRIP_START', pointerId: 1, actionCode: 'HOLD', affordable: true, timestamp: 0 });
+  feed({ type: 'MOVE', pointerId: 1, distance: 40, timestamp: 10 });
+  assert.equal(ctx.state, 'PULL', 'armed past the dead zone');
+
+  feed({ type: 'MOVE', pointerId: 1, distance: 26, timestamp: 20 });
+  assert.equal(ctx.state, 'PULL', 'still armed inside the hysteresis band');
+  assert.equal(ctx.conviction, 50, 'and reading the floor');
+
+  feed({ type: 'MOVE', pointerId: 1, distance: 20, timestamp: 30 });
+  assert.equal(ctx.state, 'GRIP', 'below the disarm threshold it lets go');
+  assert.equal(ctx.conviction, null);
+});
+
+test('an unarmed pull still respects the dead zone absolutely', () => {
+  // Hysteresis must not make the dead zone porous on the way in: 26 pt is
+  // inside the band but a pull that never armed stays unarmed.
+  const config: GestureConfig = { geometry: STD, checkpointSequence: 9 };
+  let ctx: GestureContext = initialGestureContext();
+  const r1 = gestureReducer(ctx, { type: 'GRIP_START', pointerId: 1, actionCode: 'HOLD', affordable: true, timestamp: 0 }, config);
+  ctx = r1.context;
+  const r2 = gestureReducer(ctx, { type: 'MOVE', pointerId: 1, distance: 26, timestamp: 10 }, config);
+  assert.equal(r2.context.state, 'GRIP', 'must not arm from inside the band');
+  assert.equal(r2.context.conviction, null);
+});
+
+test('the hysteresis band scales with compact geometry', () => {
+  // COMPACT scales the dead zone by 0.85 (23.8 pt), and the disarm threshold
+  // must scale with it (20.4 pt), or the band would change width relative to
+  // the geometry the thumb is actually working in.
+  const compact = geometryFor('COMPACT');
+  const config: GestureConfig = { geometry: compact, checkpointSequence: 9 };
+  let ctx: GestureContext = initialGestureContext();
+  const feed = (e: Parameters<typeof gestureReducer>[1]) => {
+    const r = gestureReducer(ctx, e, config);
+    ctx = r.context;
+  };
+
+  feed({ type: 'GRIP_START', pointerId: 1, actionCode: 'HOLD', affordable: true, timestamp: 0 });
+  feed({ type: 'MOVE', pointerId: 1, distance: 40, timestamp: 10 });
+  assert.equal(ctx.state, 'PULL', 'armed past the compact dead zone');
+
+  feed({ type: 'MOVE', pointerId: 1, distance: 22, timestamp: 20 });
+  assert.equal(ctx.state, 'PULL', '22 pt sits inside the scaled band (20.4 to 23.8)');
+  assert.equal(ctx.conviction, 50, 'and reads the floor');
+
+  feed({ type: 'MOVE', pointerId: 1, distance: 20, timestamp: 30 });
+  assert.equal(ctx.state, 'GRIP', 'below the scaled disarm threshold it lets go');
+  assert.equal(ctx.conviction, null);
 });
