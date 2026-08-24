@@ -602,3 +602,123 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─── TalkingWindow (the terminal voice) ─────────────────────────────────────
+   A window that takes the floor like a retro dialog box. Policy lives in
+   src/lib/terminalVoice.ts; the component in components/ui/TalkingWindow.tsx.
+   The border is a thin zigzag OUTLINE (stroke only, no fills, no corner
+   ornaments, no glow) that ticks at cursor cadence: steps(1), one tooth per
+   beat. Moods change colour and tick-rate only. Red is never a mood. */
+
+.twin {
+  position: relative;
+  border: 1px solid rgba(39, 99, 78, 0.45);
+  background: rgba(8, 17, 13, 0.4);
+  --twin-bc: #0CD4A0;
+  --twin-spd: 1s;
+}
+.twin-measured { --twin-bc: #D6A647; --twin-spd: 1.5s; }
+.twin-alert    { --twin-bc: #D6A647; --twin-spd: 0.5s; }
+.twin-somber   { --twin-bc: #27634E; --twin-spd: 2s; }
+.twin-brisk    { --twin-spd: 0.75s; }
+
+.twin-talking { border-color: var(--twin-bc); }
+
+.twin-enter { animation: twinWake 0.24s steps(5); }
+@keyframes twinWake {
+  from { transform: scale(0.94, 0.15); opacity: 0.35; }
+  to   { transform: scale(1, 1); opacity: 1; }
+}
+
+.twin-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(18, 39, 31, 0.9);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.twin-title { color: var(--twin-bc); font-weight: 500; }
+.twin-sig { margin-left: auto; color: #27634E; letter-spacing: 0.14em; }
+
+.twin-bod { padding: 10px 12px 12px; }
+.twin-headline {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  min-height: 1.4em;
+}
+.twin-talk {
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.85;
+  color: #B8FFD9;
+  white-space: pre-wrap;
+}
+
+.twin-cur {
+  display: inline-block;
+  width: 8px;
+  height: 13px;
+  background: #0CD4A0;
+  vertical-align: -2px;
+  margin-left: 2px;
+  animation: twinBlink 1s steps(1) infinite;
+}
+@keyframes twinBlink { 50% { opacity: 0; } }
+
+/* The zigzag edges: SVG-masked strips so the mood can recolour one stroke. */
+.twin-tooth {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+  background: var(--twin-bc);
+}
+.twin-talking .twin-tooth { opacity: 1; }
+.twin-tooth-t, .twin-tooth-b {
+  left: 6px; right: 6px; height: 6px;
+  -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x;
+  -webkit-mask-size: 12px 6px; mask-size: 12px 6px;
+  animation: twinTeethX var(--twin-spd) steps(1) infinite;
+}
+.twin-tooth-l, .twin-tooth-r {
+  top: 6px; bottom: 6px; width: 6px;
+  -webkit-mask-repeat: repeat-y; mask-repeat: repeat-y;
+  -webkit-mask-size: 6px 12px; mask-size: 6px 12px;
+  animation: twinTeethY var(--twin-spd) steps(1) infinite;
+}
+.twin-tooth-t {
+  top: -7px;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6'%3E%3Cpath d='M0 5.25 L6 .75 L12 5.25' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6'%3E%3Cpath d='M0 5.25 L6 .75 L12 5.25' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3C/svg%3E");
+}
+.twin-tooth-b {
+  bottom: -7px;
+  animation-direction: reverse;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6'%3E%3Cpath d='M0 .75 L6 5.25 L12 .75' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6'%3E%3Cpath d='M0 .75 L6 5.25 L12 .75' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3C/svg%3E");
+}
+.twin-tooth-l {
+  left: -7px;
+  animation-direction: reverse;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='12'%3E%3Cpath d='M5.25 0 L.75 6 L5.25 12' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='12'%3E%3Cpath d='M5.25 0 L.75 6 L5.25 12' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3C/svg%3E");
+}
+.twin-tooth-r {
+  right: -7px;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='12'%3E%3Cpath d='M.75 0 L5.25 6 L.75 12' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='12'%3E%3Cpath d='M.75 0 L5.25 6 L.75 12' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3C/svg%3E");
+}
+@keyframes twinTeethX { to { -webkit-mask-position: 12px 0; mask-position: 12px 0; } }
+@keyframes twinTeethY { to { -webkit-mask-position: 0 12px; mask-position: 0 12px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Full text lands instantly via the component; hold the border and cursor
+     still and visible. */
+  .twin-tooth, .twin-cur { animation: none; }
+  .twin-cur { opacity: 1; }
+}

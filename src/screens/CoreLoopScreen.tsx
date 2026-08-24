@@ -1701,13 +1701,11 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
                       {thesisLabel(lastDecision?.thesisCode)} · CONVICTION {confidenceToConviction(lastDecision?.confidence ?? 0)}
                     </div>
                   </div>
-                  <div className="border border-phosphor/15 bg-terminal-deep/30 p-4">
-                    <MachineReveal
-                      action={cp.machineDecision.actionCode}
-                      reasoning={cp.machineDecision.policyReason}
-                      durationMs={600}
-                    />
-                  </div>
+                  <MachineReveal
+                    action={cp.machineDecision.actionCode}
+                    reasoning={cp.machineDecision.policyReason}
+                    reducedMotion={reducedMotion}
+                  />
                 </div>
               )}
 

@@ -9,6 +9,7 @@ import {
 import { getSessionId } from '../lib/identity';
 import { persistence } from '../lib/persistence';
 import { isTipGateOpen, type TipGameState } from './tipGate';
+import { claimFloor, releaseFloor, subscribeFloor } from '../lib/floor';
 
 // ─── Context types ────────────────────────────────────────────────────────────
 
@@ -112,8 +113,13 @@ export function TipProvider({ children }: { children: ReactNode }) {
 
     // Sort by priority descending
     queue.sort((a, b) => b.priority - a.priority);
-    const next = queue.shift();
+    const next = queue[0];
     if (next) {
+      // One voice at a time (§11): a talking window and a tip share the same
+      // floor. A denied claim leaves the tip queued; the floor subscription
+      // below retries when the speech finishes.
+      if (!claimFloor({ kind: 'TIP', id: next.code })) return;
+      queue.shift();
       setActiveTip(next);
       syncTipShown(next.code);
     }
@@ -162,6 +168,7 @@ export function TipProvider({ children }: { children: ReactNode }) {
 
     syncTipCompleted(code, state);
     setActiveTip(null);
+    releaseFloor({ kind: 'TIP', id: code });
 
     // Show next in queue after a short gap
     setTimeout(showNextQueued, 300);
@@ -178,9 +185,15 @@ export function TipProvider({ children }: { children: ReactNode }) {
     const newSeen = new Set<string>();
     setSeenCodes(newSeen);
     saveSeenToStorage(newSeen);
+    if (activeTip) releaseFloor({ kind: 'TIP', id: activeTip.code });
     setActiveTip(null);
     pendingQueue.current = [];
-  }, []);
+  }, [activeTip]);
+
+  // Retry queued tips when the floor frees up (a talking window finished).
+  useEffect(() => subscribeFloor(() => {
+    setTimeout(showNextQueued, 300);
+  }), [showNextQueued]);
 
   // Show next queued tip when the active one clears, and again when the gate
   // lifts. Gating only delays a tip; a tip triggered mid-animation waits in the
