@@ -354,6 +354,42 @@ export const MACHINE_LADDER: MachineBenchmark[] = [
   },
 ];
 
+// ─── Ladder lifecycle ─────────────────────────────────────────────────────────
+//
+// Two independent axes, never conflated (2026-08-25 review of PR #60):
+//
+//   playable — a runtime for this opponent actually exists. A property of the
+//              build, not of the player.
+//   status   — the player's progression history: LOCKED / ACTIVE / DEFEATED.
+//
+// DEFEATED is an achievement, not a dead button: a playable opponent that has
+// been beaten stays replayable. And no surface may present an unplayable rung
+// as the player's opponent, however ACTIVE its status is — the first version
+// of this fix stranded the ladder by missing both rules: beating the only
+// playable rung left nothing challengeable, while the hub crowned SPY, an
+// opponent that does not exist at runtime, as CURRENT OPPONENT.
+
+export type LadderStatus = 'LOCKED' | 'ACTIVE' | 'DEFEATED';
+
+/** Whether this rung can be challenged right now. */
+export function isChallengeable(machine: MachineBenchmark, status: LadderStatus): boolean {
+  return machine.playable && (status === 'ACTIVE' || status === 'DEFEATED');
+}
+
+/**
+ * The opponent a surface should present as the player's current one:
+ * the first playable rung still ACTIVE, else the first playable rung already
+ * DEFEATED (a rematch is a real opponent; a rung with no runtime is not).
+ */
+export function currentOpponent(
+  ladder: Record<string, { status: LadderStatus } | undefined>,
+): MachineBenchmark | undefined {
+  return (
+    MACHINE_LADDER.find(m => m.playable && ladder[m.id]?.status === 'ACTIVE') ??
+    MACHINE_LADDER.find(m => m.playable && ladder[m.id]?.status === 'DEFEATED')
+  );
+}
+
 // ─── Rank progression ─────────────────────────────────────────────────────────
 
 const RANK_XP_THRESHOLDS: { rank: RankCode; xp: number; label: string }[] = [

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import ActionZone from '../components/ui/ActionZone';
-import { MACHINE_LADDER } from '../lib/progressionEngine';
+import { MACHINE_LADDER, isChallengeable, currentOpponent } from '../lib/progressionEngine';
 import type { BenchmarkSnapshot } from '../lib/gameTypes';
 import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
 
@@ -69,24 +69,17 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
   const { profile } = state;
 
   // The ladder row is the decision (which machine); the action zone below is
-  // the commit. Defaults to the first machine actually available to challenge,
-  // preferring one whose opponent exists at runtime over one that can only be
-  // inspected.
-  const firstAvailable =
-    MACHINE_LADDER.find(
-      m => m.playable && (profile.machineLadder[m.id]?.status ?? 'LOCKED') === 'ACTIVE',
-    ) ?? MACHINE_LADDER.find(
-      m => (profile.machineLadder[m.id]?.status ?? 'LOCKED') === 'ACTIVE',
-    );
+  // the commit. Defaults to the opponent the player would actually face:
+  // playable and ACTIVE, else playable and DEFEATED (a rematch). Never an
+  // unplayable rung merely because its status happens to be ACTIVE.
+  const firstAvailable = currentOpponent(profile.machineLadder);
   const [selectedId, setSelectedId] = useState<string | null>(firstAvailable?.id ?? null);
   const selectedMachine = MACHINE_LADDER.find(m => m.id === selectedId) ?? null;
-  // A rung is challengeable when the player has earned it AND its opponent
-  // actually exists at runtime. Rungs without a runtime used to funnel
-  // silently into the rules machine; now they say so and refuse.
+  // Challengeable = the runtime exists and the player has reached the rung.
+  // DEFEATED stays challengeable: it is an achievement, not a dead button.
   const canChallenge =
     !!selectedMachine &&
-    selectedMachine.playable &&
-    (profile.machineLadder[selectedMachine.id]?.status ?? 'LOCKED') === 'ACTIVE';
+    isChallengeable(selectedMachine, profile.machineLadder[selectedMachine.id]?.status ?? 'LOCKED');
 
   const nextXpTarget = MACHINE_LADDER.find(m =>
     profile.machineLadder[m.id]?.status === 'LOCKED',
@@ -260,9 +253,11 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
                       </div>
                     )}
                     {isDefeated && (
-                      <div className="text-paper-green text-xs tracking-widest">✓ DEFEATED</div>
+                      <div className="text-paper-green text-xs tracking-widest mb-2">✓ DEFEATED</div>
                     )}
-                    {isActive && (
+                    {/* A defeated playable rung keeps its SELECT: the
+                        achievement stands, the rematch stays open. */}
+                    {(isActive || (isDefeated && machine.playable)) && (
                       <button
                         onClick={() => setSelectedId(machine.id)}
                         aria-pressed={isSelected}
@@ -286,7 +281,7 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
         <div className="mt-6 border border-phosphor/10 p-4 text-xs text-phosphor-dim leading-relaxed space-y-2">
           <div className="text-phosphor tracking-widest mb-2">CONTEST TYPE DEFINITIONS</div>
           <div>
-            <span className="text-phosphor-mid">FAIR MATCH</span>: Same universe. Long-only rule. Same capital. Same transaction costs. Same decision windows. Same risk limits. Arena advancement is determined by fair match results.
+            <span className="text-phosphor-mid">FAIR MATCH</span>: Same universe. Long-only rule. Same capital. Same transaction costs. Same decision windows. Same risk limits. Machine victories build your ladder record. Arena advancement is separate: finishing a regime unlocks the next one, win or lose.
           </div>
           <div>
             <span className="text-alert-amber">EXHIBITION</span>: The ReFi RF/RL benchmarks use directional regime exposure (+1 long / -1 short). This is a fundamentally different capability model. Exhibition results are for learning, not arena advancement. The screen explicitly states the capability difference.

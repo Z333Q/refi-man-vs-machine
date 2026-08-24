@@ -160,6 +160,52 @@ test('challenging a ladder opponent carries that opponent into the briefing', as
   await expect(page.getByText('RFA-MCH-RULES-002')).toBeVisible();
 });
 
+test('a defeated rules machine stays challengeable as a rematch', async ({ page }) => {
+  // PR #60 review blocker: the first cut of the ladder fix made DEFEATED
+  // unchallengeable, so beating the only playable opponent stranded the
+  // ladder. DEFEATED is an achievement; the rematch stays open.
+  await asReturningPlayer(page);
+  await page.addInitScript(() => {
+    // The profile is stored per session id, merged over defaults at the top
+    // level, so the seed pins the session and carries the full ladder map.
+    localStorage.setItem('refi_session_id', 'e2e_defeated_seed');
+    localStorage.setItem('refi_profile:e2e_defeated_seed', JSON.stringify({
+      sessionId: 'e2e_defeated_seed',
+      machineLadder: {
+        spy_passive: { wins: 0, losses: 0, status: 'ACTIVE' },
+        refi_rules: { wins: 1, losses: 0, status: 'DEFEATED' },
+        your_machine: { wins: 0, losses: 0, status: 'LOCKED' },
+        refi_full_basket: { wins: 0, losses: 0, status: 'LOCKED' },
+        refi_good_fit: { wins: 0, losses: 0, status: 'LOCKED' },
+        refi_benchmark: { wins: 0, losses: 0, status: 'LOCKED' },
+        taco_protocol: { wins: 0, losses: 0, status: 'LOCKED' },
+      },
+    }));
+  });
+  await bootToLanding(page);
+  await gotoHub(page);
+
+  // The hub still names a real opponent, not SPY by ACTIVE-status accident.
+  // Scoped to the opponent panel: the ladder summary list legitimately shows
+  // every rung, SPY included.
+  const opponentPanel = page.locator('.terminal-panel-deep').filter({ hasText: 'CURRENT OPPONENT' });
+  await expect(opponentPanel).toBeVisible();
+  await expect(opponentPanel).toContainText('REFI RULES MACHINE');
+  await expect(opponentPanel).not.toContainText('S&P 500 INDEX');
+
+  await page.getByRole('button', { name: 'Machine ladder' }).click();
+  await expect(page.getByText('✓ DEFEATED')).toBeVisible();
+  // The defeated rung is the default selection and the challenge is open.
+  await expect(page.getByText(/SELECTED: REFI RULES MACHINE/)).toBeVisible();
+  const challenge = page.getByRole('button', { name: /CHALLENGE MACHINE/ });
+  await expect(challenge).toBeEnabled();
+  await challenge.click();
+
+  const start = page.getByRole('button', { name: /START RUN/ });
+  await start.waitFor({ state: 'visible', timeout: 20_000 });
+  await expect(page.getByText('RFA-MCH-RULES-002')).toBeVisible();
+});
+
 test('a rung without a runtime refuses the challenge and says why', async ({ page }) => {
   // The other half of the same P0: opponents that do not exist at runtime
   // used to funnel silently into the rules machine. Now they are explicit.

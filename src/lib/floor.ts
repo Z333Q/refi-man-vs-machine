@@ -7,8 +7,8 @@
 // "The floor" is who is allowed to address the player right now: at most one
 // owner, tip or speech. Claiming is first-come; a denied claimant subscribes
 // and retries when the floor releases. Nothing here reads a clock or an RNG —
-// the floor changes only when an owner claims or releases it (floor.test.ts
-// asserts that against this file's source).
+// the floor changes only when an owner claims or releases it
+// (terminalVoice.test.ts asserts that against this file's source).
 
 export type FloorOwnerKind = 'TIP' | 'SPEECH';
 

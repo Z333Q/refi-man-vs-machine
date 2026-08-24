@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 import { useGame } from '../context/GameContext';
-import { TERMINAL_MODULES, MACHINE_LADDER, getRankLabel, getXpToNextRank } from '../lib/progressionEngine';
+import { TERMINAL_MODULES, MACHINE_LADDER, getRankLabel, getXpToNextRank, currentOpponent } from '../lib/progressionEngine';
 import { getArchetypeLabel } from '../lib/scoringEngine';
 import { listRunRecords } from '../lib/runRecord';
 import { builderUnlocked, BUILDER_UNLOCK_REQUIREMENT } from '../lib/progressionLaw';
@@ -69,9 +69,10 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
     m => m.alwaysAvailable || profile.unlockedModules.includes(m.code)
   ).length;
 
-  const currentMachineOpponent = MACHINE_LADDER.find(m =>
-    profile.machineLadder[m.id]?.status === 'ACTIVE'
-  );
+  // The opponent shown is one the player can actually face: playable and
+  // ACTIVE, else playable and DEFEATED (the rematch). Never a rung whose
+  // runtime does not exist, however ACTIVE its status is.
+  const currentMachineOpponent = currentOpponent(profile.machineLadder);
 
   const archetypeLabel = getArchetypeLabel(profile.archetype);
 
