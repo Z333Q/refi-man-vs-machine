@@ -64,12 +64,14 @@ function fmtSharpe(v: number | null): string {
 interface Props {
   /** The arena this run plays. Chosen on the map and carried through. */
   arenaId?: ArenaId;
+  /** The opponent this run faces. Chosen on the ladder and carried through. */
+  machineId?: string;
   onComplete: () => void;
   onBack: () => void;
   onHelp?: () => void;
 }
 
-export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplete, onBack, onHelp }: Props) {
+export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId = 'refi_rules', onComplete, onBack, onHelp }: Props) {
   const {
     state,
     startRun,
@@ -221,8 +223,8 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', onComplet
   }, [resumeGate]);
 
   useEffect(() => {
-    if (resumeGate === 'CLEAR' && !run) startRun(arenaId);
-  }, [resumeGate, run, startRun, arenaId]);
+    if (resumeGate === 'CLEAR' && !run) startRun(arenaId, machineId);
+  }, [resumeGate, run, startRun, arenaId, machineId]);
 
   // Tip: first signal
   useEffect(() => {

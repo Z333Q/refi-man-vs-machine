@@ -138,25 +138,38 @@ test('the machine builder gate follows the progression law', async ({ page }) =>
   await expect(page.getByText('ARCHITECTURE')).toBeVisible({ timeout: 10_000 });
 });
 
-test('challenging a ladder opponent carries that opponent into the run', async ({ page }) => {
-  // AUDIT P0 (2026-08-25): MachineLadderScreen passes the chosen machineId up,
-  // App.tsx discards it, and GameContext.startRun hardcodes refi_rules. So
-  // challenging the S&P 500 opponent must surface that opponent in the
-  // briefing it opens — today it cannot. Remove the fail() mark when the
-  // opponent becomes part of run identity.
-  test.fail();
-
+test('challenging a ladder opponent carries that opponent into the briefing', async ({ page }) => {
+  // The 2026-08-25 audit P0, fixed: the chosen machine is part of run
+  // identity. The rules machine is the one rung with a runtime today, so it
+  // is the one that can be challenged, and the briefing names it.
   await asReturningPlayer(page);
   await bootToLanding(page);
   await gotoHub(page);
 
   await page.getByRole('button', { name: 'Machine ladder' }).click();
-  await page.getByText('S&P 500 INDEX').first().click();
+  // The rules machine is the default selection: the ladder prefers a rung
+  // that can actually be challenged.
+  await expect(page.getByText(/SELECTED: REFI RULES MACHINE/)).toBeVisible();
   await page.getByRole('button', { name: /CHALLENGE MACHINE/ }).click();
 
-  // The briefing (or the machine card behind it) must name the opponent the
-  // player picked, not the house default.
   const start = page.getByRole('button', { name: /START RUN/ });
   await start.waitFor({ state: 'visible', timeout: 20_000 });
-  await expect(page.getByText(/S&P 500/)).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('REFI RULES MACHINE')).toBeVisible();
+  await expect(page.getByText('RFA-MCH-RULES-002')).toBeVisible();
+});
+
+test('a rung without a runtime refuses the challenge and says why', async ({ page }) => {
+  // The other half of the same P0: opponents that do not exist at runtime
+  // used to funnel silently into the rules machine. Now they are explicit.
+  await asReturningPlayer(page);
+  await bootToLanding(page);
+  await gotoHub(page);
+
+  await page.getByRole('button', { name: 'Machine ladder' }).click();
+  // The only other active rung is the S&P 500 index, so the one plain SELECT
+  // button is its selector (the default rung shows SELECTED instead).
+  await page.getByRole('button', { name: 'SELECT', exact: true }).click();
+  await expect(page.getByText(/SELECTED: S&P 500 INDEX/)).toBeVisible();
+  await expect(page.getByText('OPPONENT RUNTIME IN DEVELOPMENT', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: /CHALLENGE MACHINE/ })).toBeDisabled();
 });

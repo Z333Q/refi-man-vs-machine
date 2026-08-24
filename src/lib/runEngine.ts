@@ -132,6 +132,7 @@ export const DEFAULT_RUN_SEED = 0;
 export function createInitialRun(
   seed: number = DEFAULT_RUN_SEED,
   arenaId: ArenaId = DEFAULT_ARENA_ID,
+  machineId: string = 'refi_rules',
 ): RunState {
   const arena = getArena(arenaId);
   const total = arena?.checkpoints.length ?? 0;
@@ -139,7 +140,7 @@ export function createInitialRun(
     id: null,
     seed,
     arenaId,
-    machineId: 'refi_rules',
+    machineId,
     currentCheckpoint: 1,
     totalCheckpoints: total,
     phase: 'SIGNAL',

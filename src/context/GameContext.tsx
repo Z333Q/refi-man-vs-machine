@@ -28,7 +28,7 @@ function checkpointId(arenaId: string, sequence: number): string {
 
 interface GameContextValue {
   state: GameState;
-  startRun: (arenaId?: ArenaId) => void;
+  startRun: (arenaId?: ArenaId, machineId?: string) => void;
   /** Re-enter the stored unfinished run. False when it cannot be reproduced. */
   resumeRun: () => boolean;
   setPhase: (phase: RunState['phase']) => void;
@@ -216,14 +216,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     prevResult.current = result;
   }, [state.run]);
 
-  const startRun = useCallback((arenaId: ArenaId = DEFAULT_ARENA_ID) => {
+  const startRun = useCallback((arenaId: ArenaId = DEFAULT_ARENA_ID, machineId: string = 'refi_rules') => {
     // New run → new correlation chain. beginRunTelemetry stamps a run id
     // that every event in this run shares (§56 run_id / correlation_id).
     // The Run Record reuses that same id rather than minting a second one, so
     // a stored run and its event stream can be read against each other.
     const runId = beginRunTelemetry();
-    dispatch({ type: 'START_RUN', runId, seed: mintSeed(), arenaId });
-    emitEvent('arena.started', { arenaId, machineId: 'refi_rules' }, { arenaId });
+    dispatch({ type: 'START_RUN', runId, seed: mintSeed(), arenaId, machineId });
+    emitEvent('arena.started', { arenaId, machineId }, { arenaId });
   }, []);
   /**
    * Re-enter the run the player left, rebuilt by replaying its decisions.

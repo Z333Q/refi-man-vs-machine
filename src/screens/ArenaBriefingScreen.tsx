@@ -2,6 +2,7 @@ import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 import type { ArenaId } from '../lib/gameTypes';
 import ArenaEmblem from '../components/game/ArenaEmblem';
 import { getArena, getTotalCheckpoints } from '../lib/arenas';
+import { MACHINE_LADDER } from '../lib/progressionEngine';
 
 // The briefing describes the arena the player is about to enter.
 //
@@ -13,15 +14,18 @@ import { getArena, getTotalCheckpoints } from '../lib/arenas';
 
 interface Props {
   arenaId?: ArenaId;
+  /** The opponent this briefing is for; rendered from the ladder registry. */
+  machineId?: string;
   onStart: () => void;
   onViewMachineCard: () => void;
   onBack: () => void;
 }
 
 export default function ArenaBriefingScreen({
-  arenaId = 'covid_black_swan', onStart, onViewMachineCard, onBack,
+  arenaId = 'covid_black_swan', machineId = 'refi_rules', onStart, onViewMachineCard, onBack,
 }: Props) {
   const arena = getArena(arenaId);
+  const opponent = MACHINE_LADDER.find(m => m.id === machineId) ?? MACHINE_LADDER[1];
   // Was hardcoded to 22, which is COVID's count. Every other arena is shorter,
   // so the briefing promised decision points that do not exist.
   const checkpointCount = getTotalCheckpoints(arenaId);
@@ -106,28 +110,34 @@ export default function ArenaBriefingScreen({
               <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-3">
                 OPPONENT
               </div>
+              {/* The opponent is the one the player challenged, read from the
+                  ladder registry. This used to print a hardcoded name that
+                  matched no rung on the ladder, whoever was being faced. */}
               <div className="font-mono text-lg text-phosphor-hot terminal-glow">
-                REFI CRISIS MACHINE v1.4
+                {opponent.label}
+              </div>
+              <div className="font-mono text-xs text-phosphor-dim -mt-2">
+                {opponent.subtitle}
               </div>
 
               <div className="space-y-0 font-mono text-xs">
                 {[
-                  { label: 'TYPE', value: 'SYSTEMATIC RISK-AWARE BENCHMARK' },
-                  { label: 'MODEL FAMILY', value: 'REGIME + PORTFOLIO POLICY' },
-                  { label: 'TRAINING CUTOFF', value: '2019-12-31', warning: true },
+                  { label: 'RISK POLICY', value: opponent.riskPolicy.toUpperCase() },
+                  { label: 'TRAINING CUTOFF', value: opponent.trainingCutoff.toUpperCase(), warning: true },
+                  { label: 'CONTEST', value: (opponent.contestType ?? 'FAIR_MATCH').replace(/_/g, ' ') },
                   { label: 'ARENA DATA ACCESS', value: 'TIMESTAMP AND EARLIER ONLY' },
                   { label: 'FUTURE DATA', value: 'BLOCKED', warning: true },
                   { label: 'TRANSACTION COSTS', value: 'ENABLED' },
                 ].map(row => (
-                  <div key={row.label} className="flex justify-between py-2.5 border-b border-phosphor/10">
-                    <span className="text-phosphor-dim">{row.label}</span>
-                    <span className={row.warning ? 'warning-value' : 'text-phosphor'}>{row.value}</span>
+                  <div key={row.label} className="flex justify-between py-2.5 border-b border-phosphor/10 gap-3">
+                    <span className="text-phosphor-dim flex-shrink-0">{row.label}</span>
+                    <span className={`text-right ${row.warning ? 'warning-value' : 'text-phosphor'}`}>{row.value}</span>
                   </div>
                 ))}
               </div>
 
               <div className="font-mono text-xs text-phosphor-dim pt-1">
-                AUDIT ID: RFA-MCH-CRISIS-014
+                AUDIT ID: {opponent.auditId}
               </div>
             </div>
 

@@ -69,14 +69,23 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
   const { profile } = state;
 
   // The ladder row is the decision (which machine); the action zone below is
-  // the commit. Defaults to the first machine actually available to challenge.
-  const firstAvailable = MACHINE_LADDER.find(
-    m => (profile.machineLadder[m.id]?.status ?? 'LOCKED') === 'ACTIVE',
-  );
+  // the commit. Defaults to the first machine actually available to challenge,
+  // preferring one whose opponent exists at runtime over one that can only be
+  // inspected.
+  const firstAvailable =
+    MACHINE_LADDER.find(
+      m => m.playable && (profile.machineLadder[m.id]?.status ?? 'LOCKED') === 'ACTIVE',
+    ) ?? MACHINE_LADDER.find(
+      m => (profile.machineLadder[m.id]?.status ?? 'LOCKED') === 'ACTIVE',
+    );
   const [selectedId, setSelectedId] = useState<string | null>(firstAvailable?.id ?? null);
   const selectedMachine = MACHINE_LADDER.find(m => m.id === selectedId) ?? null;
+  // A rung is challengeable when the player has earned it AND its opponent
+  // actually exists at runtime. Rungs without a runtime used to funnel
+  // silently into the rules machine; now they say so and refuse.
   const canChallenge =
     !!selectedMachine &&
+    selectedMachine.playable &&
     (profile.machineLadder[selectedMachine.id]?.status ?? 'LOCKED') === 'ACTIVE';
 
   const nextXpTarget = MACHINE_LADDER.find(m =>
@@ -298,7 +307,11 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
           label: 'CHALLENGE MACHINE',
           onClick: () => selectedMachine && onChallenge(selectedMachine.id),
           disabled: !canChallenge,
-          disabledHint: selectedMachine ? 'EARN XP TO UNLOCK THIS RANK' : 'SELECT AN AVAILABLE MACHINE',
+          disabledHint: !selectedMachine
+            ? 'SELECT AN AVAILABLE MACHINE'
+            : !selectedMachine.playable
+              ? 'OPPONENT RUNTIME IN DEVELOPMENT. NOT YET CHALLENGEABLE.'
+              : 'EARN XP TO UNLOCK THIS RANK',
           keyHint: '[ENTER]',
         }}
       />

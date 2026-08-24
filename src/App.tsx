@@ -93,6 +93,9 @@ function AppInner() {
   const [showHelp, setShowHelp] = useState(false);
   // The arena the player picked on the map, carried into the run they start.
   const [pendingArena, setPendingArena] = useState<ArenaId>('covid_black_swan');
+  // The opponent the player challenged on the ladder, carried the same way.
+  // Entering through the map (not the ladder) faces the house rules machine.
+  const [pendingMachine, setPendingMachine] = useState<string>('refi_rules');
 
   const go = useCallback((s: Screen) => setScreen(s), []);
 
@@ -260,13 +263,20 @@ function AppInner() {
         )}
         {screen === 'arena-map' && (
           <ArenaMapScreen
-            onSelectArena={(arenaId) => { setPendingArena(arenaId); go('arena-briefing'); }}
+            onSelectArena={(arenaId) => {
+              setPendingArena(arenaId);
+              // Entering through the map faces the house machine; a ladder
+              // challenge that was never started must not leak into it.
+              setPendingMachine('refi_rules');
+              go('arena-briefing');
+            }}
             onBack={() => go('progression-hub')}
           />
         )}
         {screen === 'arena-briefing' && (
           <ArenaBriefingScreen
             arenaId={pendingArena}
+            machineId={pendingMachine}
             onStart={() => go('core-loop')}
             onViewMachineCard={() => go('machine-card')}
             onBack={() => go('arena-map')}
@@ -278,6 +288,7 @@ function AppInner() {
         {screen === 'core-loop' && (
           <CoreLoopScreen
             arenaId={pendingArena}
+            machineId={pendingMachine}
             onComplete={() => go('autopsy')}
             onBack={() => go('arena-briefing')}
             onHelp={toggleHelp}
@@ -326,7 +337,12 @@ function AppInner() {
         )}
         {screen === 'machine-ladder' && (
           <MachineLadderScreen
-            onChallenge={() => go('arena-briefing')}
+            onChallenge={(machineId) => {
+              // The chosen opponent is part of run identity from here on
+              // (2026-08-25 audit P0: this callback used to discard it).
+              setPendingMachine(machineId);
+              go('arena-briefing');
+            }}
             onBack={() => go('progression-hub')}
           />
         )}

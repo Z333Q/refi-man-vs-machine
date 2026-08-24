@@ -392,6 +392,14 @@ export interface MachineBenchmark {
   snapshot?: BenchmarkSnapshot;
   // Contest fairness designation
   contestType?: 'FAIR_MATCH' | 'EXHIBITION';
+  /**
+   * Whether this opponent actually exists at runtime. An arena run's machine
+   * decisions are authored content; a rung without a runtime cannot be
+   * challenged, and the ladder must say so rather than silently substituting
+   * a different opponent (2026-08-25 audit P0). Every rung decides this
+   * explicitly.
+   */
+  playable: boolean;
 }
 
 // ─── Daily tape ───────────────────────────────────────────────────────────────
