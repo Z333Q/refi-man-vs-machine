@@ -25,8 +25,11 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// fileURLToPath, not .pathname: a checkout under a directory with a space in
+// its name yields %20 from .pathname and every readdir fails.
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ROOTS = ['src/screens', 'src/components'];
 
 /** Tailwind's default breakpoints, in points. */

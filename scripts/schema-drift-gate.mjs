@@ -21,8 +21,11 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// fileURLToPath, not .pathname: a checkout under a directory with a space in
+// its name yields %20 from .pathname and every readdir fails.
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SCHEMA_DIR = join(ROOT, 'db', 'migrations');
 const SERVICE_DIR = join(ROOT, 'services');
 
