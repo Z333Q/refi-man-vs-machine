@@ -7,10 +7,11 @@
 // and then did not. `player_machine_versions` has been in the schema since the
 // canonical-objects migration with nothing writing to it.
 //
-// Storage is local for the same reason the Run Record is (see runRecord.ts):
-// the table is owner-scoped to auth.uid() and the client has no auth session,
-// so a write today is rejected by RLS rather than stored. The record is shaped
-// to the columns it will occupy, and `flushableRow` hands back exactly that.
+// Storage is local and synchronous for the same reason the Run Record is (see
+// runRecord.ts): the builder reads it in render and a compile must be durable
+// the moment the button is released. Local is authoritative on this device; a
+// configured remote is a mirror that hears about writes through the hook below
+// and may fill gaps through applyRemoteMachineVersion, never overwrite.
 
 import type { MachineConfig, MachineModuleId, PlayerMachine } from './gameTypes';
 
@@ -188,6 +189,7 @@ export function saveMachineVersion(
   };
 
   writeAll([record, ...readAll()].sort((a, b) => b.version - a.version));
+  announceToMirror(record);
   return record;
 }
 
@@ -205,6 +207,7 @@ export function lockMachineVersion(
   const locked = { ...all[idx], lockedAt: now };
   all[idx] = locked;
   writeAll(all);
+  announceToMirror(locked);
   return locked;
 }
 
@@ -237,28 +240,79 @@ export function toPlayerMachine(record: MachineVersionRecord): PlayerMachine {
   };
 }
 
+// ─── Remote mirror ────────────────────────────────────────────────────────────
+//
+// Same arrangement as the Run Record: local is authoritative, the remote is a
+// mirror announced to on write and consulted only to fill gaps. The hook
+// indirection keeps this module free of the persistence port.
+
+let mirror: ((record: MachineVersionRecord) => void) | null = null;
+
+/** Install the fire-and-forget announcer. Pass null to detach (tests). */
+export function setMachineVersionMirror(
+  fn: ((record: MachineVersionRecord) => void) | null,
+): void {
+  mirror = fn;
+}
+
+function announceToMirror(record: MachineVersionRecord): void {
+  try {
+    mirror?.(record);
+  } catch {
+    // Best-effort by contract; a failing mirror must never reach the compile.
+  }
+}
+
+/** What became of one remote machine version offered to the local store. */
+export type RemoteMachineOutcome =
+  /** The (machine, version) was a local gap; it is now stored. */
+  | { kind: 'ADOPTED' }
+  /** Local already holds this identical record; local is kept unchanged. */
+  | { kind: 'LOCAL_KEPT' }
+  /** Same build, but persisted metadata (lockedAt, arenasCompleted, …)
+   *  differs. This layer is anonymous-session persistence, not multi-device
+   *  merge: local is kept unchanged, nothing is field-merged, and the
+   *  divergence is reported as a diagnostic. */
+  | { kind: 'METADATA_DIVERGENCE'; local: MachineVersionRecord; remote: MachineVersionRecord }
+  /** Local holds the same machine name and version with a DIFFERENT build
+   *  hash: two histories claim the same version number. Refused outright —
+   *  a version number that meant two builds would poison the whole record.
+   *  Local is kept; the remote build is preserved in the outcome. */
+  | { kind: 'CONFLICT'; local: MachineVersionRecord; remote: MachineVersionRecord }
+  /** The remote payload was not a usable machine version record. */
+  | { kind: 'REFUSED'; reason: string };
+
 /**
- * The record as the row it will occupy once the client has an auth session.
- *
- * `owner_id` is absent deliberately: the column defaults to `auth.uid()`, so
- * the row is stamped by the session's real principal. A client that named its
- * own owner would defeat the owner-scoped policy outright.
+ * Offer one remote machine version to the local store: local-authoritative
+ * gap hydration. The build hash is recomputed from the remote configuration
+ * before anything is adopted — a record whose stored hash does not match its
+ * own contents is refused, because the hash is the identity everything else
+ * (machineId, conflict detection, §57 trust copy) hangs from.
  */
-export function flushableRow(
-  record: MachineVersionRecord,
-  alphaPlayerId: string | null,
-): Record<string, unknown> {
-  return {
-    alpha_player_id: alphaPlayerId,
-    machine_name: record.machineName,
-    version: record.version,
-    configuration_json: {
-      config: record.config,
-      installedModules: record.installedModules,
-      arenasCompleted: record.arenasCompleted,
-    },
-    build_hash: record.buildHash,
-    locked_at: record.lockedAt,
-    created_at: record.createdAt,
-  };
+export function applyRemoteMachineVersion(remote: MachineVersionRecord): RemoteMachineOutcome {
+  if (!remote || typeof remote !== 'object'
+      || typeof remote.machineName !== 'string' || !remote.machineName
+      || typeof remote.version !== 'number'
+      || !remote.config || typeof remote.config !== 'object'
+      || !Array.isArray(remote.installedModules)) {
+    return { kind: 'REFUSED', reason: 'not a machine version record' };
+  }
+  if (remote.recordVersion !== MACHINE_RECORD_VERSION) {
+    return { kind: 'REFUSED', reason: `unknown record version ${String(remote.recordVersion)}` };
+  }
+  if (machineBuildHash(remote.config, remote.installedModules) !== remote.buildHash) {
+    return { kind: 'REFUSED', reason: 'build hash does not match configuration' };
+  }
+
+  const local = getMachineVersion(remote.machineName, remote.version);
+  if (!local) {
+    writeAll([remote, ...readAll()].sort((a, b) => b.version - a.version));
+    return { kind: 'ADOPTED' };
+  }
+  if (local.buildHash !== remote.buildHash) return { kind: 'CONFLICT', local, remote };
+  // Same build. Identical means identical in full, not merely hash-equal:
+  // lockedAt and arenasCompleted are persisted history too, and a divergence
+  // there is preserved and reported rather than merged by any rule.
+  if (JSON.stringify(local) === JSON.stringify(remote)) return { kind: 'LOCAL_KEPT' };
+  return { kind: 'METADATA_DIVERGENCE', local, remote };
 }

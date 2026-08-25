@@ -1,19 +1,22 @@
 // ─── Run Record ───────────────────────────────────────────────────────────────
-// §57: "Every finished run gets a Run Record: run ID; arena ID; player
-// decisions; machine decisions; simulation timestamps; benchmark ID; scoring
-// version; machine version; result; data cutoff."
+// The audit trail a run leaves behind, toward §57's Run Record. What the
+// record holds today: run ID, arena ID, seed, player decisions with commit
+// times, machine actions, scores, result. What §57 also names and this record
+// does NOT yet carry, because nothing in the product has established them:
+// benchmark ID, scoring version, simulation timestamps, data cutoff. Those
+// arrive with the benchmark layer; claiming them earlier would be provenance
+// the record cannot back.
 //
 // Until this existed the run lived only in React state. It died on refresh, the
 // autopsy had nothing to read and invented a run instead, and §65's
 // "deterministic replay from run seed" had no seed to replay from.
 //
-// Storage is local, deliberately. The player-owned tables are owner-scoped to
-// auth.uid() (§3.1 of the USA Build Integration Spec) and the client has no
-// auth session yet, so a Supabase write would be rejected by RLS rather than
-// stored — silently, since the writes are fire-and-forget. The record is
-// therefore shaped to the `arena_runs` and `checkpoint_decisions` columns it
-// will eventually occupy: when auth lands (G2), `flushableRows` hands back
-// exactly those rows and the only new code is the insert itself.
+// Storage is local and synchronous, and local is authoritative on this device:
+// the Bronze gate, the arena map and the autopsy all read it in render. A
+// configured remote (the ReFi API behind the persistence port) is a mirror —
+// writes are announced to it fire-and-forget through the hook below, and reads
+// from it may only fill gaps local does not hold, never overwrite what it
+// does. There is no timestamp-based conflict resolution anywhere in this file.
 //
 // Nothing here is authoritative game state. The engine remains the authority;
 // this is the audit trail it leaves behind.
@@ -28,7 +31,7 @@ import {
 import { confidenceToConviction } from './decisionContract';
 
 /** Bumped when the record shape changes in a way a reader must notice. */
-export const RUN_RECORD_VERSION = 1;
+export const RUN_RECORD_VERSION = 2;
 
 /** How many finished runs to keep. Old runs fall off the end. */
 export const MAX_STORED_RUNS = 20;
@@ -49,6 +52,12 @@ export interface RecordedDecision {
   quality: DecisionQuality;
   behavioralFlags: BehavioralFlag[];
   machineActionCode: ActionCode;
+  /**
+   * Wall-clock time the player committed, stamped by the projection's caller.
+   * Null on decisions recorded before v2 captured commit times: a migration
+   * must never invent a timestamp the player did not make.
+   */
+  committedAt: string | null;
 }
 
 /** One run, finished or in flight. Mirrors `arena_runs`. */
@@ -83,6 +92,16 @@ export interface RunRecord {
 }
 
 // ─── Projection ───────────────────────────────────────────────────────────────
+
+/** The committed time this decision already has, or `now` only when it has never been recorded. */
+function priorCommitTime(
+  previous: RunRecord | undefined,
+  checkpointSequence: number,
+  now: string,
+): string | null {
+  const prior = previous?.decisions.find(p => p.checkpointSequence === checkpointSequence);
+  return prior ? prior.committedAt : now;
+}
 
 /**
  * Project live run state into a record.
@@ -133,6 +152,12 @@ export function projectRun(
       quality: d.quality,
       behavioralFlags: d.behavioralFlags,
       machineActionCode: d.machineActionCode,
+      // A commit time, once recorded, is fixed: re-projections keep the time
+      // each decision was actually committed, and only decisions this write
+      // introduces are stamped with the caller's clock. A prior decision whose
+      // time is null (migrated from v1) stays null; re-stamping it would
+      // fabricate a commit time the player never made.
+      committedAt: priorCommitTime(previous, d.checkpointSequence, now),
     })),
 
     startedAt: previous?.startedAt ?? now,
@@ -145,18 +170,33 @@ export function projectRun(
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
+/**
+ * v1 → v2: v2 added `committedAt` to each decision. A v1 record is otherwise
+ * identical, so it migrates by stating honestly that its commit times were
+ * never captured: every decision gets `committedAt: null`. The one thing a
+ * migration must never do is invent the timestamp it is missing.
+ */
+function migrateV1(record: RunRecord): RunRecord {
+  return {
+    ...record,
+    recordVersion: RUN_RECORD_VERSION,
+    decisions: record.decisions.map(d => ({ ...d, committedAt: d.committedAt ?? null })),
+  };
+}
+
 function readAll(): RunRecord[] {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // Records written by an older shape are dropped rather than migrated: a run
-    // is disposable history, and a half-understood record would show the player
+    // v1 records migrate in place; anything older or unrecognized is dropped
+    // rather than half-read — a half-understood record would show the player
     // a run that did not happen, which is the bug this module exists to end.
-    return (parsed as RunRecord[]).filter(
-      r => r && typeof r === 'object' && r.recordVersion === RUN_RECORD_VERSION,
-    );
+    return (parsed as RunRecord[])
+      .filter(r => r && typeof r === 'object' && Array.isArray(r.decisions))
+      .filter(r => r.recordVersion === RUN_RECORD_VERSION || r.recordVersion === 1)
+      .map(r => (r.recordVersion === 1 ? migrateV1(r) : r));
   } catch {
     return [];
   }
@@ -202,6 +242,7 @@ export function saveRun(run: RunState, now: string = new Date().toISOString()): 
 
   const rest = readAll().filter(r => r.runId !== record.runId);
   writeAll([record, ...rest]);
+  announceToMirror(record);
   return record;
 }
 
@@ -296,53 +337,70 @@ export function replayMatchesRecord(record: RunRecord, replayed: RunState): bool
   );
 }
 
-// ─── Forward path to Supabase ─────────────────────────────────────────────────
+// ─── Remote mirror ────────────────────────────────────────────────────────────
+//
+// The store above is authoritative on this device. A configured remote hears
+// about writes through this hook and hands back what it holds through
+// applyRemoteRun — and only into gaps. The hook indirection keeps this module
+// free of the persistence port (and of any import cycle with it): the wiring
+// lives in the persistence layer, which knows whether a remote exists at all.
+
+let mirror: ((record: RunRecord) => void) | null = null;
+
+/** Install the fire-and-forget announcer. Pass null to detach (tests). */
+export function setRunRecordMirror(fn: ((record: RunRecord) => void) | null): void {
+  mirror = fn;
+}
+
+function announceToMirror(record: RunRecord): void {
+  try {
+    mirror?.(record);
+  } catch {
+    // The mirror is best-effort by contract; a failing mirror must never
+    // reach the caller that just saved a run.
+  }
+}
+
+/** What became of one remote record offered to the local store. */
+export type RemoteRunOutcome =
+  /** The run was a local gap; it is now stored. */
+  | { kind: 'ADOPTED' }
+  /** Local already holds this run; local is authoritative and unchanged. */
+  | { kind: 'LOCAL_KEPT' }
+  /** Local holds a differing record for the same run id. Local is kept; the
+   *  remote version is preserved in the outcome so nothing is lost silently. */
+  | { kind: 'CONFLICT'; local: RunRecord; remote: RunRecord }
+  /** The remote payload was not a usable run record. */
+  | { kind: 'REFUSED'; reason: string };
+
+/** Field-by-field equality, ignoring `updatedAt`: it is ordering and audit
+ *  metadata only, and never participates in conflict decisions. */
+function sameRecord(a: RunRecord, b: RunRecord): boolean {
+  const strip = ({ updatedAt: _updatedAt, ...rest }: RunRecord) => rest;
+  return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
+}
 
 /**
- * The record as the rows it will occupy once the client has an auth session.
- *
- * `owner_id` is deliberately absent: the column defaults to `auth.uid()`, so
- * the row is owner-stamped by the session's real principal rather than by
- * anything the client claims. Supplying it here would let a client name an
- * owner, which is exactly what the owner-scoped rewrite exists to prevent.
+ * Offer one remote record to the local store: local-authoritative gap
+ * hydration. A run local has never heard of is adopted; a run local already
+ * holds is never overwritten, whatever any timestamp says. A difference is
+ * reported as a conflict, not resolved.
  */
-export function flushableRows(record: RunRecord, sessionId: string): {
-  run: Record<string, unknown>;
-  decisions: Record<string, unknown>[];
-} {
-  return {
-    run: {
-      id: record.runId,
-      session_id: sessionId,
-      arena_id: record.arenaId,
-      machine_id: record.machineId,
-      state: record.state,
-      current_checkpoint: record.currentCheckpoint,
-      total_checkpoints: record.totalCheckpoints,
-      portfolio_value: record.portfolioValue,
-      cash_weight: record.cashWeight,
-      drawdown: record.drawdown,
-      turnover_used: record.turnoverUsed,
-      player_score: record.playerScore,
-      machine_score: record.machineScore,
-      result: record.result,
-      critical_failure: record.criticalFailure,
-      seed: record.seed,
-      started_at: record.startedAt,
-      completed_at: record.completedAt,
-    },
-    decisions: record.decisions.map(d => ({
-      run_id: record.runId,
-      session_id: sessionId,
-      checkpoint_sequence: d.checkpointSequence,
-      action_code: d.actionCode,
-      thesis_code: d.thesisCode,
-      confidence: d.confidence,
-      modules_consulted: d.modulesConsulted,
-      decision_quality: d.quality,
-      score_contribution: d.scoreContribution,
-      machine_action_code: d.machineActionCode,
-      behavioral_flags: d.behavioralFlags,
-    })),
-  };
+export function applyRemoteRun(remote: RunRecord): RemoteRunOutcome {
+  if (!remote || typeof remote !== 'object' || typeof remote.runId !== 'string'
+      || !remote.runId || !Array.isArray(remote.decisions)) {
+    return { kind: 'REFUSED', reason: 'not a run record' };
+  }
+  if (remote.recordVersion !== RUN_RECORD_VERSION && remote.recordVersion !== 1) {
+    return { kind: 'REFUSED', reason: `unknown record version ${String(remote.recordVersion)}` };
+  }
+  const usable = remote.recordVersion === 1 ? migrateV1(remote) : remote;
+
+  const local = getRunRecord(usable.runId);
+  if (!local) {
+    writeAll([usable, ...readAll()]);
+    return { kind: 'ADOPTED' };
+  }
+  if (sameRecord(local, usable)) return { kind: 'LOCAL_KEPT' };
+  return { kind: 'CONFLICT', local, remote: usable };
 }

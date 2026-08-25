@@ -1,6 +1,7 @@
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 
 // Schema tests, run against a real PostgreSQL.
@@ -13,7 +14,9 @@ import { Client } from 'pg';
 // Skipped when DATABASE_URL is unset, so the ordinary suite stays offline.
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const SCHEMA = new URL('./migrations/0001_founding_schema.sql', import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: the latter percent-encodes spaces and this
+// repository lives under a path that has them.
+const SCHEMA = fileURLToPath(new URL('./migrations/0001_founding_schema.sql', import.meta.url));
 
 describe('founding schema', { skip: DATABASE_URL ? false : 'DATABASE_URL not set' }, () => {
   let db: Client;
@@ -182,6 +185,60 @@ describe('founding schema', { skip: DATABASE_URL ? false : 'DATABASE_URL not set
         (session_id, tape_date, tape_id, action_code) VALUES ('ses_tape','2026-08-21','t1','HOLD')`;
       await c.query(insert);
       await assert.rejects(c.query(insert), /duplicate key|unique/i);
+    });
+  });
+
+  test('a client-minted run id round-trips exactly', async () => {
+    // The Run Record, the telemetry envelope, and this row all carry the id
+    // the client minted when the run began. If the database rewrote it, the
+    // mirror would hold a run nothing else can name.
+    await inRollback(async c => {
+      await c.query(`INSERT INTO game_sessions (id) VALUES ('ses_run')`);
+      const runId = 'run_0123456789abcdef01234567';
+      await c.query(
+        `INSERT INTO arena_runs (id, session_id, arena_id, machine_id, total_checkpoints,
+                                 portfolio_value, cash_weight, volatility, seed)
+         VALUES ($1, 'ses_run', 'covid', 'spy_benchmark', 22, 100000, 0.10, 0.185, 42)`,
+        [runId]);
+      const { rows } = await c.query(
+        `SELECT id, volatility, critical_failure_checkpoint, updated_at
+         FROM arena_runs WHERE id=$1`, [runId]);
+      assert.equal(rows[0].id, runId, 'run id was rewritten by the database');
+      assert.equal(Number(rows[0].volatility), 0.185);
+      assert.equal(rows[0].critical_failure_checkpoint, null);
+      assert.notEqual(rows[0].updated_at, null);
+
+      // Volatility has no default on purpose: zero is a real claim, and a
+      // writer that omits the value must fail rather than manufacture one.
+      await assert.rejects(
+        c.query(
+          `INSERT INTO arena_runs (id, session_id, arena_id, machine_id, total_checkpoints,
+                                   portfolio_value, cash_weight, seed)
+           VALUES ('run_missing_volatility_000', 'ses_run', 'covid', 'spy_benchmark', 22,
+                   100000, 0.10, 43)`),
+        /volatility/);
+    });
+  });
+
+  test('a decision without a commit time stays null instead of gaining a fabricated one', async () => {
+    await inRollback(async c => {
+      await c.query(`INSERT INTO game_sessions (id) VALUES ('ses_dec')`);
+      const runId = 'run_fedcba9876543210fedcba98';
+      await c.query(
+        `INSERT INTO arena_runs (id, session_id, arena_id, machine_id, total_checkpoints,
+                                 portfolio_value, cash_weight, volatility, seed)
+         VALUES ($1, 'ses_dec', 'covid', 'spy_benchmark', 22, 100000, 0.10, 0, 7)`,
+        [runId]);
+      await c.query(
+        `INSERT INTO checkpoint_decisions (run_id, checkpoint_sequence, action_code, turnover_cost)
+         VALUES ($1, 1, 'HOLD', 0.004)`, [runId]);
+      const { rows } = await c.query(
+        `SELECT run_id, committed_at, turnover_cost FROM checkpoint_decisions WHERE run_id=$1`,
+        [runId]);
+      assert.equal(rows[0].run_id, runId);
+      assert.equal(rows[0].committed_at, null,
+        'a commit time the player never made was fabricated by a default');
+      assert.equal(Number(rows[0].turnover_cost), 0.004);
     });
   });
 
