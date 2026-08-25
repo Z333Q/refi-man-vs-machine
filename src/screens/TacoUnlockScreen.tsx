@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ActionZone from '../components/ui/ActionZone';
 
 interface Props {
   onEnter: () => void;
@@ -65,15 +66,15 @@ export default function TacoUnlockScreen({ onEnter }: Props) {
   }, [phase, lines.length]);
 
   return (
-    <div className="terminal-screen min-h-screen flex flex-col items-center justify-center">
+    <div className="terminal-screen min-h-screen flex flex-col">
       {phase >= 1 && (
-        <div className="max-w-5xl w-full px-8 animate-fade-in">
+        <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col justify-center px-4 sm:px-8 py-8 animate-fade-in">
           {/* Prerequisites */}
           <div className="mb-8">
             <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-4">
               PREREQUISITES VERIFIED
             </div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {PREREQUISITES.map((item, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <span className="text-phosphor text-xs">✓</span>
@@ -146,12 +147,6 @@ export default function TacoUnlockScreen({ onEnter }: Props) {
                       <div className="font-mono text-xs text-phosphor-mid mt-2">DO YOU?</div>
                     </div>
 
-                    <button
-                      onClick={onEnter}
-                      className="cmd-button cmd-button-primary w-full tracking-widest py-3 text-sm"
-                    >
-                      [ ENTER FINAL BOSS ]
-                    </button>
                   </div>
                 )}
               </div>
@@ -159,6 +154,19 @@ export default function TacoUnlockScreen({ onEnter }: Props) {
           )}
         </div>
       )}
+
+      {/* The boss unlock only reveals itself once the sequence has played;
+          the action keeps its territory and states why it is waiting. */}
+      <ActionZone
+        note="5 POLICY ROUNDS · DATES HIDDEN · OUTCOME UNKNOWN"
+        primary={{
+          label: 'ENTER FINAL BOSS',
+          onClick: onEnter,
+          disabled: phase < 3,
+          disabledHint: 'VERIFYING PREREQUISITES',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

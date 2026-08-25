@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import ActionZone from '../components/ui/ActionZone';
 
 interface Props {
   onContinue: () => void;
@@ -16,7 +17,7 @@ export default function MachineRevealScreen({ onContinue }: Props) {
 
   return (
     <div className="terminal-screen min-h-screen flex flex-col">
-      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between">
+      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between pr-16 sm:pr-6">
         <div className="font-mono text-xs text-phosphor-mid tracking-widest">
           REFI ALPHA // MACHINE REVEAL // CHECKPOINT 07
         </div>
@@ -125,7 +126,7 @@ export default function MachineRevealScreen({ onContinue }: Props) {
                 SYSTEM ANALYSIS
               </div>
 
-              <div className="grid grid-cols-2 gap-4 font-mono text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
                 <div className="space-y-2">
                   <div className="text-phosphor-dim">YOU REACTED TO:</div>
                   <div className="text-phosphor leading-5">SECTOR-SPECIFIC RISK</div>
@@ -155,15 +156,22 @@ export default function MachineRevealScreen({ onContinue }: Props) {
             </div>
           )}
 
-          {showAnalysis && (
-            <div className="flex justify-end animate-fade-in">
-              <button onClick={onContinue} className="cmd-button cmd-button-primary tracking-widest">
-                [ VIEW CHECKPOINT SCORE ]
-              </button>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* The result is withheld until the reveal has finished reading — but
+          the action keeps its territory the whole time (§10 do not reveal
+          outcome before score state). */}
+      <ActionZone
+        note="YOU AND THE MACHINE SHARED ONE INFORMATION CUTOFF."
+        primary={{
+          label: 'VIEW CHECKPOINT SCORE',
+          onClick: onContinue,
+          disabled: !showAnalysis,
+          disabledHint: 'REVEAL IN PROGRESS',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

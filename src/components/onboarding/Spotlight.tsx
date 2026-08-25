@@ -173,7 +173,7 @@ export function Spotlight({
   );
 
   return (
-    <div className="fixed inset-0 z-[60]" style={{ pointerEvents: 'none' }}>
+    <div data-blocking-overlay className="fixed inset-0 z-[60]" style={{ pointerEvents: 'none' }}>
       {/* Scrim + focus ring over the target (or a full scrim when centered). */}
       {rect ? (
         <div

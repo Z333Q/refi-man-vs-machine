@@ -16,7 +16,7 @@
 --
 -- Data note: prototype data is disposable per §4.1. Orphan rows that
 -- exist before this migration runs are backfilled to a fixed quarantine
--- owner (`00000000-0000-0000-0000-0000000badd1e`) so the CASCADE FKs
+-- owner (`00000000-0000-0000-0000-000000badd1e`) so the CASCADE FKs
 -- attach cleanly. That user does not authenticate; its rows are
 -- effectively read-locked and can be dropped by service-role tooling.
 
@@ -33,7 +33,7 @@ DO $$
 BEGIN
   INSERT INTO auth.users (id, aud, role, email, created_at, updated_at, confirmation_sent_at)
   VALUES (
-    '00000000-0000-0000-0000-0000000badd1e',
+    '00000000-0000-0000-0000-000000badd1e',
     'authenticated',
     'authenticated',
     'prototype-quarantine@refi.trading',
@@ -71,7 +71,7 @@ BEGIN
   --    bypassed the default.
   EXECUTE format(
     'UPDATE %s SET owner_id = %L WHERE owner_id IS NULL',
-    tbl, '00000000-0000-0000-0000-0000000badd1e'
+    tbl, '00000000-0000-0000-0000-000000badd1e'
   );
 
   -- 3. Now enforce NOT NULL and the default. Default is auth.uid() so

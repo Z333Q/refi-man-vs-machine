@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { useTips } from '../context/TipContext';
 import type { ActionCode, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
+import { canAffordAction, isHoldOnly, STARTING_CAPITAL } from '../lib/runEngine';
 import PortfolioConstellation from '../components/game/PortfolioConstellation';
 import MachineReveal from '../components/game/MachineReveal';
 import MachinePipeline from '../components/game/MachinePipeline';
@@ -11,6 +12,7 @@ import { useVisualEvents, visualRegistry } from '../components/game/VisualEventL
 import { Spotlight } from '../components/onboarding/Spotlight';
 import { FiveQuestionSpine } from '../components/onboarding/FiveQuestionSpine';
 import { ArcRail } from '../components/onboarding/ArcRail';
+import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -362,6 +364,10 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
 
   const handleDraftCommit = () => {
     if (draftOrders.length === 0 && !holdConfirmed) return;
+    // A stance the remaining budget cannot fully cover is not available. The
+    // stance cards enforce this visually in the reworked decision surface;
+    // here it guards the commit path.
+    if (!holdConfirmed && run && !canAffordAction(run, positionActionsToGameAction(draftOrders))) return;
     if (!holdConfirmed) {
       const gameAction = positionActionsToGameAction(draftOrders);
       setPendingAction(gameAction);
@@ -403,9 +409,81 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   const cp = currentCheckpointData;
   const phase = run.phase;
   const portfolio = run.portfolio;
-  const portfolioGain = ((portfolio.value - 100000) / 100000) * 100;
-  const isObservation = portfolio.drawdown <= -0.20;
+  const portfolioGain = ((portfolio.value - STARTING_CAPITAL) / STARTING_CAPITAL) * 100;
+  const isObservation = run.criticalFailure;
   const hasDraft = draftOrders.length > 0 || holdConfirmed;
+
+  // Turnover is a finite run-scoped resource, so the meter is always on screen.
+  const turnoverBudget = run.turnoverBudget;
+  const turnoverSpentPct = turnoverBudget > 0 ? portfolio.turnoverUsed / turnoverBudget : 1;
+  const turnoverExhausted = isHoldOnly(run, cp);
+  const turnoverColor =
+    turnoverSpentPct > 0.85 ? 'text-risk-red' :
+    turnoverSpentPct > 0.60 ? 'text-alert-amber' :
+    'text-phosphor';
+  const turnoverBarColor =
+    turnoverSpentPct > 0.85 ? 'bg-risk-red' :
+    turnoverSpentPct > 0.60 ? 'bg-alert-amber' :
+    'bg-phosphor';
+
+  // ── Primary action ────────────────────────────────────────────────────────
+  // One action advances the run, and it keeps the same territory directly
+  // below the decision workspace in every phase. Only its label and its
+  // availability change.
+  const isDecisionPhase = phase === 'SIGNAL' || phase === 'INVESTIGATING';
+  const isResolvePhase = phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING';
+  const isFinalCheckpoint = run.currentCheckpoint >= run.totalCheckpoints;
+
+  const primaryAction = commitConfirm
+    ? {
+        label: 'COMMIT DECISION',
+        onClick: handleFinalCommit,
+        keyHint: '[ENTER]',
+        bindEnter: false, // the screen already binds ENTER while confirming
+      }
+    : isDecisionPhase
+      ? {
+          label: 'REVIEW & COMMIT',
+          onClick: handleDraftCommit,
+          disabled: !hasDraft,
+          disabledHint: turnoverExhausted
+            ? 'TURNOVER EXHAUSTED — SELECT A HOLD REASON'
+            : 'DRAFT AN ORDER OR SELECT HOLD',
+          keyHint: '[ENTER]',
+        }
+      : isResolvePhase
+        ? isFinalCheckpoint
+          ? {
+              label: 'VIEW RUN RESULTS',
+              onClick: () => {
+                const won = run.playerScore > run.machineScore;
+                completeRun(won ? 'MACHINE_BEATEN' : 'PASSED');
+                onComplete();
+              },
+              disabled: countdownActive,
+              disabledHint: `RESOLVING · ${countdown}`,
+              keyHint: '[ENTER]',
+            }
+          : {
+              label: 'NEXT SIGNAL',
+              onClick: handleLearnNext,
+              disabled: countdownActive,
+              disabledHint: `NEXT SIGNAL IN ${countdown}`,
+              keyHint: '[ENTER]',
+            }
+        : {
+            label: 'VIEW AUTOPSY',
+            onClick: onComplete,
+            keyHint: '[ENTER]',
+          };
+
+  const primaryNote = commitConfirm
+    ? 'THIS DECISION BECOMES PART OF YOUR RUN RECORD.'
+    : isDecisionPhase
+      ? `CP ${String(run.currentCheckpoint).padStart(2, '0')} · ${hasDraft ? (holdConfirmed ? 'HOLD DRAFTED' : `${draftOrders.length} ORDER(S) DRAFTED`) : 'NO DECISION DRAFTED YET'}`
+      : isResolvePhase
+        ? 'THE MACHINE FACED THE SAME INFORMATION CUTOFF.'
+        : undefined;
 
   const PANEL_TABS: { id: ActivePanel; label: string; key: string }[] = [
     { id: 'SIGNAL', label: 'SIGNAL', key: 'S' },
@@ -415,20 +493,20 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
   ];
 
   return (
-    <div className="min-h-screen bg-terminal-black terminal-screen flex flex-col font-mono">
+    <div className="screen-fit bg-terminal-black terminal-screen flex flex-col font-mono">
 
       {/* ── Top bar ── */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-3 px-3 sm:px-4 py-2 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <button
             onClick={onBack}
             className="text-phosphor-dim text-xs hover:text-phosphor transition-colors tracking-widest"
           >
             ← ABORT
           </button>
-          <div className="h-4 w-px bg-phosphor/20" />
-          <span className="text-phosphor-dim text-xs tracking-widest">COVID BLACK SWAN</span>
-          <div className="h-4 w-px bg-phosphor/20" />
+          <div className="hidden sm:block h-4 w-px bg-phosphor/20" />
+          <span className="hidden sm:inline text-phosphor-dim text-xs tracking-widest">COVID BLACK SWAN</span>
+          <div className="hidden sm:block h-4 w-px bg-phosphor/20" />
           <span className="text-phosphor text-xs tracking-widest">
             CP {String(run.currentCheckpoint).padStart(2, '0')} / {String(run.totalCheckpoints).padStart(2, '0')}
           </span>
@@ -442,7 +520,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className={`text-xs font-bold ${run.playerScore >= run.machineScore ? 'text-paper-green' : 'text-risk-red'}`}>
               YOU {run.playerScore}
@@ -480,7 +558,7 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left: signal sidebar ── */}
-        <div className="w-64 flex-shrink-0 border-r border-phosphor/10 flex flex-col">
+        <div className="hidden lg:flex w-64 flex-shrink-0 border-r border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest mb-1">
               {cp.phase.replace(/_/g, ' ')} · {cp.crisisDay}
@@ -529,11 +607,31 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                 {(portfolio.drawdown * 100).toFixed(1)}%
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-phosphor-dim">TURNOVER</span>
-              <span className={portfolio.turnoverUsed > 0.3 ? 'text-alert-amber' : 'text-phosphor'}>
-                {(portfolio.turnoverUsed * 100).toFixed(0)}%
-              </span>
+            <div>
+              <div className="flex justify-between">
+                <span className="text-phosphor-dim">TURNOVER BUDGET</span>
+                <span className={turnoverColor}>
+                  {(portfolio.turnoverUsed * 100).toFixed(0)}% / {(turnoverBudget * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div
+                className="mt-1 h-1.5 bg-phosphor/10"
+                role="meter"
+                aria-label="TURNOVER BUDGET SPENT"
+                aria-valuenow={Math.round(turnoverSpentPct * 100)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div
+                  className={`h-full ${turnoverBarColor}`}
+                  style={{ width: `${Math.min(100, turnoverSpentPct * 100)}%` }}
+                />
+              </div>
+              {turnoverExhausted && (
+                <div className="text-risk-red text-xs tracking-widest mt-1">
+                  TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -884,31 +982,8 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                         <div className="text-phosphor-dim text-xs mb-4">
                           THIS CANNOT BE UNDONE. THE MARKET WILL RESOLVE.
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleFinalCommit}
-                            className="flex-1 py-2.5 text-xs tracking-widest border border-phosphor text-phosphor hover:bg-phosphor/15 transition-colors"
-                          >
-                            COMMIT ▶ [ENTER]
-                          </button>
-                          <button
-                            onClick={() => setCommitConfirm(false)}
-                            className="px-4 py-2.5 text-xs tracking-widest border border-phosphor/20 text-phosphor-dim hover:border-phosphor/40 transition-colors"
-                          >
-                            REVISE
-                          </button>
-                        </div>
                       </div>
-                    ) : (
-                      hasDraft && !commitConfirm && (
-                        <button
-                          onClick={handleDraftCommit}
-                          className="cmd-button-primary w-full py-3 text-xs tracking-widest"
-                        >
-                          REVIEW & COMMIT ▶
-                        </button>
-                      )
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1023,27 +1098,12 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
                 </div>
               )}
 
-              {/* Advance */}
-              {countdownActive ? (
+              {/* Advance countdown is information; the action lives below. */}
+              {countdownActive && (
                 <div className="text-center py-4">
                   <div className="text-phosphor-dim text-xs tracking-widest mb-1">NEXT SIGNAL IN</div>
                   <div className="text-phosphor text-5xl font-bold">{countdown}</div>
                 </div>
-              ) : run.currentCheckpoint >= run.totalCheckpoints ? (
-                <button
-                  onClick={() => {
-                    const won = run.playerScore > run.machineScore;
-                    completeRun(won ? 'MACHINE_BEATEN' : 'PASSED');
-                    onComplete();
-                  }}
-                  className="cmd-button-primary w-full py-3 text-sm tracking-widest"
-                >
-                  VIEW RUN RESULTS ▶
-                </button>
-              ) : (
-                <button onClick={handleLearnNext} className="cmd-button-primary w-full py-3 text-sm tracking-widest">
-                  NEXT SIGNAL ▶
-                </button>
               )}
             </div>
           )}
@@ -1058,15 +1118,25 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
               <div className="text-phosphor-mid text-sm mb-6">
                 {run.playerScore} vs {run.machineScore}
               </div>
-              <button onClick={onComplete} className="cmd-button-primary px-8 py-3 tracking-widest text-sm">
-                VIEW AUTOPSY ▶
-              </button>
             </div>
           )}
+
+          {/* ── Primary action ── directly below the decision workspace,
+               centred on the game axis, in every phase of the loop. */}
+          <ActionZone
+            variant="inline"
+            note={primaryNote}
+            primary={primaryAction}
+            secondaryLeft={
+              commitConfirm ? (
+                <SecondaryAction label="Revise decision" onClick={() => setCommitConfirm(false)} />
+              ) : undefined
+            }
+          />
         </div>
 
         {/* ── Right: status sidebar ── */}
-        <div className="w-52 flex-shrink-0 border-l border-phosphor/10 flex flex-col">
+        <div className="hidden xl:flex w-52 flex-shrink-0 border-l border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest mb-2">ALPHA PROFILE</div>
             <div className="text-phosphor text-xs font-bold">{state.profile.rankCode.replace(/_/g, ' ')}</div>
@@ -1135,14 +1205,6 @@ export default function CoreLoopScreen({ onComplete, onBack, onHelp }: Props) {
             </button>
           )}
           <div className="flex-1" />
-          {hasDraft && !commitConfirm && (
-            <button
-              onClick={handleDraftCommit}
-              className="text-xs tracking-widest text-phosphor border border-phosphor/60 px-4 py-1.5 hover:bg-phosphor/10 transition-colors"
-            >
-              REVIEW DRAFT ({draftOrders.length > 0 ? draftOrders.length : 'HOLD'}) →
-            </button>
-          )}
         </div>
       )}
 

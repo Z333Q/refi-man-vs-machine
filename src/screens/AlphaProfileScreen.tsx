@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import ClaimHandoffButton from '../components/ClaimHandoffButton';
 
 interface Props {
@@ -39,7 +40,7 @@ function BarScore({ score }: { score: number }) {
 export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
   return (
     <div className="terminal-screen min-h-screen flex flex-col">
-      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between">
+      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between pr-16 sm:pr-6">
         <div className="font-mono text-xs text-phosphor-mid tracking-widest">
           REFI ALPHA // ALPHA PROFILE
         </div>
@@ -123,12 +124,6 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
                 <div className="font-mono text-sm text-phosphor leading-6">
                   WRITE RULES AROUND YOUR WEAKNESSES.
                 </div>
-                <button
-                  onClick={onBasketWriter}
-                  className="cmd-button cmd-button-primary w-full tracking-widest mt-2"
-                >
-                  [ BASKET WRITER ]
-                </button>
               </div>
             </div>
           </div>
@@ -138,7 +133,7 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
             <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-3">
               MACHINE BEAT RATE
             </div>
-            <div className="grid grid-cols-4 gap-4 font-mono text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs">
               {[
                 { label: 'TOTAL ARENAS', value: '3' },
                 { label: 'MACHINE BEATEN', value: '1' },
@@ -170,6 +165,11 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
           </div>
         </div>
       </div>
+
+      <ActionZone
+        note="BUILD A BASKET AROUND YOUR STRENGTHS. WRITE RULES AROUND YOUR WEAKNESSES."
+        primary={{ label: 'BASKET WRITER', onClick: onBasketWriter, keyHint: '[ENTER]' }}
+      />
     </div>
   );
 }

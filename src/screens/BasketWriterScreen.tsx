@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useState } from 'react';
 
 interface Props {
@@ -77,15 +78,15 @@ export default function BasketWriterScreen({ onBack, onComplete }: Props) {
   };
 
   return (
-    <div className="terminal-screen min-h-screen flex flex-col">
-      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between">
+    <div className="terminal-screen screen-fit flex flex-col">
+      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between pr-16 sm:pr-6">
         <div className="font-mono text-xs text-phosphor-mid tracking-widest">REFI ALPHA // BASKET WRITER</div>
         <button onClick={onBack} className="font-mono text-xs text-phosphor-dim hover:text-phosphor">[ESC] BACK</button>
       </div>
 
       <div className="flex-1 overflow-hidden flex">
         {/* Universe panel */}
-        <div className="w-52 border-r border-phosphor/20 flex flex-col">
+        <div className="hidden md:flex w-52 border-r border-phosphor/20 flex-col">
           <div className="border-b border-phosphor/20 p-3">
             <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-2">UNIVERSE</div>
             <input
@@ -159,7 +160,7 @@ export default function BasketWriterScreen({ onBack, onComplete }: Props) {
         </div>
 
         {/* Risk map panel */}
-        <div className="w-56 border-l border-phosphor/20 p-4 space-y-4">
+        <div className="hidden lg:block w-56 border-l border-phosphor/20 p-4 space-y-4">
           <div className="font-mono text-xs text-phosphor-dim tracking-widest">RISK MAP</div>
 
           <div className="space-y-2">
@@ -197,17 +198,21 @@ export default function BasketWriterScreen({ onBack, onComplete }: Props) {
             </div>
           </div>
 
-          <div className="space-y-2 mt-4">
-            <button onClick={onComplete} className="cmd-button cmd-button-primary w-full tracking-widest text-xs">
-              [ LOCK BASKET ]
-            </button>
-            <div className="font-mono text-xs text-phosphor-dim text-center leading-4">
-              A PORTFOLIO IS A THESIS.
-              A POLICY IS HOW YOU KEEP IT.
-            </div>
-          </div>
         </div>
       </div>
+
+      {/* Basket edits above are the decision; locking it is the commit. */}
+      <ActionZone
+        variant="inline"
+        note="A PORTFOLIO IS A THESIS. A POLICY IS HOW YOU KEEP IT."
+        primary={{
+          label: 'LOCK BASKET',
+          onClick: onComplete,
+          disabled: basket.length === 0,
+          disabledHint: 'ADD AT LEAST ONE POSITION',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

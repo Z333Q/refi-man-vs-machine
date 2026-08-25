@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ActionZone from '../components/ui/ActionZone';
 
 interface Props {
   onComplete: () => void;
@@ -15,8 +16,7 @@ const ROUNDS: { id: Round; label: string; num: number }[] = [
   { id: 'reflexivity', label: 'REFLEXIVITY', num: 5 },
 ];
 
-function ShockRound({ onNext }: { onNext: () => void }) {
-  const [decision, setDecision] = useState('');
+function ShockRound({ decision, setDecision }: { decision: string; setDecision: (d: string) => void }) {
   return (
     <div className="space-y-6">
       <div className="terminal-panel p-5 space-y-4">
@@ -40,7 +40,7 @@ function ShockRound({ onNext }: { onNext: () => void }) {
         <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-3">
           MARKET RESPONSE
         </div>
-        <div className="grid grid-cols-2 gap-3 font-mono text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
           {[
             { sym: 'SPX', val: '-5.8%', neg: true },
             { sym: 'SEMIS', val: '-10.2%', neg: true },
@@ -82,18 +82,11 @@ function ShockRound({ onNext }: { onNext: () => void }) {
         </div>
       </div>
 
-      {decision && (
-        <div className="flex justify-end animate-fade-in">
-          <button onClick={onNext} className="cmd-button cmd-button-primary tracking-widest">
-            [ COMMIT DECISION ]
-          </button>
-        </div>
-      )}
     </div>
   );
 }
 
-function PatternRound({ onNext }: { onNext: () => void }) {
+function PatternRound({ choice, setChoice }: { choice: string; setChoice: (c: string) => void }) {
   return (
     <div className="space-y-6">
       <div className="terminal-panel p-5 space-y-4 border-alert-amber/30 border">
@@ -123,8 +116,13 @@ function PatternRound({ onNext }: { onNext: () => void }) {
         {['TRADE THE POLICY — NEW EVIDENCE ONLY', 'TRADE THE PATTERN — IT WORKED BEFORE', 'REDUCE SIZE — UNCERTAIN'].map((opt, i) => (
           <button
             key={opt}
-            onClick={onNext}
-            className="w-full text-left cmd-button tracking-wider text-xs"
+            onClick={() => setChoice(opt)}
+            aria-pressed={choice === opt}
+            className={`w-full text-left font-mono text-xs px-3 py-2.5 border transition-colors ${
+              choice === opt
+                ? 'border-phosphor/60 bg-phosphor/10 text-phosphor'
+                : 'border-phosphor/20 text-phosphor-dim hover:border-phosphor/40 hover:text-phosphor-mid'
+            }`}
           >
             [{i + 1}] {opt}
           </button>
@@ -134,9 +132,7 @@ function PatternRound({ onNext }: { onNext: () => void }) {
   );
 }
 
-function ReflexivityRound({ onComplete }: { onComplete: () => void }) {
-  const [choice, setChoice] = useState('');
-
+function ReflexivityRound({ choice, setChoice }: { choice: string; setChoice: (c: string) => void }) {
   return (
     <div className="space-y-6">
       <div className="terminal-panel p-5 space-y-4">
@@ -179,15 +175,10 @@ function ReflexivityRound({ onComplete }: { onComplete: () => void }) {
       </div>
 
       {choice && (
-        <div className="animate-fade-in space-y-4">
-          <div className="terminal-panel p-4 font-mono text-xs text-phosphor-mid leading-5">
-            PAST PATTERN &ne; GUARANTEED FUTURE.
-            <br />
-            ADAPTING YOUR RULE BASED ON CROWD POSITIONING IS META-LEVEL RISK MANAGEMENT.
-          </div>
-          <button onClick={onComplete} className="cmd-button cmd-button-primary w-full tracking-widest">
-            [ COMPLETE FINAL BOSS ]
-          </button>
+        <div className="animate-fade-in terminal-panel p-4 font-mono text-xs text-phosphor-mid leading-5">
+          PAST PATTERN &ne; GUARANTEED FUTURE.
+          <br />
+          ADAPTING YOUR RULE BASED ON CROWD POSITIONING IS META-LEVEL RISK MANAGEMENT.
         </div>
       )}
     </div>
@@ -196,12 +187,28 @@ function ReflexivityRound({ onComplete }: { onComplete: () => void }) {
 
 export default function TacoBossScreen({ onComplete, onBack }: Props) {
   const [currentRoundIdx, setCurrentRoundIdx] = useState(0);
+  // The round's options are the decision; the action zone below is the commit.
+  const [choice, setChoice] = useState('');
   const currentRound = ROUNDS[currentRoundIdx];
 
   const advanceRound = () => {
+    setChoice('');
     if (currentRoundIdx < ROUNDS.length - 1) {
       setCurrentRoundIdx(i => i + 1);
     }
+  };
+
+  // Rounds 2 and 4 deliver policy information; the rest require a stance.
+  const requiresChoice =
+    currentRound.id === 'shock' || currentRound.id === 'pattern' || currentRound.id === 'reflexivity';
+  const isFinalRound = currentRound.id === 'reflexivity';
+
+  const PRIMARY_LABEL: Record<Round, string> = {
+    shock: 'COMMIT DECISION',
+    negotiation: 'OPEN ORDER TICKET',
+    pattern: 'COMMIT DECISION',
+    persistence: 'ADAPT POSITION',
+    reflexivity: 'COMPLETE FINAL BOSS',
   };
 
   return (
@@ -214,7 +221,7 @@ export default function TacoBossScreen({ onComplete, onBack }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-8 py-8">
+        <div className="max-w-5xl mx-auto px-4 py-6 sm:px-8 sm:py-8">
           {/* Round progress */}
           <div className="flex items-center gap-0 mb-8">
             {ROUNDS.map((round, i) => (
@@ -236,9 +243,9 @@ export default function TacoBossScreen({ onComplete, onBack }: Props) {
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: Portrait strip */}
-            <div className="col-span-1">
+            <div className="lg:col-span-1">
               <div className="terminal-panel p-4 space-y-4">
                 <div className="font-mono text-xs text-phosphor-dim">ROUND {currentRound.num} OF 5</div>
                 <div className="font-mono text-lg text-phosphor-hot terminal-glow">{currentRound.label}</div>
@@ -276,8 +283,8 @@ export default function TacoBossScreen({ onComplete, onBack }: Props) {
             </div>
 
             {/* Right: Round content */}
-            <div className="col-span-2">
-              {currentRound.id === 'shock' && <ShockRound onNext={advanceRound} />}
+            <div className="lg:col-span-2">
+              {currentRound.id === 'shock' && <ShockRound decision={choice} setDecision={setChoice} />}
               {currentRound.id === 'negotiation' && (
                 <div className="space-y-6">
                   <div className="terminal-panel p-5 space-y-4">
@@ -301,12 +308,9 @@ export default function TacoBossScreen({ onComplete, onBack }: Props) {
                       <div className="font-mono text-xs text-phosphor-dim">HIDDEN</div>
                     </div>
                   </div>
-                  <button onClick={advanceRound} className="cmd-button cmd-button-primary tracking-widest">
-                    [ OPEN ORDER TICKET ]
-                  </button>
                 </div>
               )}
-              {currentRound.id === 'pattern' && <PatternRound onNext={advanceRound} />}
+              {currentRound.id === 'pattern' && <PatternRound choice={choice} setChoice={setChoice} />}
               {currentRound.id === 'persistence' && (
                 <div className="space-y-6">
                   <div className="terminal-panel p-5 space-y-4 border-risk-red/30 border">
@@ -320,16 +324,24 @@ export default function TacoBossScreen({ onComplete, onBack }: Props) {
                     </div>
                     <div className="font-mono text-sm text-phosphor-hot terminal-glow">REASSESS.</div>
                   </div>
-                  <button onClick={advanceRound} className="cmd-button cmd-button-primary tracking-widest">
-                    [ ADAPT POSITION ]
-                  </button>
                 </div>
               )}
-              {currentRound.id === 'reflexivity' && <ReflexivityRound onComplete={onComplete} />}
+              {currentRound.id === 'reflexivity' && <ReflexivityRound choice={choice} setChoice={setChoice} />}
             </div>
           </div>
         </div>
       </div>
+
+      <ActionZone
+        note={`ROUND ${currentRound.num} OF 5 · ${currentRound.label}`}
+        primary={{
+          label: PRIMARY_LABEL[currentRound.id],
+          onClick: isFinalRound ? onComplete : advanceRound,
+          disabled: requiresChoice && !choice,
+          disabledHint: 'SELECT YOUR STANCE FIRST',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

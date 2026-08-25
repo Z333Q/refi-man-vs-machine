@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useState, useEffect } from 'react';
 import { getTodaysTape, getYesterdaysTape, scoreTapeDecision } from '../lib/dailyTape';
 import { useGame } from '../context/GameContext';
@@ -83,11 +84,11 @@ export default function DailyTapeScreen({ onBack }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-terminal-black terminal-screen font-mono">
-      <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-terminal-black terminal-screen font-mono flex flex-col">
+      <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8 pr-16 sm:pr-0">
           <div>
             <div className="text-phosphor-dim text-xs tracking-widest mb-1">DAILY MARKET TAPE</div>
             <div className="text-phosphor text-xl font-bold">{today.date}</div>
@@ -139,7 +140,7 @@ export default function DailyTapeScreen({ onBack }: Props) {
           {/* Market data */}
           <div className="border-t border-phosphor/10 pt-4">
             <div className="text-phosphor-dim text-xs tracking-widest mb-3">MARKET DATA</div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {today.marketData.map((md, i) => (
                 <div key={i} className="text-center">
                   <div className="text-phosphor-dim text-xs">{md.indicator}</div>
@@ -156,7 +157,7 @@ export default function DailyTapeScreen({ onBack }: Props) {
         {phase !== 'REVEAL' && !alreadySubmitted && (
           <div>
             <div className="text-phosphor-dim text-xs tracking-widest mb-3">YOUR CALL</div>
-            <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
               {today.availableActions.map((ac) => (
                 <button
                   key={ac.code}
@@ -173,19 +174,6 @@ export default function DailyTapeScreen({ onBack }: Props) {
               ))}
             </div>
 
-            <button
-              onClick={handleCommit}
-              disabled={!selectedAction}
-              className={`cmd-button-primary w-full py-3 text-sm tracking-widest ${
-                !selectedAction ? 'opacity-40 cursor-not-allowed' : ''
-              }`}
-            >
-              SUBMIT DAILY CALL ▶
-            </button>
-
-            <div className="text-phosphor-dim text-xs text-center mt-3">
-              RESULT REVEALED AT CLOSE · ONE SUBMISSION PER DAY
-            </div>
           </div>
         )}
 
@@ -265,12 +253,29 @@ export default function DailyTapeScreen({ onBack }: Props) {
               </div>
             </div>
 
-            <div className="text-center text-phosphor-dim text-xs tracking-widest pt-2">
-              NEXT TAPE TOMORROW · {state.profile.alphaXp} ALPHA XP TOTAL
-            </div>
           </div>
         )}
       </div>
+
+      {/* One decision, one commit — the tape keeps the same action territory
+          as every arena checkpoint. */}
+      {phase !== 'REVEAL' && !alreadySubmitted ? (
+        <ActionZone
+          note="RESULT REVEALED AT CLOSE · ONE SUBMISSION PER DAY"
+          primary={{
+            label: 'SUBMIT DAILY CALL',
+            onClick: handleCommit,
+            disabled: !selectedAction,
+            disabledHint: 'SELECT YOUR CALL FIRST',
+            keyHint: '[ENTER]',
+          }}
+        />
+      ) : (
+        <ActionZone
+          note={`NEXT TAPE TOMORROW · ${state.profile.alphaXp} ALPHA XP TOTAL`}
+          primary={{ label: 'BACK TO HUB', onClick: onBack, keyHint: '[ENTER]' }}
+        />
+      )}
     </div>
   );
 }

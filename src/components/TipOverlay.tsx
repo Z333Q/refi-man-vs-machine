@@ -33,6 +33,7 @@ export default function TipOverlay() {
     <>
       {/* Backdrop */}
       <div
+        data-blocking-overlay
         className="fixed inset-0 z-[60] bg-terminal-black/55 font-mono"
         onClick={!tip.blocking ? () => handleTipAction('DISMISS') : undefined}
       />

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type CSSProperties } from 'react';
 import { GameProvider } from './context/GameContext';
 import { TipProvider } from './context/TipContext';
 import TipOverlay from './components/TipOverlay';
@@ -23,6 +23,7 @@ import MachineBuilderScreen from './screens/MachineBuilderScreen';
 import ProgressionHubScreen from './screens/ProgressionHubScreen';
 import TutorialScreen from './screens/TutorialScreen';
 import HelpScreen from './screens/HelpScreen';
+import OrientationGate from './components/ui/OrientationGate';
 
 type Screen =
   | 'boot'
@@ -200,7 +201,10 @@ function AppInner() {
         </div>
       )}
 
-      <div className={!isFullscreen ? 'pt-8' : ''}>
+      <div
+        className={!isFullscreen ? 'pt-8' : ''}
+        style={{ '--chrome-offset': !isFullscreen ? '2rem' : '0px' } as CSSProperties}
+      >
         {screen === 'landing' && (
           <TitleScreen
             onEnter={() => {
@@ -213,7 +217,9 @@ function AppInner() {
           />
         )}
         {screen === 'tutorial' && (
-          <TutorialScreen onComplete={handleTutorialComplete} />
+          <OrientationGate screenLabel="CONTROL TUTORIAL">
+            <TutorialScreen onComplete={handleTutorialComplete} />
+          </OrientationGate>
         )}
         {screen === 'progression-hub' && (
           <ProgressionHubScreen
@@ -246,11 +252,13 @@ function AppInner() {
           <MachineCardScreen onReturn={() => go('arena-briefing')} />
         )}
         {screen === 'core-loop' && (
-          <CoreLoopScreen
-            onComplete={() => go('autopsy')}
-            onBack={() => go('arena-briefing')}
-            onHelp={toggleHelp}
-          />
+          <OrientationGate screenLabel="COVID BLACK SWAN · RUN TERMINAL">
+            <CoreLoopScreen
+              onComplete={() => go('autopsy')}
+              onBack={() => go('arena-briefing')}
+              onHelp={toggleHelp}
+            />
+          </OrientationGate>
         )}
         {screen === 'machine-reveal' && (
           <MachineRevealScreen onContinue={() => go('checkpoint-score')} />
@@ -272,10 +280,12 @@ function AppInner() {
           />
         )}
         {screen === 'basket-writer' && (
-          <BasketWriterScreen
-            onBack={() => go('alpha-profile')}
-            onComplete={() => go('taco-unlock')}
-          />
+          <OrientationGate screenLabel="BASKET WRITER">
+            <BasketWriterScreen
+              onBack={() => go('alpha-profile')}
+              onComplete={() => go('taco-unlock')}
+            />
+          </OrientationGate>
         )}
         {screen === 'taco-unlock' && (
           <TacoUnlockScreen onEnter={() => go('taco-boss')} />
@@ -296,10 +306,12 @@ function AppInner() {
           />
         )}
         {screen === 'machine-builder' && (
-          <MachineBuilderScreen
-            onBack={() => go('progression-hub')}
-            onCompiled={() => go('arena-map')}
-          />
+          <OrientationGate screenLabel="MACHINE BUILDER">
+            <MachineBuilderScreen
+              onBack={() => go('progression-hub')}
+              onCompiled={() => go('arena-map')}
+            />
+          </OrientationGate>
         )}
       </div>
     </div>

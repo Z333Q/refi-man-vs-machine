@@ -1,3 +1,5 @@
+import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
+
 interface Props {
   onStart: () => void;
   onViewMachineCard: () => void;
@@ -8,7 +10,7 @@ export default function ArenaBriefingScreen({ onStart, onViewMachineCard, onBack
   return (
     <div className="terminal-screen min-h-screen flex flex-col">
       {/* Header */}
-      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between">
+      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between pr-16 sm:pr-6">
         <div className="font-mono text-xs text-phosphor-mid tracking-widest">
           REFI ALPHA // ARENA BRIEFING
         </div>
@@ -17,8 +19,8 @@ export default function ArenaBriefingScreen({ onStart, onViewMachineCard, onBack
         </button>
       </div>
 
-      <div className="flex-1 flex items-start justify-center px-8 py-12">
-        <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="flex-1 flex items-start justify-center px-4 py-6 sm:px-8 sm:py-12">
+        <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Left: Briefing */}
           <div className="space-y-6">
             <div>
@@ -123,30 +125,15 @@ export default function ArenaBriefingScreen({ onStart, onViewMachineCard, onBack
               <div className="font-mono text-xs text-phosphor-dim">22 DECISION POINTS</div>
             </div>
 
-            {/* Actions */}
-            <div className="space-y-3">
-              <button
-                onClick={onStart}
-                className="cmd-button cmd-button-primary w-full tracking-widest py-3 text-sm"
-              >
-                [ START RUN ]
-              </button>
-              <button
-                onClick={onViewMachineCard}
-                className="cmd-button w-full tracking-widest"
-              >
-                [ VIEW MACHINE CARD ]
-              </button>
-            </div>
           </div>
         </div>
       </div>
 
-      <div className="border-t border-phosphor/20 px-6 py-2 font-mono text-xs text-phosphor-dim">
-        <span className="nav-key">M</span> MACHINE CARD &nbsp;
-        <span className="nav-key">ESC</span> ARENA MAP &nbsp;
-        <span className="nav-key">ENTER</span> START RUN
-      </div>
+      <ActionZone
+        note="22 DECISIONS. DATES HIDDEN. NO RESTART ONCE COMMITTED."
+        primary={{ label: 'START RUN', onClick: onStart, keyHint: '[ENTER]' }}
+        secondaryRight={<SecondaryAction label="View machine card" onClick={onViewMachineCard} />}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ActionZone from '../components/ui/ActionZone';
 
 interface Props {
   onContinue: () => void;
@@ -20,8 +21,8 @@ export default function AutopsyScreen({ onContinue }: Props) {
   const [tab, setTab] = useState<Tab>('timeline');
 
   return (
-    <div className="terminal-screen min-h-screen flex flex-col">
-      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between">
+    <div className="terminal-screen screen-fit flex flex-col">
+      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between pr-16 sm:pr-6">
         <div className="font-mono text-xs text-phosphor-mid tracking-widest">
           REFI ALPHA // POST-RUN AUTOPSY
         </div>
@@ -276,14 +277,10 @@ export default function AutopsyScreen({ onContinue }: Props) {
         )}
       </div>
 
-      <div className="border-t border-phosphor/20 px-6 py-4 flex items-center justify-between">
-        <div className="font-mono text-xs text-phosphor-dim">
-          REFI IS BUILT AROUND THIS GAP: GOOD THESIS, CONSISTENT EXECUTION.
-        </div>
-        <button onClick={onContinue} className="cmd-button cmd-button-primary tracking-widest">
-          [ CONTINUE ]
-        </button>
-      </div>
+      <ActionZone
+        note="REFI IS BUILT AROUND THIS GAP: GOOD THESIS, CONSISTENT EXECUTION."
+        primary={{ label: 'CONTINUE', onClick: onContinue, keyHint: '[ENTER]' }}
+      />
     </div>
   );
 }

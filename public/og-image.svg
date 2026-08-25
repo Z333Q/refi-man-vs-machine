@@ -1,16 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" font-family="'JetBrains Mono','IBM Plex Mono',monospace">
-  <rect width="1200" height="630" fill="#050806" />
-  <!-- scanlines -->
-  <rect width="1200" height="630" fill="url(#scan)" opacity="0.08" />
+  <!-- Source of truth for public/og-image.png. Regenerate the PNG after any
+       edit here: see docs/OG-IMAGE.md. Sizes and letter-spacing are set to
+       survive monospace font fallback on machines without JetBrains Mono —
+       keep the two footer lines short or they clip the 1200x630 canvas. -->
   <defs>
     <pattern id="scan" width="1" height="4" patternUnits="userSpaceOnUse">
       <rect width="1" height="1" fill="#0CD4A0" />
     </pattern>
   </defs>
+  <rect width="1200" height="630" fill="#050806" />
+  <rect width="1200" height="630" fill="url(#scan)" opacity="0.08" />
   <rect x="40" y="40" width="1120" height="550" fill="none" stroke="#0CD4A0" stroke-opacity="0.25" />
   <text x="80" y="150" font-size="22" letter-spacing="8" fill="#27634E">REFI.TRADING // HISTORICAL REGIME SIMULATION</text>
   <text x="76" y="320" font-size="150" font-weight="700" fill="#79FFD7">REFI ALPHA</text>
   <text x="80" y="400" font-size="52" letter-spacing="6" fill="#0CD4A0">MAN vs MACHINE<tspan fill="#79FFD7">_</tspan></text>
   <text x="80" y="470" font-size="30" fill="#0A8F68">Can you beat the machine through a market crash?</text>
-  <text x="80" y="560" font-size="22" letter-spacing="4" fill="#27634E">NO ACCOUNT · 3 FREE DECISIONS · EDUCATIONAL GAME — NOT INVESTMENT ADVICE</text>
+  <text x="80" y="528" font-size="20" letter-spacing="3" fill="#27634E">NO ACCOUNT · 3 FREE DECISIONS</text>
+  <text x="80" y="562" font-size="20" letter-spacing="3" fill="#27634E">EDUCATIONAL GAME · NOT INVESTMENT ADVICE</text>
 </svg>

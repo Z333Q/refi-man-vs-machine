@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ActionZone from '../components/ui/ActionZone';
 
 interface Props {
   onSelectArena: (arena: string) => void;
@@ -129,11 +130,12 @@ function DifficultyBar({ level }: { level: number }) {
 
 export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
   const [selected, setSelected] = useState<ArenaNode>(ARENAS[1]);
+  const isSelectable = selected.state === 'active' || selected.state === 'available';
 
   return (
-    <div className="terminal-screen min-h-screen flex flex-col">
+    <div className="terminal-screen screen-fit flex flex-col">
       {/* Header */}
-      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between">
+      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between pr-16 sm:pr-6">
         <div className="font-mono text-xs text-phosphor-mid tracking-widest">
           REFI ALPHA // HISTORICAL REGIME NETWORK
         </div>
@@ -144,7 +146,7 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Network map */}
-        <div className="flex-1 p-8 overflow-y-auto">
+        <div className="hidden md:block flex-1 p-8 overflow-y-auto">
           <div className="max-w-lg space-y-0">
             {/* Main linear chain */}
             {ARENAS.map((arena, i) => (
@@ -232,7 +234,7 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
         </div>
 
         {/* Right: Arena detail */}
-        <div className="w-80 lg:w-96 border-l border-phosphor/20 p-6 flex flex-col gap-4 overflow-y-auto">
+        <div className="flex-1 md:flex-none w-full md:w-80 lg:w-96 md:border-l border-phosphor/20 p-4 sm:p-6 flex flex-col gap-4 overflow-y-auto">
           <div>
             <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-2">
               [{selected.code}] SELECTED
@@ -276,32 +278,21 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
             <div className="font-mono text-xs text-phosphor leading-5">{selected.lesson}</div>
           </div>
 
-          <div className="mt-auto space-y-2">
-            {selected.state === 'active' || selected.state === 'available' ? (
-              <button
-                onClick={() => onSelectArena(selected.id)}
-                className="cmd-button cmd-button-primary w-full tracking-widest"
-              >
-                [ ENTER ARENA ]
-              </button>
-            ) : (
-              <button className="cmd-button w-full tracking-widest opacity-40 cursor-not-allowed">
-                [ LOCKED ]
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
-      {/* Bottom nav */}
-      <div className="border-t border-phosphor/20 px-6 py-2 flex items-center gap-6">
-        <span className="font-mono text-xs text-phosphor-dim">
-          <span className="nav-key">F1</span> ARENAS &nbsp;
-          <span className="nav-key">F7</span> PROFILE &nbsp;
-          <span className="nav-key">F8</span> RECORDS &nbsp;
-          <span className="nav-key">F9</span> LEADERBOARD
-        </span>
-      </div>
+      {/* The arena selection above is the decision; entering it is the commit.
+          Locked arenas keep the button in place and say why. */}
+      <ActionZone
+        note={`SELECTED: ${selected.code} ${selected.label}`}
+        primary={{
+          label: isSelectable ? 'ENTER ARENA' : 'LOCKED',
+          onClick: () => onSelectArena(selected.id),
+          disabled: !isSelectable,
+          disabledHint: 'CLEAR THE PRECEDING ARENA TO UNLOCK',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

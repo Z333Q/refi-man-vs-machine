@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { BENCHMARK_SNAPSHOTS } from '../lib/progressionEngine';
 import type { BenchmarkSnapshot } from '../lib/gameTypes';
 import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
@@ -51,8 +52,8 @@ export default function MachineCardScreen({ onReturn }: Props) {
   const spy = BENCHMARK_SNAPSHOTS.spy;
 
   return (
-    <div className="terminal-screen min-h-screen flex flex-col font-mono">
-      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between">
+    <div className="terminal-screen screen-fit flex flex-col font-mono">
+      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between pr-16 sm:pr-6">
         <div className="text-xs text-phosphor-mid tracking-widest">
           REFI ALPHA // BENCHMARK TRANSPARENCY RECORD
         </div>
@@ -204,13 +205,13 @@ export default function MachineCardScreen({ onReturn }: Props) {
             </div>
           </div>
 
-          <div className="flex gap-4">
-            <button onClick={onReturn} className="cmd-button cmd-button-primary tracking-widest">
-              [ RETURN ]
-            </button>
-          </div>
         </div>
       </div>
+
+      <ActionZone
+        note="TRUST THE RECORD. NOT THE CLAIM."
+        primary={{ label: 'RETURN TO BRIEFING', onClick: onReturn, keyHint: '[ENTER]' }}
+      />
     </div>
   );
 }

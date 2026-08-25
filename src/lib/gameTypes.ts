@@ -112,6 +112,10 @@ export interface ActionBranch {
   actionCode: ActionCode;
   label: string;
   shortLabel: string;
+  // Fixed, authored turnover price of taking this stance. The run's turnover
+  // budget is a finite, deterministic resource: no estimate, no noise term.
+  // HOLD is always 0.
+  turnoverCost: number;
   branchEffect: BranchEffect;
   // Kept optional at the outer level for content authored before
   // `machineComparison` moved into BranchEffect (see BranchEffect note).
@@ -130,6 +134,10 @@ export interface CheckpointData {
     returnBias: number;        // Expected return contribution this checkpoint
     volatilityDelta: number;   // Volatility change
     correlationLevel: number;  // Cross-asset correlation 0-1
+    // Optional authored per-symbol returns for this checkpoint. Where absent,
+    // every position moves by the checkpoint return exactly. No noise term:
+    // run state must be reproducible from the decision sequence alone.
+    positionReturns?: Record<string, number>;
   };
   machineDecision: MachineDecision;
   availableActions: ActionBranch[];
@@ -153,6 +161,9 @@ export interface PortfolioState {
   value: number;
   cashWeight: number;
   positions: PortfolioPosition[];
+  // High-water mark. Ratchets up only; drawdown is measured against it so a
+  // recovered-then-fallen run reports the real decline, not decline-from-start.
+  peakValue: number;
   drawdown: number;
   volatility: number;
   sectorExposure: Record<string, number>;
@@ -177,6 +188,7 @@ export interface RunDecision {
   thesisCode?: ThesisCode;
   confidence?: number;
   modulesConsulted: ModuleCode[];
+  turnoverCost: number;
   scoreContribution: number;
   quality: DecisionQuality;
   behavioralFlags: BehavioralFlag[];
@@ -192,6 +204,9 @@ export interface RunState {
   totalCheckpoints: number;
   phase: RunPhase;
   portfolio: PortfolioState;
+  // Finite run-scoped turnover allowance. Non-HOLD stances are unavailable
+  // once turnoverUsed reaches it.
+  turnoverBudget: number;
   playerScore: number;
   machineScore: number;
   decisions: RunDecision[];

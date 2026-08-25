@@ -1,3 +1,4 @@
+import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 import { useGame } from '../context/GameContext';
 import { TERMINAL_MODULES, MACHINE_LADDER, getRankLabel, getXpToNextRank } from '../lib/progressionEngine';
 import { getArchetypeLabel } from '../lib/scoringEngine';
@@ -66,11 +67,11 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
   const archetypeLabel = getArchetypeLabel(profile.archetype);
 
   return (
-    <div className="min-h-screen bg-terminal-black terminal-screen font-mono">
-      <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-terminal-black terminal-screen font-mono flex flex-col">
+      <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
 
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="flex items-start justify-between mb-8 pr-16 sm:pr-0">
           <div>
             <div className="text-phosphor-dim text-xs tracking-widest mb-1">ALPHA PROFILE</div>
             <div className="text-phosphor text-xl font-bold">
@@ -86,7 +87,7 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Left column */}
           <div className="col-span-2 space-y-5">
@@ -198,32 +199,6 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
           {/* Right column */}
           <div className="space-y-5">
 
-            {/* Quick actions */}
-            <div className="terminal-panel p-5 space-y-3">
-              <div className="text-phosphor-dim text-xs tracking-widest mb-2">QUICK ACTIONS</div>
-
-              <button
-                onClick={onStartRun}
-                className="cmd-button-primary w-full py-3 text-xs tracking-widest"
-              >
-                START ARENA RUN ▶
-              </button>
-
-              <button
-                onClick={onDailyTape}
-                className="cmd-button w-full py-2.5 text-xs tracking-widest border border-phosphor/30 hover:border-phosphor/60 text-phosphor-mid hover:text-phosphor transition-colors"
-              >
-                DAILY TAPE ▶
-              </button>
-
-              <button
-                onClick={onMachineLadder}
-                className="cmd-button w-full py-2.5 text-xs tracking-widest border border-phosphor/20 hover:border-phosphor/40 text-phosphor-dim hover:text-phosphor-mid transition-colors"
-              >
-                MACHINE LADDER ▶
-              </button>
-            </div>
-
             {/* Current opponent */}
             {currentMachineOpponent && (
               <div className="terminal-panel-deep p-4">
@@ -291,6 +266,13 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
           </div>
         </div>
       </div>
+
+      <ActionZone
+        note={currentMachineOpponent ? `NEXT OPPONENT: ${currentMachineOpponent.label}` : undefined}
+        primary={{ label: 'START ARENA RUN', onClick: onStartRun, keyHint: '[ENTER]' }}
+        secondaryLeft={<SecondaryAction label="Daily tape" onClick={onDailyTape} />}
+        secondaryRight={<SecondaryAction label="Machine ladder" onClick={onMachineLadder} />}
+      />
     </div>
   );
 }

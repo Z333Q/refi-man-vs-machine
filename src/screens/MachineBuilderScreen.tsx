@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useState, useCallback } from 'react';
 import type {
   MachineModuleId,
@@ -221,7 +222,7 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
   const funnel = funnelCounts(config);
 
   return (
-    <div className="min-h-screen bg-terminal-black terminal-screen font-mono flex flex-col">
+    <div className="screen-fit bg-terminal-black terminal-screen font-mono flex flex-col">
 
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-phosphor/15 bg-terminal-deep/60 flex-shrink-0">
@@ -262,7 +263,7 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left: module list ── */}
-        <div className="w-56 flex-shrink-0 border-r border-phosphor/10 flex flex-col">
+        <div className="hidden md:flex w-56 flex-shrink-0 border-r border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest">ARCHITECTURE</div>
           </div>
@@ -309,35 +310,6 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
             })}
           </div>
 
-          {/* Compile button */}
-          <div className="border-t border-phosphor/15 p-4">
-            {compiling ? (
-              <div className="text-phosphor-dim text-xs tracking-widest text-center animate-pulse">
-                COMPILING...
-              </div>
-            ) : compiled ? (
-              <div className="text-paper-green text-xs tracking-widest text-center">
-                ✓ {compiledVersion} READY
-              </div>
-            ) : (
-              <button
-                onClick={handleCompile}
-                disabled={installedModules.size === 0}
-                className={`w-full py-2.5 text-xs tracking-widest border transition-colors ${
-                  installedModules.size === 0
-                    ? 'border-phosphor/10 text-phosphor-dim cursor-not-allowed'
-                    : 'border-phosphor text-phosphor hover:bg-phosphor/10 hover:text-phosphor-hot'
-                }`}
-              >
-                {allInstalled ? 'COMPILE ▶' : `COMPILE PARTIAL (${installedModules.size}/${MODULES.length})`}
-              </button>
-            )}
-            {installedModules.size === 0 && (
-              <div className="text-phosphor-dim text-xs text-center mt-1" style={{ fontSize: '9px' }}>
-                INSTALL AT LEAST ONE MODULE
-              </div>
-            )}
-          </div>
         </div>
 
         {/* ── Center: module editor / compile / schematic ── */}
@@ -421,7 +393,7 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
         </div>
 
         {/* ── Right: installed summary ── */}
-        <div className="w-52 flex-shrink-0 border-l border-phosphor/10 flex flex-col">
+        <div className="hidden xl:flex w-52 flex-shrink-0 border-l border-phosphor/10 flex-col">
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest">INSTALLED</div>
           </div>
@@ -463,6 +435,26 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Installing a module is the decision; compiling the version is the
+          commit — same territory as COMMIT DECISION in a run. */}
+      <ActionZone
+        variant="inline"
+        note={
+          compiling
+            ? 'COMPILING…'
+            : compiled
+              ? `✓ ${compiledVersion} READY`
+              : `${installedModules.size}/${MODULES.length} MODULES INSTALLED · ${versionString(versionNumber + 1)} NEXT`
+        }
+        primary={{
+          label: allInstalled ? 'COMPILE MACHINE' : `COMPILE PARTIAL (${installedModules.size}/${MODULES.length})`,
+          onClick: handleCompile,
+          disabled: installedModules.size === 0 || compiling,
+          disabledHint: compiling ? 'BUILD IN PROGRESS' : 'INSTALL AT LEAST ONE MODULE',
+          keyHint: '[ENTER]',
+        }}
+      />
     </div>
   );
 }

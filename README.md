@@ -2,7 +2,7 @@
 
 **ReFi Alpha (Man vs Machine)** — a historical U.S. equity strategy game and marketing property of ReFi Trading Inc.
 
-Vite + React + Supabase SPA. Historical arenas only; no current-market recommendations, no forward-looking signals, no brokerage. Deployed at `play.refi.trading`.
+Vite + React + Supabase SPA. Historical arenas only; no current-market recommendations, no forward-looking signals, no brokerage. Deployed at `game.refi.trading`.
 
 ## Specifications
 

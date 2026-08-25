@@ -1,3 +1,4 @@
+import ActionZone from '../components/ui/ActionZone';
 import { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { Spotlight } from '../components/onboarding/Spotlight';
@@ -210,7 +211,7 @@ export default function TutorialScreen({ onComplete }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-terminal-black font-mono flex flex-col">
+    <div className="screen-fit bg-terminal-black font-mono flex flex-col">
 
       {/* Top bar */}
       <div className="border-b border-phosphor/15 bg-terminal-black px-6 py-3 flex items-center justify-between">
@@ -434,15 +435,26 @@ export default function TutorialScreen({ onComplete }: Props) {
                   </div>
                 </div>
 
-                {(draftOrders.length > 0 || holdReason) && (
-                  <button className="cmd-button-primary w-full py-3 text-xs tracking-widest mt-4">
-                    COMMIT DECISION ▶ (TUTORIAL ONLY)
-                  </button>
-                )}
               </div>
             )}
           </div>
         </div>
+
+        {/* The tutorial teaches the control before it is used (§11): the
+            commit action sits in the same territory it will occupy in a real
+            run, disabled until there is something to commit. */}
+        <ActionZone
+          variant="inline"
+          note="TUTORIAL · NO CAPITAL AT RISK"
+          primary={{
+            label: 'COMMIT DECISION',
+            onClick: advance,
+            disabled: draftOrders.length === 0 && !holdReason,
+            disabledHint: 'DRAFT AN ORDER OR SELECT A HOLD REASON',
+            keyHint: '[ENTER]',
+            bindEnter: false, // the spotlight coach owns ENTER during the tutorial
+          }}
+        />
 
         {/* Machine comparison (shown in MACHINE step) */}
         {step.id === 'MACHINE' && (

@@ -1,4 +1,5 @@
 import { ResultCategoryLabel } from '../components/ResultCategoryLabel';
+import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 
 interface Props {
   onContinue: () => void;
@@ -30,7 +31,7 @@ export default function CheckpointScoreScreen({ onContinue, onViewAutopsy, resul
 
   return (
     <div className="terminal-screen min-h-screen flex flex-col">
-      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between">
+      <div className="border-b border-phosphor/20 px-6 py-3 flex items-center justify-between pr-16 sm:pr-6">
         <div className="font-mono text-xs text-phosphor-mid tracking-widest">
           REFI ALPHA // {isContinue ? 'CHECKPOINT 07 COMPLETE' : isVictory ? 'ARENA COMPLETE // MACHINE BEATEN' : 'ARENA COMPLETE'}
         </div>
@@ -110,7 +111,7 @@ export default function CheckpointScoreScreen({ onContinue, onViewAutopsy, resul
               <div className="space-y-3">
                 <div className="font-mono text-sm text-phosphor-mid leading-6">YOUR MARKET VIEW WAS OFTEN RIGHT.</div>
                 <div className="font-mono text-sm text-phosphor leading-6">THE MACHINE WAS MORE CONSISTENT.</div>
-                <div className="grid grid-cols-3 gap-3 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
                   {[
                     { label: 'PRIMARY GAP', value: 'RE-ENTRY DISCIPLINE' },
                     { label: 'SECONDARY GAP', value: 'TURNOVER' },
@@ -133,27 +134,22 @@ export default function CheckpointScoreScreen({ onContinue, onViewAutopsy, resul
               : 'IDEAS ARE EASY. CONSISTENCY IS HARD.'}
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-4 justify-end">
-            <button onClick={onViewAutopsy} className="cmd-button tracking-widest">
-              [ VIEW AUTOPSY ]
-            </button>
-            {isContinue ? (
-              <button onClick={onContinue} className="cmd-button cmd-button-primary tracking-widest">
-                [ NEXT CHECKPOINT ]
-              </button>
-            ) : isVictory ? (
-              <button onClick={onContinue} className="cmd-button cmd-button-primary tracking-widest">
-                [ ENTER NEXT ARENA ]
-              </button>
-            ) : (
-              <button onClick={onContinue} className="cmd-button cmd-button-primary tracking-widest">
-                [ RETRY HIDDEN PATH ]
-              </button>
-            )}
-          </div>
         </div>
       </div>
+
+      <ActionZone
+        note="THIS RESULT IS ALREADY PART OF YOUR RUN RECORD."
+        primary={{
+          label: isContinue
+            ? 'NEXT CHECKPOINT'
+            : isVictory
+              ? 'ENTER NEXT ARENA'
+              : 'RETRY HIDDEN PATH',
+          onClick: onContinue,
+          keyHint: '[ENTER]',
+        }}
+        secondaryRight={<SecondaryAction label="VIEW AUTOPSY" onClick={onViewAutopsy} />}
+      />
     </div>
   );
 }
