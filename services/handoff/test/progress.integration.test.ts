@@ -1,6 +1,7 @@
 import { test, before, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { loadProgress } from "../src/progress.js";
 
@@ -22,10 +23,12 @@ import { loadProgress } from "../src/progress.js";
 // Skipped when DATABASE_URL is unset, so the ordinary unit suite stays offline.
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const SCHEMA = new URL(
+// fileURLToPath, not URL.pathname: the latter percent-encodes spaces and this
+// repository lives under a path that has them.
+const SCHEMA = fileURLToPath(new URL(
   "../../../db/migrations/0001_founding_schema.sql",
   import.meta.url,
-).pathname;
+));
 
 describe("loadProgress against the founding schema", {
   skip: DATABASE_URL ? false : "DATABASE_URL not set",
@@ -46,18 +49,20 @@ describe("loadProgress against the founding schema", {
       INSERT INTO player_profiles (session_id, machine_beats, machine_attempts)
       VALUES ('ses_player', 3, 12), ('ses_other', 99, 99)`);
 
+    // The client mints run ids and supplies volatility; the schema deliberately
+    // has no default for either, so this fixture writes what a real client writes.
     await db.query(`
       INSERT INTO arena_runs
-        (session_id, arena_id, machine_id, state, total_checkpoints,
-         portfolio_value, cash_weight, seed)
+        (id, session_id, arena_id, machine_id, state, total_checkpoints,
+         portfolio_value, cash_weight, volatility, seed)
       VALUES
-        ('ses_player', 'covid_black_swan', 'refi_rules', 'COMPLETED', 22, 100000, 0.2, 1),
-        ('ses_player', 'recovery_trap',    'refi_rules', 'COMPLETED', 6,  100000, 0.2, 2),
+        ('run_a1b2c3d4e5f60718293a4b01', 'ses_player', 'covid_black_swan', 'refi_rules', 'COMPLETED', 22, 100000, 0.2, 0.16, 1),
+        ('run_a1b2c3d4e5f60718293a4b02', 'ses_player', 'recovery_trap',    'refi_rules', 'COMPLETED', 6,  100000, 0.2, 0.16, 2),
         -- A second run of an arena already completed: the query is DISTINCT.
-        ('ses_player', 'covid_black_swan', 'refi_rules', 'COMPLETED', 22, 100000, 0.2, 3),
+        ('run_a1b2c3d4e5f60718293a4b03', 'ses_player', 'covid_black_swan', 'refi_rules', 'COMPLETED', 22, 100000, 0.2, 0.16, 3),
         -- Still in flight, so not completed.
-        ('ses_player', 'inflation_shift',  'refi_rules', 'ACTIVE',    8,  100000, 0.2, 4),
-        ('ses_other',  'banking_stress',   'refi_rules', 'COMPLETED', 8,  100000, 0.2, 5)`);
+        ('run_a1b2c3d4e5f60718293a4b04', 'ses_player', 'inflation_shift',  'refi_rules', 'ACTIVE',    8,  100000, 0.2, 0.16, 4),
+        ('run_a1b2c3d4e5f60718293a4b05', 'ses_other',  'banking_stress',   'refi_rules', 'COMPLETED', 8,  100000, 0.2, 0.16, 5)`);
 
     await db.query(`
       INSERT INTO module_unlocks (session_id, module_code)
