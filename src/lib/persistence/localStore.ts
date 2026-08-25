@@ -2,6 +2,8 @@ import type {
   PersistencePort, ProfileSnapshot, TipRecord, DailyTapeSubmission,
 } from './types';
 import type { EventEnvelope } from '../eventBuffer';
+import { listRunRecords, applyRemoteRun } from '../runRecord';
+import { listMachineVersions, applyRemoteMachineVersion } from '../machineVersions';
 
 // ─── Local persistence ────────────────────────────────────────────────────────
 //
@@ -79,6 +81,34 @@ export const localStore: PersistencePort = {
     const all = read<Record<string, DailyTapeSubmission>>(scoped(TAPE_KEY, sessionId)) ?? {};
     all[submission.tapeDate] = submission;
     write(scoped(TAPE_KEY, sessionId), all);
+  },
+
+  // Run Records and machine versions live in their own synchronous stores
+  // (runRecord.ts, machineVersions.ts): the Bronze gate and the builder read
+  // them in render, so their durability cannot wait on a promise. These port
+  // methods are the async view over the same data, not a second copy of it.
+  // The stores predate per-session scoping and keep their unscoped keys; the
+  // sessionId parameter is for the remote side of the port, which does need
+  // to say whose stream it is asking about.
+
+  async loadRunRecords() {
+    return { kind: 'VALUE' as const, value: listRunRecords() };
+  },
+
+  async saveRunRecord(_sessionId, record) {
+    // Idempotent: a record the store already holds is kept (local wins), so
+    // routing a save through the port never overwrites the synchronous store.
+    applyRemoteRun(record);
+    return { kind: 'VALUE' as const, value: null };
+  },
+
+  async loadMachineVersions() {
+    return { kind: 'VALUE' as const, value: listMachineVersions() };
+  },
+
+  async saveMachineVersion(_sessionId, record) {
+    applyRemoteMachineVersion(record);
+    return { kind: 'VALUE' as const, value: null };
   },
 
   async deliverEvent(_envelope: EventEnvelope) {

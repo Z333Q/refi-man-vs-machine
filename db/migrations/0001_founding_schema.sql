@@ -200,7 +200,10 @@ CREATE TABLE daily_tape_submissions (
 -- ─── Runs and decisions ──────────────────────────────────────────────────────
 
 CREATE TABLE arena_runs (
-  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- The client mints the run id (run_<24 hex>) when the run begins, and the Run
+  -- Record, telemetry envelope, and this row all carry the same string. A
+  -- server-side uuid default would mint a second identity for the same run.
+  id                 text PRIMARY KEY,
   session_id         text NOT NULL REFERENCES game_sessions(id) ON DELETE CASCADE,
   arena_id           text NOT NULL,
   machine_id         text NOT NULL,
@@ -211,23 +214,32 @@ CREATE TABLE arena_runs (
   portfolio_value    numeric(18,4) NOT NULL,
   cash_weight        numeric(8,6) NOT NULL,
   drawdown           numeric(8,6) NOT NULL DEFAULT 0,
+  -- No default: zero volatility is a real claim, not a neutral missing value.
+  -- Even the canonical starting portfolio is non-zero here, so a writer that
+  -- omits volatility must fail rather than silently manufacture an audit fact.
+  volatility         numeric(8,6) NOT NULL,
   turnover_used      numeric(8,6) NOT NULL DEFAULT 0,
   player_score       numeric(6,2),
   machine_score      numeric(6,2),
   result             text,
   critical_failure   boolean NOT NULL DEFAULT false,
+  -- Which checkpoint breached the risk budget; null when the run never failed.
+  critical_failure_checkpoint integer,
   behavioral_flags   jsonb NOT NULL DEFAULT '[]'::jsonb,
   -- The determinism anchor: a run replays from its seed (§65).
   seed               bigint NOT NULL,
   started_at         timestamptz NOT NULL DEFAULT now(),
-  completed_at       timestamptz
+  completed_at       timestamptz,
+  -- When this mirror row last changed. Ordering and audit metadata only:
+  -- conflict resolution is local-authoritative, never a timestamp comparison.
+  updated_at         timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX arena_runs_session_idx ON arena_runs (session_id, started_at DESC);
 
 CREATE TABLE checkpoint_decisions (
   id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  run_id                 uuid NOT NULL REFERENCES arena_runs(id) ON DELETE CASCADE,
+  run_id                 text NOT NULL REFERENCES arena_runs(id) ON DELETE CASCADE,
   checkpoint_sequence    integer NOT NULL,
   action_code            text NOT NULL,
   thesis_code            text,
@@ -241,7 +253,11 @@ CREATE TABLE checkpoint_decisions (
   machine_action_code    text,
   machine_reasoning      text[],
   behavioral_flags       text[] NOT NULL DEFAULT '{}',
-  committed_at           timestamptz NOT NULL DEFAULT now(),
+  turnover_cost          numeric(8,6),
+  -- Wall-clock commit time, stamped by the client when the player commits.
+  -- Null for decisions recorded before commit times were captured; a server
+  -- default would fabricate a commit time the player never made.
+  committed_at           timestamptz,
   -- The session is reachable through the run; storing it again would be a
   -- second source of truth for the same fact.
   CONSTRAINT checkpoint_decisions_unique UNIQUE (run_id, checkpoint_sequence)

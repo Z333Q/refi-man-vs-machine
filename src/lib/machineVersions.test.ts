@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import { DEFAULT_MACHINE_CONFIG, DEFAULT_GUARDRAILS } from './gameTypes';
 import type { MachineConfig, MachineModuleId } from './gameTypes';
 import {
-  MACHINE_RECORD_VERSION, MAX_STORED_VERSIONS, clearMachineVersions, flushableRow,
-  getMachineVersion, isUnchangedFromLatest, latestMachineVersion, listMachineVersions,
-  lockMachineVersion, machineBuildHash, nextVersionNumber, saveMachineVersion,
-  toPlayerMachine, versionLabel,
+  MACHINE_RECORD_VERSION, MAX_STORED_VERSIONS, applyRemoteMachineVersion,
+  clearMachineVersions, getMachineVersion, isUnchangedFromLatest,
+  latestMachineVersion, listMachineVersions, lockMachineVersion,
+  machineBuildHash, nextVersionNumber, saveMachineVersion,
+  setMachineVersionMirror, toPlayerMachine, versionLabel,
 } from './machineVersions';
 
 // A machine is meant to accumulate: §18 ends the builder tutorial on "EVERY
@@ -197,18 +198,106 @@ test('a stored version converts to the machine the rest of the game passes aroun
   assert.deepEqual(machine.installedModules, rec.installedModules);
 });
 
-test('the flushable row matches player_machine_versions and names no owner', () => {
+test('the serialized record names no identity: no alpha_player_id, no session_id, no owner', () => {
   clearMachineVersions();
   const rec = saveMachineVersion('M', cfg(), ALL_MODULES, '2026-01-01T00:00:00.000Z');
-  const row = flushableRow(rec, 'alp_123');
+  const wire = JSON.stringify(rec);
+  for (const field of ['alpha_player_id', 'session_id', 'owner_id', 'alphaPlayerId', 'sessionId']) {
+    assert.ok(!wire.includes(field),
+      `${field} must not travel in the record; identity is the transport header's job`);
+  }
+});
 
-  assert.equal(row.machine_name, 'M');
-  assert.equal(row.version, 1);
-  assert.equal(row.build_hash, rec.buildHash);
-  assert.equal(row.alpha_player_id, 'alp_123');
-  assert.equal(row.locked_at, null);
-  assert.ok(row.configuration_json);
-  assert.ok(!('owner_id' in row), 'owner_id defaults to auth.uid() server-side');
+// ─── Remote mirror ────────────────────────────────────────────────────────────
+
+test('a save is announced to the mirror, and a failing mirror never reaches the compile', () => {
+  clearMachineVersions();
+  const announced: string[] = [];
+  setMachineVersionMirror(r => { announced.push(`${r.machineName} v${r.version}`); });
+  saveMachineVersion('M', cfg(), ALL_MODULES, '2026-01-01T00:00:00.000Z');
+  assert.deepEqual(announced, ['M v1']);
+
+  setMachineVersionMirror(() => { throw new Error('mirror down'); });
+  assert.doesNotThrow(() =>
+    saveMachineVersion('M', cfg({ signal: 'RF_RL_PIPELINE' }), ALL_MODULES));
+  setMachineVersionMirror(null);
+});
+
+test('locking a version is announced to the mirror', () => {
+  clearMachineVersions();
+  const announced: Array<string | null> = [];
+  saveMachineVersion('M', cfg(), ALL_MODULES, '2026-01-01T00:00:00.000Z');
+  setMachineVersionMirror(r => { announced.push(r.lockedAt); });
+  lockMachineVersion('M', 1, '2026-01-02T00:00:00.000Z');
+  assert.deepEqual(announced, ['2026-01-02T00:00:00.000Z']);
+  setMachineVersionMirror(null);
+});
+
+test('a remote version fills a local gap and nothing else', () => {
+  clearMachineVersions();
+  const rec = saveMachineVersion('M', cfg(), ALL_MODULES, '2026-01-01T00:00:00.000Z');
+  clearMachineVersions();
+
+  assert.equal(applyRemoteMachineVersion(rec).kind, 'ADOPTED');
+  assert.equal(getMachineVersion('M', 1)?.buildHash, rec.buildHash);
+  // Offering it again finds local already holds it: local is kept.
+  assert.equal(applyRemoteMachineVersion(rec).kind, 'LOCAL_KEPT');
+});
+
+test('same name and version with a different build hash is refused as a conflict', () => {
+  clearMachineVersions();
+  const local = saveMachineVersion('M', cfg(), ALL_MODULES, '2026-01-01T00:00:00.000Z');
+  const otherConfig = cfg({ signal: 'RF_RL_PIPELINE' });
+  const remote = {
+    ...local,
+    config: otherConfig,
+    buildHash: machineBuildHash(otherConfig, ALL_MODULES),
+  };
+
+  const outcome = applyRemoteMachineVersion(remote);
+  assert.equal(outcome.kind, 'CONFLICT');
+  assert.equal(getMachineVersion('M', 1)?.buildHash, local.buildHash,
+    'local must be kept; a version number that meant two builds poisons the record');
+  if (outcome.kind === 'CONFLICT') {
+    assert.equal(outcome.remote.buildHash, remote.buildHash,
+      'the conflicting remote build is preserved in the outcome, not dropped');
+  }
+});
+
+test('same build with diverging metadata: no field merge, local unchanged, divergence reported', () => {
+  clearMachineVersions();
+  const local = saveMachineVersion('M', cfg(), ALL_MODULES, '2026-01-01T00:00:00.000Z');
+  assert.equal(local.lockedAt, null);
+
+  // The same build as seen by another device: locked there, stress-tested there.
+  const remote = {
+    ...local,
+    lockedAt: '2026-01-02T00:00:00.000Z',
+    arenasCompleted: ['covid_black_swan'],
+  };
+
+  const outcome = applyRemoteMachineVersion(remote);
+  assert.equal(outcome.kind, 'METADATA_DIVERGENCE');
+
+  const kept = getMachineVersion('M', 1);
+  assert.ok(kept);
+  assert.equal(kept.lockedAt, null,
+    'a lockedAt must not be adopted from remote; that would be a field merge');
+  assert.deepEqual(kept.arenasCompleted, [],
+    'arenasCompleted must not be unioned; anonymous-session persistence has no merge authority');
+  if (outcome.kind === 'METADATA_DIVERGENCE') {
+    assert.equal(outcome.remote.lockedAt, '2026-01-02T00:00:00.000Z',
+      'the diverging remote record is preserved in the outcome, not dropped');
+  }
+});
+
+test('a remote record whose hash does not match its own contents is refused', () => {
+  clearMachineVersions();
+  const rec = saveMachineVersion('M', cfg(), ALL_MODULES, '2026-01-01T00:00:00.000Z');
+  clearMachineVersions();
+  const tampered = { ...rec, buildHash: '0000:0000:0000' };
+  assert.equal(applyRemoteMachineVersion(tampered).kind, 'REFUSED');
+  assert.equal(getMachineVersion('M', 1), null, 'a refused record must not be stored');
 });
 
 test('the latest version is what a returning builder reopens', () => {

@@ -9,7 +9,7 @@ import {
   reducer, mintSeed, type GameState,
 } from './gameReducer';
 import { getSessionId } from '../lib/identity';
-import { persistence } from '../lib/persistence';
+import { persistence, startPersistenceSync } from '../lib/persistence';
 import {
   emitEvent, beginRunTelemetry, endRunTelemetry, setRunTelemetryId, covidCrisisDayToISO,
 } from '../lib/events';
@@ -83,6 +83,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     };
 
     void load();
+
+    // Background mirror sync for runs and machine versions. Deliberately not
+    // awaited and gating nothing: resume and the Bronze gate read the local
+    // stores synchronously, and anything the mirror holds that this device
+    // does not shows up on a later read.
+    startPersistenceSync();
   }, []);
 
   // Persist profile changes.

@@ -9,9 +9,9 @@ import type { RunState } from './gameTypes';
 import { getCheckpoint } from './arenas';
 import './arenaIndex';
 import {
-  MAX_STORED_RUNS, RUN_RECORD_VERSION, clearRunRecords, flushableRows,
+  MAX_STORED_RUNS, RUN_RECORD_VERSION, applyRemoteRun, clearRunRecords,
   getRunRecord, latestFinishedRun, latestUnfinishedRun, listRunRecords,
-  projectRun, saveRun, replayRun, replayMatchesRecord,
+  projectRun, saveRun, setRunRecordMirror, replayRun, replayMatchesRecord,
 } from './runRecord';
 import { bestAndWorst, flagTallies, headline, outcomes, scoreAttribution } from './runAnalysis';
 
@@ -153,14 +153,60 @@ test('a failed write never throws into the run', () => {
   storage.failWrites(false);
 });
 
-test('records from an older shape are dropped, not half-read', () => {
+test('records from an unknown shape are dropped, not half-read', () => {
   clearRunRecords();
   localStorage.setItem(
     'refi_run_records',
-    JSON.stringify([{ recordVersion: RUN_RECORD_VERSION - 1, runId: 'ancient', decisions: [] }]),
+    JSON.stringify([
+      { recordVersion: 0, runId: 'ancient', decisions: [] },
+      { recordVersion: RUN_RECORD_VERSION + 1, runId: 'future', decisions: [] },
+    ]),
   );
   assert.equal(listRunRecords().length, 0);
   assert.equal(getRunRecord('ancient'), null);
+  assert.equal(getRunRecord('future'), null);
+});
+
+test('a legacy v1 record survives migration with commit times honestly null', () => {
+  clearRunRecords();
+  // A v2 record with the v1 shape restored: version 1, no committedAt anywhere.
+  const rec = projectRun(runWith(2), '2026-01-01T00:00:00.000Z');
+  assert.ok(rec);
+  const v1 = {
+    ...rec,
+    recordVersion: 1,
+    decisions: rec.decisions.map(({ committedAt: _committedAt, ...d }) => d),
+  };
+  localStorage.setItem('refi_run_records', JSON.stringify([v1]));
+
+  const back = getRunRecord(rec.runId);
+  assert.ok(back, 'a v1 record must migrate, not vanish');
+  assert.equal(back.recordVersion, RUN_RECORD_VERSION);
+  assert.equal(back.decisions.length, 2);
+  for (const d of back.decisions) {
+    assert.equal(d.committedAt, null,
+      'a migration must never invent the timestamp it is missing');
+  }
+});
+
+test('re-saving a migrated run keeps null commit times null', () => {
+  clearRunRecords();
+  const live = runWith(2);
+  const rec = projectRun(live, '2026-01-01T00:00:00.000Z');
+  assert.ok(rec);
+  const v1 = {
+    ...rec,
+    recordVersion: 1,
+    decisions: rec.decisions.map(({ committedAt: _committedAt, ...d }) => d),
+  };
+  localStorage.setItem('refi_run_records', JSON.stringify([v1]));
+
+  const saved = saveRun(live, '2026-06-01T00:00:00.000Z');
+  assert.ok(saved);
+  for (const d of saved.decisions) {
+    assert.equal(d.committedAt, null,
+      're-projection must not stamp a commit time onto a decision that never had one');
+  }
 });
 
 test('corrupt storage reads as empty rather than throwing', () => {
@@ -169,30 +215,107 @@ test('corrupt storage reads as empty rather than throwing', () => {
   assert.deepEqual(listRunRecords(), []);
 });
 
-// ─── Forward path to Supabase ─────────────────────────────────────────────────
+// ─── Commit times ─────────────────────────────────────────────────────────────
 
-test('flushable rows match the arena_runs / checkpoint_decisions columns', () => {
+test('new decisions are stamped with the write time, and the stamp never moves', () => {
+  clearRunRecords();
+  const one = runWith(1);
+  const first = saveRun(one, '2026-01-01T00:00:00.000Z');
+  assert.ok(first);
+  assert.equal(first.decisions[0].committedAt, '2026-01-01T00:00:00.000Z');
+
+  // The run grows by one decision; the earlier decision keeps its time.
+  const two = runWith(2);
+  const second = saveRun(two, '2026-02-01T00:00:00.000Z');
+  assert.ok(second);
+  assert.equal(second.decisions[0].committedAt, '2026-01-01T00:00:00.000Z',
+    'a commit time, once recorded, is fixed');
+  assert.equal(second.decisions[1].committedAt, '2026-02-01T00:00:00.000Z');
+});
+
+// ─── Wire shape ───────────────────────────────────────────────────────────────
+
+test('the serialized record names no identity: no session_id, no owner', () => {
   clearRunRecords();
   const rec = saveRun(runWith(2), '2026-01-01T00:00:00.000Z');
   assert.ok(rec);
-  const { run, decisions } = flushableRows(rec, 'ses_abc');
-
-  assert.equal(run.id, 'run_test_0001');
-  assert.equal(run.session_id, 'ses_abc');
-  assert.equal(run.seed, rec.seed);
-  assert.equal(run.arena_id, 'covid_black_swan');
-  assert.equal(decisions.length, 2);
-  assert.equal(decisions[0].run_id, 'run_test_0001');
-  assert.equal(decisions[0].checkpoint_sequence, 1);
+  const wire = JSON.stringify(rec);
+  for (const field of ['session_id', 'sessionId', 'owner_id', 'alpha_player_id', 'alphaPlayerId']) {
+    assert.ok(!wire.includes(field),
+      `${field} must not travel in the record; identity is the transport header's job`);
+  }
 });
 
-test('the client never names an owner: owner_id defaults to auth.uid() server-side', () => {
+// ─── Remote mirror ────────────────────────────────────────────────────────────
+
+test('a save is announced to the mirror, and a failing mirror never reaches the run', () => {
   clearRunRecords();
-  const rec = saveRun(runWith(1), '2026-01-01T00:00:00.000Z');
+  const announced: string[] = [];
+  setRunRecordMirror(r => { announced.push(r.runId); });
+  saveRun(runWith(1), '2026-01-01T00:00:00.000Z');
+  assert.deepEqual(announced, ['run_test_0001']);
+
+  setRunRecordMirror(() => { throw new Error('mirror down'); });
+  assert.doesNotThrow(() => saveRun(runWith(2)));
+  setRunRecordMirror(null);
+});
+
+test('a remote run fills a local gap; a run local holds is never overwritten', () => {
+  clearRunRecords();
+  const rec = projectRun(runWith(2), '2026-01-01T00:00:00.000Z');
   assert.ok(rec);
-  const { run, decisions } = flushableRows(rec, 'ses_abc');
-  assert.ok(!('owner_id' in run), 'a client-supplied owner would defeat owner-scoped RLS');
-  assert.ok(decisions.every(d => !('owner_id' in d)));
+
+  assert.equal(applyRemoteRun(rec).kind, 'ADOPTED');
+  assert.equal(getRunRecord(rec.runId)?.decisions.length, 2);
+
+  // The identical record again: local is authoritative and untouched.
+  assert.equal(applyRemoteRun(rec).kind, 'LOCAL_KEPT');
+
+  // A differing record for the same run id: conflict, local kept, remote
+  // preserved in the outcome. Timestamps play no part in the decision.
+  const differing = { ...rec, playerScore: rec.playerScore + 10, updatedAt: '2030-01-01T00:00:00.000Z' };
+  const outcome = applyRemoteRun(differing);
+  assert.equal(outcome.kind, 'CONFLICT');
+  assert.equal(getRunRecord(rec.runId)?.playerScore, rec.playerScore,
+    'a newer timestamp must not buy the remote record the win');
+  if (outcome.kind === 'CONFLICT') {
+    assert.equal(outcome.remote.playerScore, rec.playerScore + 10);
+  }
+});
+
+test('updatedAt alone is not a difference: it is audit metadata, not content', () => {
+  clearRunRecords();
+  const rec = projectRun(runWith(1), '2026-01-01T00:00:00.000Z');
+  assert.ok(rec);
+  assert.equal(applyRemoteRun(rec).kind, 'ADOPTED');
+  const echo = { ...rec, updatedAt: '2027-01-01T00:00:00.000Z' };
+  assert.equal(applyRemoteRun(echo).kind, 'LOCAL_KEPT',
+    'a mirror echo with a later updatedAt is the same record, not a conflict');
+});
+
+test('a malformed or unknown-version remote payload is refused, not stored', () => {
+  clearRunRecords();
+  const bad = { runId: 'run_bad', recordVersion: 99, decisions: [] } as never;
+  assert.equal(applyRemoteRun(bad).kind, 'REFUSED');
+  assert.equal(getRunRecord('run_bad'), null);
+  const notARecord = { recordVersion: RUN_RECORD_VERSION } as never;
+  assert.equal(applyRemoteRun(notARecord).kind, 'REFUSED');
+});
+
+test('a remote v1 record is migrated on adoption, commit times honestly null', () => {
+  clearRunRecords();
+  const rec = projectRun(runWith(1), '2026-01-01T00:00:00.000Z');
+  assert.ok(rec);
+  const v1 = {
+    ...rec,
+    recordVersion: 1,
+    decisions: rec.decisions.map(({ committedAt: _committedAt, ...d }) => d),
+  } as never;
+  assert.equal(applyRemoteRun(v1).kind, 'ADOPTED');
+  const back = getRunRecord(rec.runId);
+  assert.ok(back);
+  assert.equal(back.recordVersion, RUN_RECORD_VERSION);
+  assert.equal(back.decisions[0].committedAt, null);
 });
 
 // ─── Analysis ─────────────────────────────────────────────────────────────────
