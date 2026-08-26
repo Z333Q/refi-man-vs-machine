@@ -38,18 +38,29 @@ export interface RefiRemote {
   deliverEvent(envelope: EventEnvelope): Promise<boolean>;
 }
 
-export function makeRefiRemote(baseUrl: string): RefiRemote {
+/** Default bound on any single remote request. A request that never answers
+ *  must not pin its mirror queue forever. */
+export const DEFAULT_REMOTE_TIMEOUT_MS = 10_000;
+
+export function makeRefiRemote(
+  baseUrl: string,
+  options?: { timeoutMs?: number },
+): RefiRemote {
   const root = baseUrl.replace(/\/+$/, '');
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_REMOTE_TIMEOUT_MS;
 
   async function call<T>(
     path: string,
     sessionId: string,
     init?: RequestInit,
   ): Promise<RemoteResult<T>> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => { controller.abort(); }, timeoutMs);
     let res: Response;
     try {
       res = await fetch(`${root}${path}`, {
         ...init,
+        signal: controller.signal,
         headers: {
           'content-type': 'application/json',
           'x-alpha-session': sessionId,
@@ -57,9 +68,11 @@ export function makeRefiRemote(baseUrl: string): RefiRemote {
         },
       });
     } catch {
-      // Offline, blocked, DNS, timeout. The one thing this is not is an
-      // empty account.
+      // Offline, blocked, DNS, or the timeout above aborted it. The one
+      // thing this is not is an empty account.
       return { kind: 'NETWORK_ERROR' };
+    } finally {
+      clearTimeout(timer);
     }
     if (res.status === 404) return { kind: 'NOT_FOUND' };
     if (!res.ok) return { kind: 'HTTP_ERROR', status: res.status };
@@ -135,15 +148,20 @@ export function makeRefiRemote(baseUrl: string): RefiRemote {
     },
 
     async deliverEvent(envelope: EventEnvelope) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => { controller.abort(); }, timeoutMs);
       try {
         const res = await fetch(`${root}/v1/events`, {
           method: 'POST',
+          signal: controller.signal,
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(envelope),
         });
         return res.ok;
       } catch {
         return false;
+      } finally {
+        clearTimeout(timer);
       }
     },
   };

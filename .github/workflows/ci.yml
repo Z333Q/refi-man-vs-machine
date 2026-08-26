@@ -208,6 +208,8 @@ jobs:
           # db/migrations/0001_founding_schema.sql themselves.
           DATABASE_URL: postgresql://refi:refi@localhost:5432/refi_persistence_test
         run: npm test
+      - name: Build
+        run: npm run build
 
   security:
     name: Security scans (§3.3)

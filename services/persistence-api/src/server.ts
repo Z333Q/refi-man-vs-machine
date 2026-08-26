@@ -27,9 +27,10 @@ const PORT = Number(process.env['PORT'] ?? 8080);
 // Default to the game origin, not "*": the API is public, so CORS is one of
 // the few browser-side abuse dampeners it has.
 const ALLOWED_ORIGIN = process.env['ALLOWED_ORIGIN'] ?? 'https://game.refi.trading';
-// Run records with a full decision history are the largest payload; 22
-// decisions fit comfortably in 64 KiB with an order of magnitude to spare.
-const MAX_BODY_BYTES = 64 * 1024;
+// Run records with a full decision history are the largest payload; the
+// ordered cap leaves a maximum 22-decision canonical run several multiples
+// of headroom.
+const MAX_BODY_BYTES = 256 * 1024;
 
 // Per-IP rate limit: fixed window, in-memory (per instance — a first layer;
 // a distributed limiter is the scale follow-on). More generous than the mint

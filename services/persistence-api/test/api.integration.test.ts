@@ -6,12 +6,13 @@ import type { AddressInfo } from 'node:net';
 import { Pool } from 'pg';
 
 import { makeServer } from '../src/server.js';
-import { runFixture, machineFixture, profileFixture } from './fixtures.js';
+import { runFixture, machineFixture, profileFixture, sid } from './fixtures.js';
 
 // Integration test: every endpoint, driven over real HTTP against the real
 // founding schema. The unit tests prove the validators; only this proves that
 // a domain object survives the trip through PostgreSQL and comes back as the
-// same domain object — which is the entire job of this service.
+// same domain object — and that the mirror's two laws (session boundary,
+// monotonic history) hold where they matter, in the database.
 //
 // Skipped when DATABASE_URL is unset, so the ordinary unit suite stays offline.
 
@@ -58,6 +59,15 @@ describe('persistence-api against the founding schema', {
     });
   }
 
+  function put(path: string, sessionId: string, body: unknown) {
+    return call(path, sessionId, { method: 'PUT', body: JSON.stringify(body) });
+  }
+  function post(path: string, sessionId: string, body: unknown) {
+    return call(path, sessionId, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  // ─── Session boundary ───────────────────────────────────────────────────────
+
   test('health answers without a database', async () => {
     const res = await fetch(`${base}/healthz`);
     assert.equal(res.status, 200);
@@ -68,92 +78,164 @@ describe('persistence-api against the founding schema', {
     assert.equal(res.status, 400);
   });
 
+  test('an unknown session reads 404; an existing anonymous session with nothing reads 200 []', async () => {
+    assert.equal((await call('/v1/runs', sid(0x10))).status, 404,
+      'a session the server has never seen has nothing, not an empty list');
+    assert.equal((await call('/v1/machine-versions', sid(0x10))).status, 404);
+
+    // A write creates the anonymous session; from then on emptiness is real.
+    assert.equal((await put('/v1/guidance', sid(0x10), { mode: 'FULL' })).status, 204);
+    const runs = await call('/v1/runs', sid(0x10));
+    assert.equal(runs.status, 200);
+    assert.deepEqual(await runs.json(), []);
+    const machines = await call('/v1/machine-versions', sid(0x10));
+    assert.equal(machines.status, 200);
+    assert.deepEqual(await machines.json(), []);
+  });
+
+  test('a session linked to an account is refused for both reads and writes', async () => {
+    // A linked session: the boundary this API must never cross. Operations on
+    // it belong to a verified principal, which x-alpha-session is not.
+    const linked = sid(0x11);
+    const { rows: [user] } = await pool.query(
+      `INSERT INTO app_users DEFAULT VALUES RETURNING id`);
+    await pool.query(
+      `INSERT INTO game_sessions (id, user_id, linked_at) VALUES ($1, $2, now())`,
+      [linked, user.id]);
+
+    assert.equal((await call('/v1/runs', linked)).status, 403);
+    assert.equal((await call('/v1/progress', linked)).status, 403);
+    assert.equal((await put('/v1/progress', linked, profileFixture())).status, 403);
+    assert.equal((await put(`/v1/runs/${runFixture().runId as string}`, linked, runFixture())).status, 403);
+
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM player_profiles WHERE session_id = $1`, [linked]);
+    assert.equal(rows[0].n, 0, 'the refused write must not have touched anything');
+  });
+
+  // ─── Profile ────────────────────────────────────────────────────────────────
+
   test('profile: 404 before first write, then PUT/GET round-trips the domain object', async () => {
-    const miss = await call('/v1/progress', 'ses_p1');
+    const s = sid(0x20);
+    assert.equal((await put('/v1/guidance', s, { mode: 'FULL' })).status, 204);
+    const miss = await call('/v1/progress', s);
     assert.equal(miss.status, 404, 'no profile yet is NOT_FOUND, not an empty profile');
 
     const profile = profileFixture();
-    const put = await call('/v1/progress', 'ses_p1',
-      { method: 'PUT', body: JSON.stringify(profile) });
-    assert.equal(put.status, 204);
+    assert.equal((await put('/v1/progress', s, profile)).status, 204);
 
-    const got = await call('/v1/progress', 'ses_p1');
+    const got = await call('/v1/progress', s);
     assert.equal(got.status, 200);
-    const back = await got.json();
-    assert.deepEqual(back, profile,
+    assert.deepEqual(await got.json(), profile,
       'row -> domain object must reproduce exactly what domain object -> row stored');
 
     // Idempotent: the same PUT twice leaves the same state.
-    const again = await call('/v1/progress', 'ses_p1',
-      { method: 'PUT', body: JSON.stringify(profile) });
-    assert.equal(again.status, 204);
-    assert.deepEqual(await (await call('/v1/progress', 'ses_p1')).json(), profile);
+    assert.equal((await put('/v1/progress', s, profile)).status, 204);
+    assert.deepEqual(await (await call('/v1/progress', s)).json(), profile);
   });
 
-  test('profiles are scoped by session: another session sees its own 404', async () => {
-    const res = await call('/v1/progress', 'ses_p2');
-    assert.equal(res.status, 404);
+  test('a legacy SQL null archetype reads back as the explicit UNCLASSIFIED', async () => {
+    const s = sid(0x21);
+    await pool.query(`INSERT INTO game_sessions (id) VALUES ($1)`, [s]);
+    await pool.query(
+      `INSERT INTO player_profiles (session_id, archetype) VALUES ($1, NULL)`, [s]);
+    const got = await call('/v1/progress', s);
+    assert.equal(got.status, 200);
+    assert.equal((await got.json() as { archetype: string }).archetype, 'UNCLASSIFIED',
+      'the domain Archetype is never null; the truthful mapping is the explicit value');
   });
 
-  test('tips upsert and re-showing increments the count', async () => {
-    const tip = { tipCode: 'HOLD_IS_A_DECISION', state: 'SHOWN' };
-    assert.equal((await call('/v1/tips', 'ses_t1',
-      { method: 'POST', body: JSON.stringify(tip) })).status, 204);
-    assert.equal((await call('/v1/tips', 'ses_t1',
-      { method: 'POST', body: JSON.stringify({ ...tip, state: 'COMPLETED' }) })).status, 204);
-    const { rows } = await pool.query(
-      `SELECT tip_state, show_count FROM user_tip_states
-       WHERE session_id = 'ses_t1' AND tip_code = 'HOLD_IS_A_DECISION'`);
+  // ─── Tips and guidance ──────────────────────────────────────────────────────
+
+  test('tips record only the provenance the record establishes', async () => {
+    const s = sid(0x30);
+    // No lastShownAt supplied: nothing is invented.
+    assert.equal((await post('/v1/tips', s,
+      { tipCode: 'HOLD_IS_A_DECISION', state: 'SHOWN' })).status, 204);
+    let { rows } = await pool.query(
+      `SELECT tip_state, last_shown_at, show_count FROM user_tip_states
+       WHERE session_id = $1 AND tip_code = 'HOLD_IS_A_DECISION'`, [s]);
+    assert.equal(rows[0].tip_state, 'SHOWN');
+    assert.equal(rows[0].last_shown_at, null, 'a missing lastShownAt must not become now()');
+    assert.equal(rows[0].show_count, 0,
+      'a TipRecord cannot prove a display happened, so none may be counted');
+
+    // A state update with a real timestamp carries it; the count still does
+    // not move, and an exact retry is a true no-op.
+    const update = {
+      tipCode: 'HOLD_IS_A_DECISION', state: 'COMPLETED',
+      lastShownAt: '2026-08-25T12:00:00.000Z', completedAt: '2026-08-25T12:01:00.000Z',
+    };
+    assert.equal((await post('/v1/tips', s, update)).status, 204);
+    assert.equal((await post('/v1/tips', s, update)).status, 204);
+    ({ rows } = await pool.query(
+      `SELECT tip_state, last_shown_at, completed_at, show_count FROM user_tip_states
+       WHERE session_id = $1 AND tip_code = 'HOLD_IS_A_DECISION'`, [s]));
     assert.equal(rows[0].tip_state, 'COMPLETED');
-    assert.equal(rows[0].show_count, 2);
+    assert.equal(new Date(rows[0].last_shown_at as string).toISOString(), '2026-08-25T12:00:00.000Z');
+    assert.equal(new Date(rows[0].completed_at as string).toISOString(), '2026-08-25T12:01:00.000Z');
+    assert.equal(rows[0].show_count, 0);
+
+    // A later record without timestamps keeps the established ones.
+    assert.equal((await post('/v1/tips', s,
+      { tipCode: 'HOLD_IS_A_DECISION', state: 'DISMISSED' })).status, 204);
+    ({ rows } = await pool.query(
+      `SELECT last_shown_at, completed_at FROM user_tip_states
+       WHERE session_id = $1 AND tip_code = 'HOLD_IS_A_DECISION'`, [s]));
+    assert.equal(new Date(rows[0].last_shown_at as string).toISOString(), '2026-08-25T12:00:00.000Z');
+    assert.equal(new Date(rows[0].completed_at as string).toISOString(), '2026-08-25T12:01:00.000Z');
   });
 
   test('guidance mode round-trips through its settings row', async () => {
-    assert.equal((await call('/v1/guidance', 'ses_g1',
-      { method: 'PUT', body: JSON.stringify({ mode: 'MINIMAL' }) })).status, 204);
+    const s = sid(0x31);
+    assert.equal((await put('/v1/guidance', s, { mode: 'MINIMAL' })).status, 204);
     const { rows } = await pool.query(
-      `SELECT guidance_mode FROM guidance_settings WHERE session_id = 'ses_g1'`);
+      `SELECT guidance_mode FROM guidance_settings WHERE session_id = $1`, [s]);
     assert.equal(rows[0].guidance_mode, 'MINIMAL');
   });
 
-  test('daily tape: one decision per day — same call idempotent, different call 409', async () => {
-    const tape = { tapeDate: '2026-08-25', tapeId: 'tape_003', playerAction: 'HOLD', score: 7 };
-    assert.equal((await call('/v1/daily-tape', 'ses_d1',
-      { method: 'POST', body: JSON.stringify(tape) })).status, 204);
+  // ─── Daily tape ─────────────────────────────────────────────────────────────
 
-    const got = await call('/v1/daily-tape/2026-08-25', 'ses_d1');
+  test('daily tape: identical means every fact including the score', async () => {
+    const s = sid(0x40);
+    const tape = { tapeDate: '2026-08-25', tapeId: 'tape_003', playerAction: 'HOLD', score: 7 };
+    assert.equal((await post('/v1/daily-tape', s, tape)).status, 204);
+
+    const got = await call('/v1/daily-tape/2026-08-25', s);
     assert.equal(got.status, 200);
     assert.deepEqual(await got.json(), tape);
 
     // The mirror retries fire-and-forget: the identical submission is a no-op.
-    assert.equal((await call('/v1/daily-tape', 'ses_d1',
-      { method: 'POST', body: JSON.stringify(tape) })).status, 204);
+    assert.equal((await post('/v1/daily-tape', s, tape)).status, 204);
 
     // A different answer for the same day is an attempt to re-decide (§6.3).
-    const other = { ...tape, playerAction: 'REDUCE_TECH' };
-    assert.equal((await call('/v1/daily-tape', 'ses_d1',
-      { method: 'POST', body: JSON.stringify(other) })).status, 409);
+    assert.equal((await post('/v1/daily-tape', s,
+      { ...tape, playerAction: 'REDUCE' })).status, 409);
+    // The same answer with a different score is not "identical" either: a
+    // silent first-score-wins would hide a real disagreement.
+    assert.equal((await post('/v1/daily-tape', s, { ...tape, score: 9 })).status, 409);
 
     // Another day is another decision.
-    assert.equal((await call('/v1/daily-tape/2026-08-26', 'ses_d1')).status, 404);
+    assert.equal((await call('/v1/daily-tape/2026-08-26', s)).status, 404);
   });
+
+  // ─── Runs: round-trip ───────────────────────────────────────────────────────
+
+  const RUN_SESSION = sid(0x50);
 
   test('runs: PUT/GET round-trips the Run Record exactly, including a null commit time', async () => {
     const record = runFixture();
-    const put = await call(`/v1/runs/${record.runId}`, 'ses_r1',
-      { method: 'PUT', body: JSON.stringify(record) });
-    assert.equal(put.status, 204);
+    assert.equal((await put(`/v1/runs/${record.runId as string}`, RUN_SESSION, record)).status, 204);
 
-    const got = await call('/v1/runs', 'ses_r1');
+    const got = await call('/v1/runs', RUN_SESSION);
     assert.equal(got.status, 200);
     const list = await got.json() as unknown[];
     assert.equal(list.length, 1);
     assert.deepEqual(list[0], record,
       'the Run Record that comes back must be the Run Record that went in');
 
-    // Idempotent: same PUT, same state, still one run with two decisions.
-    assert.equal((await call(`/v1/runs/${record.runId}`, 'ses_r1',
-      { method: 'PUT', body: JSON.stringify(record) })).status, 204);
+    // Exact retry: a true no-op, still one run with two decisions.
+    assert.equal((await put(`/v1/runs/${record.runId as string}`, RUN_SESSION, record)).status, 204);
     const { rows } = await pool.query(
       `SELECT count(*)::int AS n FROM checkpoint_decisions WHERE run_id = $1`, [record.runId]);
     assert.equal(rows[0].n, 2);
@@ -167,66 +249,245 @@ describe('persistence-api against the founding schema', {
 
   test('a run id under a different session is contradictory ownership: 409', async () => {
     const record = runFixture();
-    const res = await call(`/v1/runs/${record.runId}`, 'ses_r2',
-      { method: 'PUT', body: JSON.stringify(record) });
-    assert.equal(res.status, 409);
-    // And the run still belongs to its owner.
+    const other = sid(0x51);
+    assert.equal((await put(`/v1/runs/${record.runId as string}`, other, record)).status, 409);
     const { rows } = await pool.query(
       `SELECT session_id FROM arena_runs WHERE id = $1`, [record.runId]);
-    assert.equal(rows[0].session_id, 'ses_r1');
+    assert.equal(rows[0].session_id, RUN_SESSION, 'the run still belongs to its owner');
   });
 
-  test('an updated run replaces its own earlier mirror write', async () => {
-    const record = runFixture();
-    const grown = {
-      ...record,
-      currentCheckpoint: 3,
-      updatedAt: '2026-08-25T12:30:00.000Z',
-      decisions: [...record.decisions, {
-        ...record.decisions[0],
-        checkpointSequence: 3,
-        committedAt: '2026-08-25T12:30:00.000Z',
-      }],
+  // ─── Runs: monotonic history ────────────────────────────────────────────────
+
+  function decision(sequence: number, patch: Record<string, unknown> = {}) {
+    return {
+      checkpointSequence: sequence,
+      actionCode: 'HOLD',
+      thesisCode: 'THESIS_UNCHANGED',
+      confidence: 0.6,
+      modulesConsulted: [],
+      turnoverCost: 0,
+      scoreContribution: 1,
+      quality: 'GOOD',
+      behavioralFlags: [],
+      machineActionCode: 'HOLD',
+      committedAt: `2026-08-25T12:0${String(sequence)}:00.000Z`,
+      ...patch,
     };
-    assert.equal((await call(`/v1/runs/${record.runId}`, 'ses_r1',
-      { method: 'PUT', body: JSON.stringify(grown) })).status, 204);
-    const list = await (await call('/v1/runs', 'ses_r1')).json() as { decisions: unknown[] }[];
-    assert.equal(list[0]?.decisions.length, 3);
+  }
+
+  test('a valid appended decision advances the run; a stale shorter history cannot truncate it', async () => {
+    const s = sid(0x52);
+    const runId = 'run_b1b2c3d4e5f60718293a4b02';
+    const two = runFixture({
+      runId, decisions: [decision(1), decision(2)], currentCheckpoint: 2,
+    });
+    assert.equal((await put(`/v1/runs/${runId}`, s, two)).status, 204);
+
+    const three = runFixture({
+      runId, decisions: [decision(1), decision(2), decision(3)], currentCheckpoint: 3,
+      updatedAt: '2026-08-25T12:30:00.000Z',
+    });
+    assert.equal((await put(`/v1/runs/${runId}`, s, three)).status, 204);
+    let list = await (await call('/v1/runs', s)).json() as { decisions: unknown[] }[];
+    assert.equal(list[0]?.decisions.length, 3, 'the valid longer history appends');
+
+    // The stale two-decision record arrives late: nothing is destroyed.
+    assert.equal((await put(`/v1/runs/${runId}`, s, two)).status, 204);
+    list = await (await call('/v1/runs', s)).json() as
+      { decisions: unknown[]; currentCheckpoint: number }[];
+    assert.equal(list[0]?.decisions.length, 3, 'a stale shorter run cannot truncate history');
+    assert.equal(list[0]?.currentCheckpoint, 3, 'a stale earlier checkpoint cannot regress the run');
   });
+
+  test('immutable run fields cannot be contradicted', async () => {
+    const s = sid(0x53);
+    const runId = 'run_c1b2c3d4e5f60718293a4b03';
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [decision(1)] }))).status, 204);
+    for (const patch of [
+      { seed: 9999 },
+      { arenaId: 'recovery_trap' },
+      { machineId: 'spy_benchmark' },
+      { totalCheckpoints: 30 },
+      { startedAt: '2026-08-25T10:00:00.000Z' },
+    ]) {
+      assert.equal((await put(`/v1/runs/${runId}`, s,
+        runFixture({ runId, decisions: [decision(1)], ...patch }))).status, 409,
+        `mutating ${Object.keys(patch)[0] as string} must be refused`);
+    }
+  });
+
+  test('a stored decision cannot be rewritten', async () => {
+    const s = sid(0x54);
+    const runId = 'run_d1b2c3d4e5f60718293a4b04';
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [decision(1)] }))).status, 204);
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [decision(1, { actionCode: 'REDUCE' })] }))).status, 409);
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [decision(1, { scoreContribution: 5 })] }))).status, 409);
+  });
+
+  test('thesis and commit time are one-way enrichments, never rewrites', async () => {
+    const s = sid(0x55);
+    const runId = 'run_e1b2c3d4e5f60718293a4b05';
+    const bare = decision(1, { thesisCode: null, committedAt: null });
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [bare] }))).status, 204);
+
+    // null -> value: both enrichments land.
+    const enriched = decision(1);
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [enriched] }))).status, 204);
+    let list = await (await call('/v1/runs', s)).json() as
+      { decisions: { thesisCode: string | null; committedAt: string | null }[] }[];
+    assert.equal(list[0]?.decisions[0]?.thesisCode, 'THESIS_UNCHANGED');
+    assert.equal(list[0]?.decisions[0]?.committedAt, '2026-08-25T12:01:00.000Z');
+
+    // value -> null: the established values stand.
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [bare] }))).status, 204);
+    list = await (await call('/v1/runs', s)).json() as
+      { decisions: { thesisCode: string | null; committedAt: string | null }[] }[];
+    assert.equal(list[0]?.decisions[0]?.thesisCode, 'THESIS_UNCHANGED',
+      'a stale null must not erase an established thesis');
+    assert.equal(list[0]?.decisions[0]?.committedAt, '2026-08-25T12:01:00.000Z',
+      'a stale null must not erase an established commit time');
+
+    // value -> different value: contradiction.
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [decision(1, { thesisCode: 'MOMENTUM' })] }))).status, 409);
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [decision(1, { committedAt: '2026-08-25T23:59:00.000Z' })] }))).status, 409);
+  });
+
+  test('a terminal result never regresses or mutates', async () => {
+    const s = sid(0x56);
+    const runId = 'run_f1b2c3d4e5f60718293a4b06';
+    const done = runFixture({
+      runId, decisions: [decision(1)], state: 'COMPLETE', result: 'FAILED',
+      completedAt: '2026-08-25T13:00:00.000Z',
+    });
+    assert.equal((await put(`/v1/runs/${runId}`, s, done)).status, 204);
+
+    // Another terminal result for the same run: contradiction.
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [decision(1)], state: 'COMPLETE', result: 'PASSED' }))).status, 409);
+
+    // A stale ACTIVE record: the concluded run does not come back to life.
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [decision(1)], state: 'SIGNAL', result: 'ACTIVE' }))).status, 204);
+    const list = await (await call('/v1/runs', s)).json() as
+      { result: string; state: string; completedAt: string | null }[];
+    assert.equal(list[0]?.result, 'FAILED');
+    assert.equal(list[0]?.state, 'COMPLETE');
+    assert.equal(list[0]?.completedAt, '2026-08-25T13:00:00.000Z');
+  });
+
+  test('same decision count: state moves forward but never backward', async () => {
+    const s = sid(0x57);
+    const runId = 'run_a2b2c3d4e5f60718293a4b07';
+    const investigating = runFixture({
+      runId, decisions: [decision(1)], currentCheckpoint: 2, state: 'INVESTIGATING',
+    });
+    assert.equal((await put(`/v1/runs/${runId}`, s, investigating)).status, 204);
+
+    // Forward within the same checkpoint: accepted.
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [decision(1)], currentCheckpoint: 2, state: 'COMMITTING' }))).status, 204);
+    let list = await (await call('/v1/runs', s)).json() as { state: string }[];
+    assert.equal(list[0]?.state, 'COMMITTING');
+
+    // Backward: stale, no regression.
+    assert.equal((await put(`/v1/runs/${runId}`, s,
+      runFixture({ runId, decisions: [decision(1)], currentCheckpoint: 2, state: 'SIGNAL' }))).status, 204);
+    list = await (await call('/v1/runs', s)).json() as { state: string }[];
+    assert.equal(list[0]?.state, 'COMMITTING', 'phase must never move backward');
+  });
+
+  // ─── Machine versions ───────────────────────────────────────────────────────
+
+  const MACHINE_SESSION = sid(0x60);
+  const MACHINE_PATH = `/v1/machine-versions/${encodeURIComponent('PLAYER MACHINE')}/1`;
 
   test('machine versions: PUT/GET round-trips; a different hash on the same key is 409', async () => {
     const record = machineFixture();
-    const path = `/v1/machine-versions/${encodeURIComponent(record.machineName)}/1`;
-    assert.equal((await call(path, 'ses_m1',
-      { method: 'PUT', body: JSON.stringify(record) })).status, 204);
+    assert.equal((await put(MACHINE_PATH, MACHINE_SESSION, record)).status, 204);
 
-    const list = await (await call('/v1/machine-versions', 'ses_m1')).json() as unknown[];
+    const list = await (await call('/v1/machine-versions', MACHINE_SESSION)).json() as unknown[];
     assert.deepEqual(list, [record]);
 
     // Same key, different build: two histories claiming one version number.
-    const contradictory = machineFixture({ buildHash: '0000:1111:2222' });
-    assert.equal((await call(path, 'ses_m1',
-      { method: 'PUT', body: JSON.stringify(contradictory) })).status, 409);
+    const contradictory = machineFixture({ installedModules: ['UNIVERSE', 'SIGNAL', 'GUARDRAILS'] });
+    assert.equal((await put(MACHINE_PATH, MACHINE_SESSION, contradictory)).status, 409);
 
     // The same version under a different session is that session's own record.
-    assert.equal((await call(path, 'ses_m2',
-      { method: 'PUT', body: JSON.stringify(record) })).status, 204);
+    assert.equal((await put(MACHINE_PATH, sid(0x61), record)).status, 204);
   });
 
-  test('a machine lock is one-way on the server too', async () => {
-    const record = machineFixture();
-    const path = `/v1/machine-versions/${encodeURIComponent(record.machineName)}/1`;
+  test('a machine lock is one-way and single-valued on the server', async () => {
     const locked = machineFixture({ lockedAt: '2026-08-25T13:00:00.000Z' });
-    assert.equal((await call(path, 'ses_m1',
-      { method: 'PUT', body: JSON.stringify(locked) })).status, 204);
+    assert.equal((await put(MACHINE_PATH, MACHINE_SESSION, locked)).status, 204);
 
-    // A later mirror write without the lock must not clear it.
-    assert.equal((await call(path, 'ses_m1',
-      { method: 'PUT', body: JSON.stringify(record) })).status, 204);
-    const list = await (await call('/v1/machine-versions', 'ses_m1')).json() as
+    // A later mirror write without the lock: stale, the lock stands.
+    assert.equal((await put(MACHINE_PATH, MACHINE_SESSION, machineFixture())).status, 204);
+    let list = await (await call('/v1/machine-versions', MACHINE_SESSION)).json() as
+      { lockedAt: string | null }[];
+    assert.equal(list[0]?.lockedAt, '2026-08-25T13:00:00.000Z');
+
+    // The same lock again: no-op.
+    assert.equal((await put(MACHINE_PATH, MACHINE_SESSION, locked)).status, 204);
+    // A different lock: two contradictory histories.
+    assert.equal((await put(MACHINE_PATH, MACHINE_SESSION,
+      machineFixture({ lockedAt: '2026-08-26T09:00:00.000Z' }))).status, 409);
+    list = await (await call('/v1/machine-versions', MACHINE_SESSION)).json() as
       { lockedAt: string | null }[];
     assert.equal(list[0]?.lockedAt, '2026-08-25T13:00:00.000Z');
   });
+
+  test('arenasCompleted moves as a set: superset advances, subset is stale, divergence is 409', async () => {
+    const s = sid(0x62);
+    const path = `/v1/machine-versions/${encodeURIComponent('SET MACHINE')}/1`;
+    const withOne = machineFixture({
+      machineName: 'SET MACHINE', arenasCompleted: ['covid_black_swan'],
+    });
+    assert.equal((await put(path, s, withOne)).status, 204);
+
+    // Exact same set: no-op.
+    assert.equal((await put(path, s, withOne)).status, 204);
+
+    // Superset: advances.
+    assert.equal((await put(path, s, machineFixture({
+      machineName: 'SET MACHINE', arenasCompleted: ['covid_black_swan', 'recovery_trap'],
+    }))).status, 204);
+    let list = await (await call('/v1/machine-versions', s)).json() as
+      { arenasCompleted: string[] }[];
+    assert.deepEqual(new Set(list[0]?.arenasCompleted),
+      new Set(['covid_black_swan', 'recovery_trap']));
+
+    // Subset: stale, kept.
+    assert.equal((await put(path, s, withOne)).status, 204);
+    list = await (await call('/v1/machine-versions', s)).json() as
+      { arenasCompleted: string[] }[];
+    assert.deepEqual(new Set(list[0]?.arenasCompleted),
+      new Set(['covid_black_swan', 'recovery_trap']),
+      'a stale subset must not shrink the set');
+
+    // Divergent: neither side is entitled to auto-union.
+    assert.equal((await put(path, s, machineFixture({
+      machineName: 'SET MACHINE', arenasCompleted: ['covid_black_swan', 'banking_stress'],
+    }))).status, 409);
+  });
+
+  test('the stored machine id is derived from the hash, not persisted JSON', async () => {
+    const { rows } = await pool.query(
+      `SELECT configuration_json FROM player_machine_versions
+       WHERE session_id = $1 AND machine_name = 'PLAYER MACHINE'`, [MACHINE_SESSION]);
+    assert.ok(!('machineId' in (rows[0].configuration_json as Record<string, unknown>)),
+      'persisting machineId would let it disagree with the hash it derives from');
+  });
+
+  // ─── Telemetry ──────────────────────────────────────────────────────────────
 
   test('telemetry: the envelope lands once, however many times it is delivered', async () => {
     const envelope = {
@@ -234,7 +495,7 @@ describe('persistence-api against the founding schema', {
       event_type: 'decision.committed',
       event_version: 1,
       occurred_at: '2026-08-25T12:00:00.000Z',
-      session_id: 'ses_e1',
+      session_id: sid(0x70),
       run_id: 'run_a1b2c3d4e5f60718293a4b01',
       payload: { thesis_code: 'THESIS_UNCHANGED' },
     };
@@ -250,13 +511,28 @@ describe('persistence-api against the founding schema', {
     assert.equal(rows[0].n, 1);
   });
 
+  test('telemetry without a canonical session_id is refused', async () => {
+    const res = await fetch(`${base}/v1/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        event_id: 'evt_integration_002', event_type: 'session.started',
+        event_version: 1, occurred_at: '2026-08-25T12:00:00.000Z',
+        payload: {},
+      }),
+    });
+    assert.equal(res.status, 400);
+  });
+
+  // ─── Malformed bodies ───────────────────────────────────────────────────────
+
   test('a malformed run body is a 400 and writes nothing', async () => {
-    const { volatility: _v, ...missing } = runFixture({ runId: 'run_badbadbadbadbadbadbad01' });
-    const res = await call('/v1/runs/run_badbadbadbadbadbadbad01', 'ses_r1',
-      { method: 'PUT', body: JSON.stringify(missing) });
+    const badId = 'run_badbadbadbadbadbadbad1'.slice(0, 28);
+    const { volatility: _v, ...missing } = runFixture({ runId: badId });
+    const res = await put(`/v1/runs/${badId}`, RUN_SESSION, missing);
     assert.equal(res.status, 400);
     const { rows } = await pool.query(
-      `SELECT count(*)::int AS n FROM arena_runs WHERE id = 'run_badbadbadbadbadbadbad01'`);
+      `SELECT count(*)::int AS n FROM arena_runs WHERE id = $1`, [badId]);
     assert.equal(rows[0].n, 0);
   });
 });

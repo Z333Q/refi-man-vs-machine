@@ -1,6 +1,14 @@
 // Shared wire-shape fixtures for the contract and integration suites.
 // One source, so the two suites cannot quietly drift apart on what a
-// well-formed record looks like.
+// well-formed record looks like. Every value is drawn from the canonical
+// vocabularies and id shapes the validators enforce.
+
+import { machineBuildHash, derivedMachineId } from '../src/contract.js';
+
+/** A canonical session id (ses_<20 hex>), deterministic per label. */
+export function sid(n: number): string {
+  return 'ses_' + n.toString(16).padStart(20, '0');
+}
 
 export function runFixture(overrides: Record<string, unknown> = {}) {
   return {
@@ -9,8 +17,8 @@ export function runFixture(overrides: Record<string, unknown> = {}) {
     seed: 1234,
     arenaId: 'covid_black_swan',
     machineId: 'refi_rules',
-    state: 'COMPLETE',
-    result: 'MACHINE_WIN',
+    state: 'SIGNAL',
+    result: 'ACTIVE',
     currentCheckpoint: 2,
     totalCheckpoints: 22,
     playerScore: 61.5,
@@ -28,10 +36,10 @@ export function runFixture(overrides: Record<string, unknown> = {}) {
         actionCode: 'HOLD',
         thesisCode: 'THESIS_UNCHANGED',
         confidence: 0.6,
-        modulesConsulted: ['RISK_PANEL'],
+        modulesConsulted: ['PORTFOLIO_SUMMARY'],
         turnoverCost: 0,
         scoreContribution: 2.5,
-        quality: 'SOUND',
+        quality: 'GOOD',
         behavioralFlags: [],
         machineActionCode: 'HOLD',
         committedAt: '2026-08-25T12:00:00.000Z',
@@ -45,8 +53,8 @@ export function runFixture(overrides: Record<string, unknown> = {}) {
         turnoverCost: 0.004,
         scoreContribution: -1.25,
         quality: 'NEUTRAL',
-        behavioralFlags: ['PANIC_ADJACENT'],
-        machineActionCode: 'ROTATE',
+        behavioralFlags: ['PANIC_REDUCTION_LARGE'],
+        machineActionCode: 'ROTATE_DEFENSIVE',
         // Migrated from a v1 record: the commit time was never captured.
         committedAt: null,
       },
@@ -58,15 +66,37 @@ export function runFixture(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** The canonical MachineConfig the fixtures compile. */
+export function machineConfigFixture() {
+  return {
+    universe: 'US_LIQUID',
+    eligibility: 'FUNDAMENTAL_LIQUIDITY',
+    signal: 'REGIME_CLASSIFIER',
+    construction: 'CONSTRAINED_OPT',
+    guardrails: {
+      maxPositionPct: 0.10,
+      maxSectorPct: 0.25,
+      maxCorrelation: 0.85,
+      drawdownGatePct: -0.15,
+      cashFloorPct: 0.05,
+    },
+    execution: 'DAILY_CLOSE',
+    monitoring: 'PASSIVE',
+  };
+}
+
 export function machineFixture(overrides: Record<string, unknown> = {}) {
+  const config = (overrides['config'] as Record<string, unknown>) ?? machineConfigFixture();
+  const installedModules = (overrides['installedModules'] as string[]) ?? ['UNIVERSE', 'SIGNAL'];
+  const buildHash = machineBuildHash(config, installedModules);
   return {
     recordVersion: 1,
-    machineId: 'mch_9f2a31d877c1',
+    machineId: derivedMachineId(buildHash),
     machineName: 'PLAYER MACHINE',
     version: 1,
-    config: { universe: 'US_LARGE_CAP', guardrails: { maxPositionPct: 0.1 } },
-    installedModules: ['UNIVERSE', 'SIGNAL'],
-    buildHash: '9F2A:31D8:77C1',
+    config,
+    installedModules,
+    buildHash,
     createdAt: '2026-08-25T12:00:00.000Z',
     lockedAt: null,
     arenasCompleted: [],
@@ -83,14 +113,16 @@ export function profileFixture() {
     machineAttempts: 7,
     currentStreak: 1,
     bestStreak: 3,
-    archetype: null,
+    archetype: 'UNCLASSIFIED',
     decisionStreak: 4,
     lastActiveDate: '2026-08-25',
     dimensions: {
       POSITION_SIZING: { score: 43.5, sampleSize: 12 },
       REGIME_ADAPTATION: { score: 71, sampleSize: 9 },
     },
-    unlockedModules: ['CORRELATION_MATRIX', 'MACHINE_BUILDER'],
+    // Alphabetical, matching the deterministic tie-break order a same-instant
+    // batch of unlocks reads back in.
+    unlockedModules: ['BASKET_WRITER', 'CORRELATION_MATRIX'],
     machineLadder: {
       spy_benchmark: { wins: 1, losses: 2, status: 'DEFEATED' as const },
       refi_rules: { wins: 0, losses: 1, status: 'ACTIVE' as const },

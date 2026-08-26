@@ -127,22 +127,43 @@ test('the background probe opens the mirror on NOT_FOUND', async () => {
   assert.equal(remote.saved.profiles.length, 1, 'the server said "no profile": mirroring is safe');
 });
 
-test('a differing remote profile is surfaced as a diagnostic; local stays the device authority', async () => {
+test('a differing remote profile blocks the upward mirror; local is kept and the conflict surfaced', async () => {
   const remote = fakeRemote({
     loadProfile: async () => ({ kind: 'VALUE', value: { alphaXp: 999 } as ProfileSnapshot }),
   });
   const store = makeMirroredStore(remote);
   await store.saveProfile('ses_probe_diff', { alphaXp: 10 } as ProfileSnapshot);
   const back = await store.loadProfile('ses_probe_diff');
-  assert.equal((back as { alphaXp: number } | null)?.alphaXp, 10, 'local is kept');
+  assert.equal((back as { alphaXp: number } | null)?.alphaXp, 10, 'local is kept for gameplay');
   await new Promise(resolve => setImmediate(resolve));
   assert.ok(
     syncConflicts().some(c => c.kind === 'PROFILE' && c.key === 'ses_probe_diff'),
     'the divergence is surfaced, not swallowed',
   );
   await store.saveProfile('ses_probe_diff', { alphaXp: 20 } as ProfileSnapshot);
-  assert.equal(remote.saved.profiles.length, 1,
-    'once the server has answered, the local record resumes mirroring as the device authority');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(remote.saved.profiles.length, 0,
+    'a divergent remote must never be overwritten by an automatic upward mirror');
+});
+
+test('a remote profile canonically equal to local arms the mirror despite key order', async () => {
+  const local = { alphaXp: 10, rankCode: 'ANALYST' } as unknown as ProfileSnapshot;
+  // The same profile with reversed key insertion order: not a conflict.
+  const reordered = { rankCode: 'ANALYST', alphaXp: 10 } as unknown as ProfileSnapshot;
+  const remote = fakeRemote({
+    loadProfile: async () => ({ kind: 'VALUE', value: reordered }),
+  });
+  const store = makeMirroredStore(remote);
+  await store.saveProfile('ses_probe_eq', local);
+  await store.loadProfile('ses_probe_eq');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(
+    !syncConflicts().some(c => c.key === 'ses_probe_eq'),
+    'object insertion order must not create a false conflict',
+  );
+  await store.saveProfile('ses_probe_eq', { ...local, alphaXp: 20 } as ProfileSnapshot);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(remote.saved.profiles.length, 1, 'equality arms the mirror');
 });
 
 test('a remote outage on a fresh device reads as nothing to hydrate, and holds profile mirroring', async () => {
@@ -290,6 +311,57 @@ test('a machine compile completes without awaiting the remote, even one that nev
   assert.equal(rec.version, 1, 'the compile returned synchronously');
   assert.equal(getMachineVersion('M', 1)?.buildHash, rec.buildHash,
     'the version is readable before the remote has answered');
+
+  setRunRecordMirror(null);
+  setMachineVersionMirror(null);
+});
+
+test('mirror writes to one resource run strictly in call order', async () => {
+  // Remote write 1 is held open; write 2 must not begin until it settles.
+  const began: number[] = [];
+  let releaseFirst: () => void = () => undefined;
+  const firstHeld = new Promise<void>(resolve => { releaseFirst = resolve; });
+  let callIndex = 0;
+  const remote = fakeRemote({
+    saveRunRecord: async () => {
+      const n = ++callIndex;
+      began.push(n);
+      if (n === 1) await firstHeld;
+      return { kind: 'VALUE', value: null };
+    },
+  });
+  wireMirrors(remote, () => 'ses_queue');
+
+  saveRun(runWith(1), '2026-01-01T00:00:00.000Z');
+  saveRun(runWith(2), '2026-01-02T00:00:00.000Z');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(began, [1], 'write 2 must not begin while write 1 is in flight');
+
+  releaseFirst();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(began, [1, 2], 'write 2 runs after write 1 settles');
+
+  setRunRecordMirror(null);
+  setMachineVersionMirror(null);
+});
+
+test('a failed mirror write does not block the writes queued behind it', async () => {
+  const began: string[] = [];
+  let calls = 0;
+  const remote = fakeRemote({
+    saveRunRecord: async (_s, r) => {
+      calls += 1;
+      began.push(r.updatedAt);
+      if (calls === 1) throw new Error('mirror down');
+      return { kind: 'VALUE', value: null };
+    },
+  });
+  wireMirrors(remote, () => 'ses_queue_fail');
+
+  saveRun(runWith(1), '2026-01-01T00:00:00.000Z');
+  saveRun(runWith(2), '2026-01-02T00:00:00.000Z');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(began.length, 2, 'the queue advances past a failed task');
 
   setRunRecordMirror(null);
   setMachineVersionMirror(null);
