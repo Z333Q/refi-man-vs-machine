@@ -50,6 +50,7 @@ export default function DailyTapeScreen({ onBack }: Props) {
 
     await persistence.saveDailyTape(getSessionId(), {
       tapeDate: today.date,
+      tapeId: today.id,
       playerAction: selectedAction,
       score: tapeScore,
     });

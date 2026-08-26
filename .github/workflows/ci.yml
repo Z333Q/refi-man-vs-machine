@@ -167,6 +167,50 @@ jobs:
           DATABASE_URL: postgresql://refi:refi@localhost:5432/refi_handoff_test
         run: npm test
 
+  persistence-api:
+    name: Persistence API / Typecheck / Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/persistence-api
+    # A real database, for the same reason the handoff job has one: this
+    # service owns both directions of the domain-object <-> row mapping, and
+    # the round-trip claim (what a PUT stores, a GET reproduces exactly) is
+    # only checkable against real PostgreSQL.
+    services:
+      postgres:
+        image: postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685 # 16-alpine
+        env:
+          POSTGRES_USER: refi
+          POSTGRES_PASSWORD: refi
+          POSTGRES_DB: refi_persistence_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U refi"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: services/persistence-api/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests
+        env:
+          # Present, so the integration tests run rather than skip. They apply
+          # db/migrations/0001_founding_schema.sql themselves.
+          DATABASE_URL: postgresql://refi:refi@localhost:5432/refi_persistence_test
+        run: npm test
+      - name: Build
+        run: npm run build
+
   security:
     name: Security scans (§3.3)
     runs-on: ubuntu-latest

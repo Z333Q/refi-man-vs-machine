@@ -63,6 +63,19 @@ test('a 204 write acknowledgement is VALUE', async () => {
   assert.deepEqual(answer, { kind: 'VALUE', value: null });
 });
 
+test('a request that never answers times out to NETWORK_ERROR instead of hanging forever', async () => {
+  // A fetch that resolves only when aborted: without the timeout, this await
+  // would never settle and a mirror queue behind it would be pinned forever.
+  globalThis.fetch = (_input: RequestInfo | URL, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort',
+        () => { reject(new DOMException('aborted', 'AbortError')); });
+    });
+  const remote = makeRefiRemote('https://api.test', { timeoutMs: 25 });
+  const answer = await remote.loadRunRecords('ses_a');
+  assert.equal(answer.kind, 'NETWORK_ERROR');
+});
+
 // ─── Transport shape ──────────────────────────────────────────────────────────
 
 test('the session travels in the x-alpha-session header, never in the URL', async () => {

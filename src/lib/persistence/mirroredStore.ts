@@ -24,7 +24,7 @@ import {
 
 /** A disagreement between this device and the mirror, kept for inspection. */
 export interface SyncConflict {
-  kind: 'RUN' | 'MACHINE_VERSION' | 'REFUSED';
+  kind: 'RUN' | 'MACHINE_VERSION' | 'PROFILE' | 'REFUSED';
   key: string;
   detail: string;
 }
@@ -70,15 +70,83 @@ function noteMachineOutcome(key: string, outcome: RemoteMachineOutcome): void {
   }
 }
 
+// ─── Mirror queue ─────────────────────────────────────────────────────────────
+//
+// Remote mirror writes are fire-and-forget, and fetch gives no ordering
+// promise: two writes to the same resource can arrive reversed and the older
+// one land last. The queue serializes remote tasks per resource key, in call
+// order, without ever putting the network back on the gameplay path: the
+// local write has already finished before anything is enqueued. A failed
+// task must not block the ones behind it, and nothing here is a durable
+// retry queue — a lost mirror write is lost until the next local save
+// announces newer state.
+
+const mirrorChains = new Map<string, Promise<unknown>>();
+
+export function enqueueMirror(key: string, task: () => Promise<unknown>): void {
+  const prev = mirrorChains.get(key) ?? Promise.resolve();
+  // Run after the previous task settles either way; a rejection upstream
+  // must not dam the queue.
+  const next = prev.then(task, task).catch(() => undefined);
+  mirrorChains.set(key, next);
+  void next.finally(() => {
+    if (mirrorChains.get(key) === next) mirrorChains.delete(key);
+  });
+}
+
 // ─── Profile mirror guard ─────────────────────────────────────────────────────
 //
-// Mirroring a profile save upward is only safe once the server's answer for
-// this session has been heard. Without that, a fresh device during an outage
-// would create a default profile locally and then push it over the real one
-// the moment the network returned. VALUE and NOT_FOUND both count as heard;
-// an error of any kind does not.
+// The armed state means exactly one thing: it is safe to mirror this
+// session's profile upward. It arms only when the server's answer proves
+// safety — NOT_FOUND (nothing to protect) or a VALUE canonically identical
+// to local (nothing to disagree with). A VALUE that differs from local is a
+// conflict: local is preserved for gameplay, the divergence is surfaced, and
+// the mirror stays closed so the local record cannot overwrite the remote
+// one. Saves stay local-only until a later probe establishes equality or
+// absence, or an explicit conflict-resolution mechanism exists.
+//
+// An earlier revision armed the moment a local profile was found, which
+// meant a device with any local profile mirrored upward without the server
+// ever answering — exactly the blind write this guard exists to prevent.
 
-const heardFrom = new Set<string>();
+const mirrorArmed = new Set<string>();
+const probing = new Set<string>();
+
+/** Deterministic canonical form: object key insertion order never makes two
+ *  equal profiles look different. */
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`;
+}
+
+function probeRemoteProfile(
+  remote: RefiRemote,
+  sessionId: string,
+  local: unknown,
+): void {
+  if (mirrorArmed.has(sessionId) || probing.has(sessionId)) return;
+  probing.add(sessionId);
+  void remote.loadProfile(sessionId).then(answer => {
+    probing.delete(sessionId);
+    if (answer.kind === 'NOT_FOUND') {
+      mirrorArmed.add(sessionId);
+    } else if (answer.kind === 'VALUE') {
+      if (canonicalJson(answer.value) === canonicalJson(local)) {
+        mirrorArmed.add(sessionId);
+      } else {
+        recordConflict({
+          kind: 'PROFILE', key: sessionId,
+          detail: 'remote profile differs from local; local kept, upward mirror held until resolved',
+        });
+      }
+    }
+    // Any error: not armed. The next loadProfile probes again.
+  }).catch(() => { probing.delete(sessionId); });
+}
 
 /**
  * Build the port used when a ReFi API is configured: local first for
@@ -91,16 +159,19 @@ export function makeMirroredStore(remote: RefiRemote): PersistencePort {
     async loadProfile(sessionId) {
       const local = await localStore.loadProfile(sessionId);
       if (local) {
-        heardFrom.add(sessionId);
+        // Local answers now; the server's answer arrives in the background
+        // and is what can arm the upward mirror — never the local hit itself.
+        probeRemoteProfile(remote, sessionId, local);
         return local;
       }
       const answer = await remote.loadProfile(sessionId);
       if (answer.kind === 'VALUE') {
-        heardFrom.add(sessionId);
+        // Hydrated verbatim, so local and remote are identical: safe to arm.
+        mirrorArmed.add(sessionId);
         await localStore.saveProfile(sessionId, answer.value);
         return answer.value;
       }
-      if (answer.kind === 'NOT_FOUND') heardFrom.add(sessionId);
+      if (answer.kind === 'NOT_FOUND') mirrorArmed.add(sessionId);
       // NOT_FOUND: a genuinely new player. Anything else: an outage, which
       // must read as "nothing to hydrate from", never as "no account" — the
       // guard above keeps saves from mirroring until the server has spoken.
@@ -111,17 +182,20 @@ export function makeMirroredStore(remote: RefiRemote): PersistencePort {
       // Durability is local and immediate; the mirror is told afterwards and
       // its failure is its own problem.
       await localStore.saveProfile(sessionId, profile);
-      if (heardFrom.has(sessionId)) void remote.saveProfile(sessionId, profile);
+      if (mirrorArmed.has(sessionId)) {
+        enqueueMirror(`profile:${sessionId}`, () => remote.saveProfile(sessionId, profile));
+      }
     },
 
     async saveTipState(sessionId, record) {
       await localStore.saveTipState(sessionId, record);
-      void remote.saveTipState(sessionId, record);
+      enqueueMirror(`tip:${sessionId}:${record.tipCode}`,
+        () => remote.saveTipState(sessionId, record));
     },
 
     async saveGuidanceMode(sessionId, mode) {
       await localStore.saveGuidanceMode(sessionId, mode);
-      void remote.saveGuidanceMode(sessionId, mode);
+      enqueueMirror(`guidance:${sessionId}`, () => remote.saveGuidanceMode(sessionId, mode));
     },
 
     async loadDailyTape(sessionId, tapeDate) {
@@ -137,7 +211,8 @@ export function makeMirroredStore(remote: RefiRemote): PersistencePort {
 
     async saveDailyTape(sessionId, submission) {
       await localStore.saveDailyTape(sessionId, submission);
-      void remote.saveDailyTape(sessionId, submission);
+      enqueueMirror(`tape:${sessionId}:${submission.tapeDate}`,
+        () => remote.saveDailyTape(sessionId, submission));
     },
 
     async loadRunRecords(sessionId) {
@@ -169,10 +244,14 @@ export function makeMirroredStore(remote: RefiRemote): PersistencePort {
  */
 export function wireMirrors(remote: RefiRemote, sessionId: () => string): void {
   setRunRecordMirror(record => {
-    void remote.saveRunRecord(sessionId(), record);
+    const session = sessionId();
+    enqueueMirror(`run:${session}:${record.runId}`,
+      () => remote.saveRunRecord(session, record));
   });
   setMachineVersionMirror(record => {
-    void remote.saveMachineVersion(sessionId(), record);
+    const session = sessionId();
+    enqueueMirror(`machine:${session}:${record.machineName}:${String(record.version)}`,
+      () => remote.saveMachineVersion(session, record));
   });
 }
 
