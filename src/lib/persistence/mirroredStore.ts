@@ -24,7 +24,7 @@ import {
 
 /** A disagreement between this device and the mirror, kept for inspection. */
 export interface SyncConflict {
-  kind: 'RUN' | 'MACHINE_VERSION' | 'REFUSED';
+  kind: 'RUN' | 'MACHINE_VERSION' | 'PROFILE' | 'REFUSED';
   key: string;
   detail: string;
 }
@@ -77,8 +77,42 @@ function noteMachineOutcome(key: string, outcome: RemoteMachineOutcome): void {
 // would create a default profile locally and then push it over the real one
 // the moment the network returned. VALUE and NOT_FOUND both count as heard;
 // an error of any kind does not.
+//
+// The guard applies on the local-hit path too. An earlier revision marked the
+// session as heard the moment a local profile was found, which meant a device
+// with any local profile mirrored upward without the server ever answering —
+// exactly the blind write the guard exists to prevent. Now a local hit returns
+// immediately (local is the authority for gameplay) while a background probe
+// asks the remote; only its VALUE or NOT_FOUND answer opens the mirror, and a
+// VALUE that disagrees with local is surfaced as a diagnostic before the local
+// record, which is kept, resumes mirroring over it.
 
 const heardFrom = new Set<string>();
+const probing = new Set<string>();
+
+function probeRemoteProfile(
+  remote: RefiRemote,
+  sessionId: string,
+  local: unknown,
+): void {
+  if (heardFrom.has(sessionId) || probing.has(sessionId)) return;
+  probing.add(sessionId);
+  void remote.loadProfile(sessionId).then(answer => {
+    probing.delete(sessionId);
+    if (answer.kind === 'VALUE') {
+      heardFrom.add(sessionId);
+      if (JSON.stringify(answer.value) !== JSON.stringify(local)) {
+        recordConflict({
+          kind: 'PROFILE', key: sessionId,
+          detail: 'remote profile differs from local; local kept and mirrored as the device authority',
+        });
+      }
+    } else if (answer.kind === 'NOT_FOUND') {
+      heardFrom.add(sessionId);
+    }
+    // Any error: still not heard. The next loadProfile probes again.
+  }).catch(() => { probing.delete(sessionId); });
+}
 
 /**
  * Build the port used when a ReFi API is configured: local first for
@@ -91,7 +125,9 @@ export function makeMirroredStore(remote: RefiRemote): PersistencePort {
     async loadProfile(sessionId) {
       const local = await localStore.loadProfile(sessionId);
       if (local) {
-        heardFrom.add(sessionId);
+        // Local answers now; the server's answer arrives in the background
+        // and is what opens the upward mirror — never the local hit itself.
+        probeRemoteProfile(remote, sessionId, local);
         return local;
       }
       const answer = await remote.loadProfile(sessionId);

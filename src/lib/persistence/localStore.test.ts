@@ -58,9 +58,10 @@ test('a corrupt stored value reads as absent rather than throwing', async () => 
 });
 
 test('one daily tape submission per date, per session', async () => {
-  await localStore.saveDailyTape('ses_a', { tapeDate: '2026-08-21', playerAction: 'HOLD', score: 7 });
+  await localStore.saveDailyTape('ses_a',
+    { tapeDate: '2026-08-21', tapeId: 'tape_001', playerAction: 'HOLD', score: 7 });
   assert.deepEqual(await localStore.loadDailyTape('ses_a', '2026-08-21'),
-    { tapeDate: '2026-08-21', playerAction: 'HOLD', score: 7 });
+    { tapeDate: '2026-08-21', tapeId: 'tape_001', playerAction: 'HOLD', score: 7 });
   // A different day is a different decision, and a different session is a
   // different player.
   assert.equal(await localStore.loadDailyTape('ses_a', '2026-08-22'), null);

@@ -29,6 +29,13 @@ export interface TipRecord {
 
 export interface DailyTapeSubmission {
   tapeDate: string;
+  /**
+   * Which authored tape this decision answered. The date says when the call
+   * was made; the id says what it was about, and the two can diverge (an
+   * authored tape rotates through the calendar). daily_tape_submissions
+   * requires it, so a submission without it cannot reach the database.
+   */
+  tapeId: string;
   playerAction: string;
   score: number;
 }

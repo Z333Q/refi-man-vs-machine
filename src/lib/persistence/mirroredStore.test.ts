@@ -89,15 +89,60 @@ const MODULES = ['UNIVERSE', 'SIGNAL'] as const;
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
-test('a local profile is answered without asking the remote at all', async () => {
-  let asked = 0;
+test('a local profile answers immediately; the remote is only probed in the background', async () => {
+  // A remote that never answers: if the local hit waited on it, this test
+  // could not resolve.
+  const never = new Promise<never>(() => {});
   const store = makeMirroredStore(fakeRemote({
-    loadProfile: async () => { asked++; return { kind: 'NETWORK_ERROR' }; },
+    loadProfile: () => never as never,
   }));
-  await store.saveProfile('ses_a', { alphaXp: 500 } as ProfileSnapshot);
-  const back = await store.loadProfile('ses_a');
-  assert.equal((back as { alphaXp: number } | null)?.alphaXp, 500);
-  assert.equal(asked, 0, 'local is authoritative; the remote is not consulted');
+  await store.saveProfile('ses_probe_slow', { alphaXp: 500 } as ProfileSnapshot);
+  const back = await store.loadProfile('ses_probe_slow');
+  assert.equal((back as { alphaXp: number } | null)?.alphaXp, 500,
+    'local answers without waiting for the remote probe');
+});
+
+test('a local hit does not open the mirror by itself: an unanswered probe keeps saves local-only', async () => {
+  const remote = fakeRemote({
+    loadProfile: async () => ({ kind: 'NETWORK_ERROR' }),
+  });
+  const store = makeMirroredStore(remote);
+  await store.saveProfile('ses_probe_err', { alphaXp: 10 } as ProfileSnapshot);
+  await store.loadProfile('ses_probe_err');
+  await new Promise(resolve => setImmediate(resolve));
+  await store.saveProfile('ses_probe_err', { alphaXp: 20 } as ProfileSnapshot);
+  assert.equal(remote.saved.profiles.length, 0,
+    'a local profile alone must never count as having heard the server');
+});
+
+test('the background probe opens the mirror on NOT_FOUND', async () => {
+  const remote = fakeRemote({
+    loadProfile: async () => ({ kind: 'NOT_FOUND' }),
+  });
+  const store = makeMirroredStore(remote);
+  await store.saveProfile('ses_probe_nf', { alphaXp: 10 } as ProfileSnapshot);
+  await store.loadProfile('ses_probe_nf');
+  await new Promise(resolve => setImmediate(resolve));
+  await store.saveProfile('ses_probe_nf', { alphaXp: 20 } as ProfileSnapshot);
+  assert.equal(remote.saved.profiles.length, 1, 'the server said "no profile": mirroring is safe');
+});
+
+test('a differing remote profile is surfaced as a diagnostic; local stays the device authority', async () => {
+  const remote = fakeRemote({
+    loadProfile: async () => ({ kind: 'VALUE', value: { alphaXp: 999 } as ProfileSnapshot }),
+  });
+  const store = makeMirroredStore(remote);
+  await store.saveProfile('ses_probe_diff', { alphaXp: 10 } as ProfileSnapshot);
+  const back = await store.loadProfile('ses_probe_diff');
+  assert.equal((back as { alphaXp: number } | null)?.alphaXp, 10, 'local is kept');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(
+    syncConflicts().some(c => c.kind === 'PROFILE' && c.key === 'ses_probe_diff'),
+    'the divergence is surfaced, not swallowed',
+  );
+  await store.saveProfile('ses_probe_diff', { alphaXp: 20 } as ProfileSnapshot);
+  assert.equal(remote.saved.profiles.length, 1,
+    'once the server has answered, the local record resumes mirroring as the device authority');
 });
 
 test('a remote outage on a fresh device reads as nothing to hydrate, and holds profile mirroring', async () => {
