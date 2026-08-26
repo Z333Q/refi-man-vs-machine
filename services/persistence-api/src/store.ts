@@ -51,20 +51,27 @@ export async function resolveSessionForRead(pool: Pool, sessionId: string): Prom
 /**
  * Resolve the session for a scoped write, inside the caller's transaction.
  * A missing row is created (anonymous play starts here); an anonymous row is
- * touched; a linked row is refused before anything else happens — never
- * blindly upserted first.
+ * touched; a linked row is refused before its data is touched.
+ *
+ * Order matters for concurrency: a row that does not exist cannot be
+ * row-locked, so a SELECT-then-INSERT lets two first writes to a brand-new
+ * session both observe absence and race the insert (the client serializes
+ * per resource key, not per session, so a tip and a guidance write are
+ * legitimately concurrent). The idempotent INSERT settles creation first —
+ * it cannot mutate an existing linked row — and the locked SELECT
+ * immediately after is what establishes authorization.
  */
 async function resolveSessionForWrite(c: PoolClient, sessionId: string): Promise<void> {
+  await c.query(
+    `INSERT INTO game_sessions (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`,
+    [sessionId],
+  );
   const { rows } = await c.query(
     `SELECT user_id FROM game_sessions WHERE id = $1 FOR UPDATE`,
     [sessionId],
   );
   const row = rows[0];
-  if (!row) {
-    await c.query(`INSERT INTO game_sessions (id) VALUES ($1)`, [sessionId]);
-    return;
-  }
-  if (row.user_id !== null) {
+  if (row && row.user_id !== null) {
     throw new HttpError(403, 'authentication_required');
   }
   await c.query(`UPDATE game_sessions SET last_seen_at = now() WHERE id = $1`, [sessionId]);
@@ -615,8 +622,13 @@ export async function putRun(pool: Pool, sessionId: string, run: WireRunRecord):
       },
     );
 
-    if (appended.length === 0 && progress < 0) {
-      return; // Same history, earlier state: stale, and state never regresses.
+    // A backward record never lands, whatever else it carries. In particular
+    // a record with MORE decisions but an EARLIER checkpoint or phase is
+    // internally inconsistent or stale: letting it append and then rewrite
+    // the scalar state backwards would be exactly the regression this whole
+    // function exists to prevent. The check therefore precedes the append.
+    if (progress < 0) {
+      return;
     }
 
     await insertDecisions(c, run.runId, appended);

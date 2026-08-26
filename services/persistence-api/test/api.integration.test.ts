@@ -113,6 +113,32 @@ describe('persistence-api against the founding schema', {
     assert.equal(rows[0].n, 0, 'the refused write must not have touched anything');
   });
 
+  test('two concurrent first writes to a brand-new session both land, one row', async () => {
+    // The client serializes per resource key, not per session, so a tip and a
+    // guidance write to a session the server has never seen are legitimately
+    // concurrent. Both must succeed; the session must exist exactly once.
+    const s = sid(0x12);
+    const [guidance, tip] = await Promise.all([
+      put('/v1/guidance', s, { mode: 'STANDARD' }),
+      post('/v1/tips', s, { tipCode: 'FIRST_TIP', state: 'SHOWN' }),
+    ]);
+    assert.equal(guidance.status, 204);
+    assert.equal(tip.status, 204);
+
+    const { rows: sessions } = await pool.query(
+      `SELECT count(*)::int AS n, bool_and(user_id IS NULL) AS anon
+       FROM game_sessions WHERE id = $1`, [s]);
+    assert.equal(sessions[0].n, 1, 'exactly one session row');
+    assert.equal(sessions[0].anon, true, 'the session remains anonymous');
+
+    const { rows: g } = await pool.query(
+      `SELECT guidance_mode FROM guidance_settings WHERE session_id = $1`, [s]);
+    assert.equal(g[0].guidance_mode, 'STANDARD');
+    const { rows: t } = await pool.query(
+      `SELECT tip_state FROM user_tip_states WHERE session_id = $1 AND tip_code = 'FIRST_TIP'`, [s]);
+    assert.equal(t[0].tip_state, 'SHOWN');
+  });
+
   // ─── Profile ────────────────────────────────────────────────────────────────
 
   test('profile: 404 before first write, then PUT/GET round-trips the domain object', async () => {
@@ -403,6 +429,33 @@ describe('persistence-api against the founding schema', {
       runFixture({ runId, decisions: [decision(1)], currentCheckpoint: 2, state: 'SIGNAL' }))).status, 204);
     list = await (await call('/v1/runs', s)).json() as { state: string }[];
     assert.equal(list[0]?.state, 'COMMITTING', 'phase must never move backward');
+  });
+
+  test('a longer history with an earlier checkpoint cannot append and regress', async () => {
+    // Internally inconsistent (or stale beyond repair): more decisions than
+    // the store holds, but an earlier checkpoint and phase. It must not get
+    // to append its extra decision and then drag the scalar state backwards.
+    const s = sid(0x58);
+    const runId = 'run_a3b2c3d4e5f60718293a4b08';
+    const stored = runFixture({
+      runId, decisions: [decision(1), decision(2)],
+      currentCheckpoint: 3, state: 'COMMITTING',
+    });
+    assert.equal((await put(`/v1/runs/${runId}`, s, stored)).status, 204);
+
+    const inconsistent = runFixture({
+      runId, decisions: [decision(1), decision(2), decision(3)],
+      currentCheckpoint: 2, state: 'SIGNAL',
+    });
+    assert.equal((await put(`/v1/runs/${runId}`, s, inconsistent)).status, 204,
+      'stale, so a no-op, not an error');
+
+    const list = await (await call('/v1/runs', s)).json() as
+      { currentCheckpoint: number; state: string; decisions: unknown[] }[];
+    assert.equal(list[0]?.currentCheckpoint, 3, 'the checkpoint must not regress');
+    assert.equal(list[0]?.state, 'COMMITTING', 'the phase must not regress');
+    assert.equal(list[0]?.decisions.length, 2,
+      'the inconsistent extra decision must not have been appended');
   });
 
   // ─── Machine versions ───────────────────────────────────────────────────────
