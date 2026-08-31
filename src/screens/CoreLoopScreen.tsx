@@ -1777,13 +1777,23 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     caption="AREA IS YOUR ALLOCATION. OUTLINE IS BEFORE YOUR STANCE. PNL IS WHAT THE MARKET DID."
                   />
                 </div>
+                {/* Stacked until there is room for two columns.
+                    Found on a real phone: two fixed columns at every width left
+                    each panel about 150pt, and a long action code (
+                    ROTATE_DEFENSIVE) painted straight across the machine panel
+                    beside it. The page never scrolled sideways, so a
+                    document-level overflow check could not see it. Android
+                    Chrome scales text in ways desktop emulation does not, so
+                    the cell cannot assume a font size: it gets the full width
+                    on a phone, and the code is allowed to break rather than
+                    escape. */}
                 <div
-                  className="grid grid-cols-2 gap-4 mb-5 transition-opacity duration-500"
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5 transition-opacity duration-500"
                   style={{ opacity: revealDelay }}
                 >
-                  <div className="border border-phosphor/20 bg-terminal-deep/40 p-4">
+                  <div className="border border-phosphor/20 bg-terminal-deep/40 p-4 min-w-0">
                     <div className="text-phosphor-dim text-xs tracking-widest mb-2">YOUR CALL</div>
-                    <div className="text-phosphor text-xl font-bold tracking-wide">
+                    <div className="text-phosphor text-xl font-bold tracking-wide break-words">
                       {lastDecision?.actionCode}
                     </div>
                     <div className="text-phosphor-dim text-xs mt-1">
