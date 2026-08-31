@@ -30,7 +30,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: 'real-flow.spec.ts' },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: /real-flow\.spec\.ts|pointer-commit\.spec\.ts/ },
     // §62 and the viewport gate both claim the game is reachable on a phone.
     // That claim is checked here rather than asserted.
     //
@@ -39,7 +39,7 @@ export default defineConfig({
     // separate WebKit download. The claim under test is the layout at phone
     // width, not WebKit's rendering, so this buys the coverage without making
     // the suite depend on a browser the machine may not have.
-    { name: 'mobile', use: { ...devices['Pixel 5'] }, testIgnore: 'real-flow.spec.ts' },
+    { name: 'mobile', use: { ...devices['Pixel 5'] }, testIgnore: /real-flow\.spec\.ts|pointer-commit\.spec\.ts/ },
     // The production build, played the way a player would.
     //
     // Every other project runs against the dev server, where the DEMO jump
@@ -54,6 +54,33 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1440, height: 900 },
+        baseURL: 'http://127.0.0.1:5200',
+      },
+    },
+    // The pull, driven by real browser pointer input.
+    //
+    // The deterministic replay suite proves the geometry and the state machine
+    // agree on a sample stream. It cannot prove a hand on a real page produces
+    // that stream: hit testing, pointer capture, coalescing, the filter and the
+    // layout all sit in between, and that is where a gesture breaks for a
+    // player while every unit test stays green. These run on the production
+    // build for the same reason real-flow does.
+    {
+      name: 'pointer-desktop',
+      testMatch: 'pointer-commit.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+        baseURL: 'http://127.0.0.1:5200',
+      },
+    },
+    {
+      name: 'pointer-phone',
+      testMatch: 'pointer-commit.spec.ts',
+      // Pixel 5 portrait, with touch: §62 forbids an orientation gate, so the
+      // phone has to commit a decision in the orientation it is held in.
+      use: {
+        ...devices['Pixel 5'],
         baseURL: 'http://127.0.0.1:5200',
       },
     },
