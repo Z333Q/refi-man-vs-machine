@@ -112,6 +112,9 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
   // The pre-commit allocation, snapshotted at the moment of commit so the
   // reveal can ghost what the field looked like before the world moved.
   const blocksBeforeRef = useRef<BlockInput[]>([]);
+  // Portfolio value at the same frozen moment, so the reveal can state the
+  // checkpoint's portfolio move as a fact rather than re-deriving it.
+  const valueBeforeRef = useRef<number | null>(null);
   // Which stance the earned Block Field is previewing. Preview only: it never
   // touches pending decision state, so looking cannot become deciding.
   const [previewStance, setPreviewStance] = useState<ActionCode | null>(null);
@@ -512,6 +515,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
     // run itself so the snapshot is the exact state the engine advances from.
     if (run) {
       blocksBeforeRef.current = blocksFromPortfolio(run.portfolio.positions, run.portfolio.cashWeight);
+      valueBeforeRef.current = run.portfolio.value;
     }
     setPreviewStance(null);
     commitDecision(command);
@@ -1768,13 +1772,20 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                   style={{ opacity: revealDelay }}
                   data-testid="block-field-reveal"
                 >
-                  <div className="text-phosphor-dim text-xs tracking-widest mb-2">BLOCK FIELD · RESOLVED</div>
+                  <div className="text-phosphor-dim text-xs tracking-widest">BLOCK FIELD</div>
+                  <div className="text-phosphor text-xs tracking-widest mb-2">YOUR PORTFOLIO AFTER THIS STANCE</div>
                   <BlockField
                     blocks={blocksFromPortfolio(portfolio.positions, portfolio.cashWeight)}
                     previous={blocksBeforeRef.current.length > 0 ? blocksBeforeRef.current : null}
                     height={150}
                     reducedMotion={reducedMotion}
-                    caption="AREA IS YOUR ALLOCATION. OUTLINE IS BEFORE YOUR STANCE. PNL IS WHAT THE MARKET DID."
+                    caption="AREA = YOUR ALLOCATION NOW · OUTLINE = BEFORE YOUR STANCE"
+                    resolved
+                    marketMove={
+                      valueBeforeRef.current !== null && valueBeforeRef.current > 0
+                        ? portfolio.value / valueBeforeRef.current - 1
+                        : null
+                    }
                   />
                 </div>
                 {/* Stacked until there is room for two columns.

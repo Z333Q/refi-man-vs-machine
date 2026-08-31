@@ -1,42 +1,122 @@
-import { useMemo } from 'react';
-import { layoutBlocks, sectorHue, type BlockInput } from '../../lib/blockField';
+import { useEffect, useMemo, useState } from 'react';
+import { allocationChanges, layoutBlocks, sectorHue, type BlockInput } from '../../lib/blockField';
+import BlockFieldLadder from './BlockFieldLadder';
 
 // ─── Block field ──────────────────────────────────────────────────────────────
-// The portfolio as area. Size means allocation, hue means sector, and cash is
-// drawn hollow so dry powder reads as capacity rather than as another holding.
+// The portfolio as area on a desktop, as a ladder on a phone. One model,
+// two presentations (2026-08-31 mobile UX ruling): blocksFromPortfolio stays
+// the single derivation, and this component only chooses how to draw it.
+//
+//   >= sm   the treemap. Size means allocation, hue means sector, cash is
+//           drawn hollow so dry powder reads as capacity rather than as
+//           another holding. Ghost outlines carry the pre-stance allocation.
+//   <  sm   BlockFieldLadder. At phone width the treemap collapsed into ten
+//           outlined rectangles that read as disabled form fields; the ladder
+//           keeps every holding visible, stable, and legible instead.
 //
 // Two sanctioned homes (2026-08-25 #30 salvage ruling):
 //
 //   reveal side     the resolved portfolio after a commit, with the pre-commit
-//                   field ghosted beneath it
+//                   field beneath/marked
 //   PORTFOLIO panel once the BLOCK_FIELD module is earned, with the stance
 //                   preview
 //
 // It never renders on the pre-commit DECIDE surface; the e2e suite pins that.
 //
-// PnL is never colour-alone (Sec 62): the edge colour is reinforcement, the
-// signed number prints on any block with room for it, and the SVG label reads
-// symbol, sector, allocation and PnL for every block.
+// PnL is never colour-alone (§62): on the treemap the edge colour is
+// reinforcement, the signed number prints on any block with room for it, and
+// the SVG label reads symbol, sector, allocation and PnL for every block. On
+// the ladder PnL lives in the per-row disclosure after resolution.
 
 interface Props {
   blocks: BlockInput[];
-  /** Ghost outlines of a previous allocation, drawn to show what moved. */
+  /** The allocation before the stance: treemap ghosts, ladder markers. */
   previous?: BlockInput[] | null;
   height?: number;
   reducedMotion?: boolean;
-  /** Caption under the field. Kept to one short line. */
+  /** Caption under the treemap. Kept to one short line. Desktop only. */
   caption?: string;
+  /**
+   * Post-resolution surface: enables the ladder's per-row disclosure, the
+   * change summary, and the MARKET RESULT line. Never set pre-commit.
+   */
+  resolved?: boolean;
+  /** Portfolio-level move this checkpoint produced, for MARKET RESULT. */
+  marketMove?: number | null;
 }
 
 const W = 600;
+
+/**
+ * True below Tailwind's `sm` (640px). A media query rather than a CSS-hidden
+ * pair: the phone DOM genuinely contains no treemap, so nothing off-screen
+ * competes for the accessibility tree or the layout.
+ */
+function useIsNarrow(): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const onChange = () => setNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return narrow;
+}
 
 function pnlText(pnl: number): string {
   return `${pnl >= 0 ? '+' : ''}${(pnl * 100).toFixed(1)}%`;
 }
 
-export default function BlockField({
-  blocks, previous = null, height = 200, reducedMotion = false, caption,
-}: Props) {
+/** How many changed rows print before the summary defers to the ladder. */
+const CHANGE_SUMMARY_CAP = 6;
+
+/**
+ * The consequence of the stance in plain terms: only the rows whose printed
+ * percent moved. The causal link the field alone was missing — I chose X,
+ * therefore my portfolio moved like Y.
+ */
+function ChangeSummary({ previous, current }: { previous: BlockInput[]; current: BlockInput[] }) {
+  const changes = useMemo(() => allocationChanges(previous, current), [previous, current]);
+  return (
+    <div className="mt-3 pt-2 border-t border-phosphor/10" data-testid="block-field-changes">
+      {changes.length === 0 ? (
+        <div className="text-xs tracking-widest text-phosphor-mid">
+          YOUR STANCE DID NOT CHANGE ALLOCATION
+        </div>
+      ) : (
+        <>
+          <div className="text-xs tracking-widest text-phosphor-mid mb-1">YOUR STANCE CHANGED</div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+            {changes.slice(0, CHANGE_SUMMARY_CAP).map(c => (
+              <div key={c.key} className="flex justify-between text-xs tabular-nums" data-testid="change-row">
+                <span className={c.isCash ? 'text-phosphor-mid' : 'text-phosphor'}>{c.isCash ? 'CASH' : c.key}</span>
+                <span className="text-terminal-white">{c.beforePct}% → {c.afterPct}%</span>
+              </div>
+            ))}
+          </div>
+          {changes.length > CHANGE_SUMMARY_CAP && (
+            <div className="text-[11px] text-phosphor-dim tracking-widest mt-1">
+              +{changes.length - CHANGE_SUMMARY_CAP} MORE CHANGED
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The desktop presentation: the incumbent treemap, unchanged. */
+function BlockFieldTreemap({
+  blocks, previous, height, reducedMotion, caption,
+}: {
+  blocks: BlockInput[];
+  previous: BlockInput[] | null;
+  height: number;
+  reducedMotion: boolean;
+  caption?: string;
+}) {
   const rects = useMemo(() => layoutBlocks(blocks, W, height), [blocks, height]);
   const ghosts = useMemo(
     () => (previous ? layoutBlocks(previous, W, height) : []),
@@ -52,12 +132,13 @@ export default function BlockField({
     .join('; ');
 
   return (
-    <div data-testid="block-field">
+    <>
       <svg
         viewBox={`0 0 ${W} ${height}`}
         className="w-full"
         role="img"
         aria-label={`Portfolio allocation. ${label}.`}
+        data-testid="block-field-treemap"
       >
         {/* Ghosts first, so the current field reads on top of where it was. */}
         {ghosts.map(g => (
@@ -110,6 +191,52 @@ export default function BlockField({
       </svg>
       {caption && (
         <div className="text-phosphor-dim text-xs tracking-widest mt-1">{caption}</div>
+      )}
+    </>
+  );
+}
+
+export default function BlockField({
+  blocks, previous = null, height = 200, reducedMotion = false, caption,
+  resolved = false, marketMove = null,
+}: Props) {
+  const narrow = useIsNarrow();
+
+  if (blocks.length === 0) return null;
+
+  return (
+    <div data-testid="block-field">
+      {narrow ? (
+        <BlockFieldLadder
+          blocks={blocks}
+          previous={previous}
+          resolved={resolved}
+          reducedMotion={reducedMotion}
+        />
+      ) : (
+        <BlockFieldTreemap
+          blocks={blocks}
+          previous={previous}
+          height={height}
+          reducedMotion={reducedMotion}
+          caption={caption}
+        />
+      )}
+
+      {/* Allocation and the market are different channels; after resolution
+          they get different sections instead of one paragraph. */}
+      {resolved && marketMove !== null && (
+        <div className="mt-2 flex items-baseline gap-3" data-testid="block-field-market">
+          <span className="text-xs tracking-widest text-phosphor-mid">MARKET RESULT</span>
+          <span className={`text-sm tabular-nums font-bold ${marketMove >= 0 ? 'text-paper-green' : 'text-risk-red'}`}>
+            {pnlText(marketMove)}
+          </span>
+          <span className="text-[11px] text-phosphor-dim tracking-widest">PORTFOLIO MOVE</span>
+        </div>
+      )}
+
+      {resolved && previous && previous.length > 0 && (
+        <ChangeSummary previous={previous} current={blocks} />
       )}
     </div>
   );

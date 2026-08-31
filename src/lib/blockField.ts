@@ -222,3 +222,61 @@ export function sectorHue(sector: string, isCash = false): string {
   if (isCash) return 'transparent';
   return SECTOR_HUES[sector] ?? '#27634E';
 }
+
+// ─── Change summary ──────────────────────────────────────────────────────────
+
+export interface AllocationChange {
+  key: string;
+  /** Display percent before the stance. */
+  beforePct: number;
+  /** Display percent now. */
+  afterPct: number;
+  isCash: boolean;
+}
+
+/** The one rounding every surface prints for a weight. */
+export function displayPct(weight: number): number {
+  return Math.round(weight * 100);
+}
+
+/**
+ * What the stance actually changed, at display precision, in stable field
+ * order (positions first, cash last), with fully exited positions appended.
+ *
+ * Display precision is deliberate: moving cash rescales every equity by a
+ * fraction of a point, and a summary that lists ten rows for one decision
+ * teaches nothing. A row belongs here only when the number the player reads
+ * moved. The full ladder stays authoritative; this is the caption, not the
+ * ledger.
+ */
+export function allocationChanges(
+  previous: readonly BlockInput[],
+  current: readonly BlockInput[],
+): AllocationChange[] {
+  const beforeByKey = new Map(previous.map(b => [b.key, b.weight]));
+  const out: AllocationChange[] = [];
+
+  for (const cur of orderBlocks(current)) {
+    const beforePct = displayPct(beforeByKey.get(cur.key) ?? 0);
+    const afterPct = displayPct(cur.weight);
+    if (beforePct !== afterPct) {
+      out.push({ key: cur.key, beforePct, afterPct, isCash: cur.isCash });
+    }
+  }
+
+  // A position that was exited entirely no longer appears in the current
+  // field; it still changed, and the summary owes the player its exit.
+  for (const prev of orderBlocks(previous)) {
+    const stillHeld = current.some(c => c.key === prev.key && c.weight > 0);
+    if (!stillHeld && displayPct(prev.weight) !== 0) {
+      out.push({
+        key: prev.key,
+        beforePct: displayPct(prev.weight),
+        afterPct: 0,
+        isCash: prev.isCash,
+      });
+    }
+  }
+
+  return out;
+}

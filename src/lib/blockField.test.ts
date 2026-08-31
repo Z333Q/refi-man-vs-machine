@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   blocksFromPortfolio, previewStanceBlocks, orderBlocks, layoutBlocks,
+  allocationChanges, displayPct,
   type BlockInput,
 } from './blockField';
 import {
@@ -307,4 +308,85 @@ test('reducer integration: committing COVID CP3 earns the module for CP4', () =>
     command: { action: 'HOLD', conviction: 70 },
   });
   assert.ok(!c1.profile.unlockedModules.includes('BLOCK_FIELD'));
+});
+
+// ─── Change summary: only what the player's number actually moved ────────────
+//
+// The 2026-08-31 mobile ruling: the reveal explains the stance's consequence
+// as a short list of changed rows. Display precision is the law — moving cash
+// rescales every equity by a fraction of a point, and a summary listing ten
+// rows for one decision teaches nothing.
+
+const block = (key: string, weight: number, isCash = false): BlockInput => ({
+  key, weight, sector: isCash ? 'CASH' : 'TECHNOLOGY', pnl: 0, isCash,
+});
+
+test('the change summary lists moved rows and omits unchanged ones', () => {
+  // The acceptance case, verbatim: AAPL 9 -> 10, CASH 20 -> 15, MSFT flat.
+  const before = [block('AAPL', 0.09), block('MSFT', 0.10), block('CASH', 0.20, true)];
+  const after = [block('AAPL', 0.10), block('MSFT', 0.10), block('CASH', 0.15, true)];
+
+  const changes = allocationChanges(before, after);
+  const keys = changes.map(c => c.key);
+
+  assert.ok(keys.includes('AAPL'), 'AAPL moved and must be listed');
+  assert.ok(keys.includes('CASH'), 'CASH moved and must be listed');
+  assert.ok(!keys.includes('MSFT'), 'MSFT did not move and must be absent');
+
+  const aapl = changes.find(c => c.key === 'AAPL')!;
+  assert.equal(aapl.beforePct, 9);
+  assert.equal(aapl.afterPct, 10);
+  const cash = changes.find(c => c.key === 'CASH')!;
+  assert.equal(cash.beforePct, 20);
+  assert.equal(cash.afterPct, 15);
+  assert.ok(cash.isCash);
+});
+
+test('a hold produces an empty change summary', () => {
+  const book = [block('AAPL', 0.10), block('MSFT', 0.10), block('CASH', 0.20, true)];
+  assert.deepEqual(allocationChanges(book, book), []);
+});
+
+test('sub-display-precision drift is not a change', () => {
+  // 10.04% and 9.96% both print as 10%; the player's number did not move.
+  const before = [block('AAPL', 0.1004), block('CASH', 0.8996, true)];
+  const after = [block('AAPL', 0.0996), block('CASH', 0.9004, true)];
+  assert.deepEqual(allocationChanges(before, after), []);
+});
+
+test('a fully exited position still appears in the summary', () => {
+  const before = [block('AAPL', 0.10), block('DAL', 0.08), block('CASH', 0.20, true)];
+  const after = [block('AAPL', 0.10), block('DAL', 0), block('CASH', 0.28, true)];
+  const changes = allocationChanges(before, after);
+  const dal = changes.find(c => c.key === 'DAL');
+  assert.ok(dal, 'the exited position is owed its exit');
+  assert.equal(dal!.beforePct, 8);
+  assert.equal(dal!.afterPct, 0);
+});
+
+test('summary order follows the stable field order, cash last among held rows', () => {
+  const before = [block('MSFT', 0.10), block('AAPL', 0.10), block('CASH', 0.20, true)];
+  const after = [block('MSFT', 0.12), block('AAPL', 0.08), block('CASH', 0.24, true)];
+  const keys = allocationChanges(before, after).map(c => c.key);
+  assert.deepEqual(keys, ['AAPL', 'MSFT', 'CASH']);
+});
+
+test('every engine stance summary is consistent with the printed ladder', () => {
+  // Whatever the stance, the summary's percents must be exactly the display
+  // rounding of the fields it compares — never a third derivation.
+  for (const arena of allArenas()) {
+    const p = createInitialPortfolio(arena.id);
+    const before = blocksFromPortfolio(p.positions, p.cashWeight);
+    for (const action of ALL_ACTIONS) {
+      const next = simulatePortfolioAdvance(p, action, 1, arena.id);
+      const after = blocksFromPortfolio(next.positions, next.cashWeight);
+      for (const c of allocationChanges(before, after)) {
+        const b = before.find(x => x.key === c.key);
+        const a = after.find(x => x.key === c.key);
+        assert.equal(c.beforePct, displayPct(b?.weight ?? 0));
+        assert.equal(c.afterPct, displayPct(a?.weight ?? 0));
+        assert.notEqual(c.beforePct, c.afterPct);
+      }
+    }
+  }
 });
