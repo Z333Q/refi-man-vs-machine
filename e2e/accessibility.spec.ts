@@ -28,8 +28,8 @@ test('every keyboard action in the run has a clickable equivalent (§9)', async 
   await dismissOverlays(page);
 
   // The action bar advertises the keys; each must also be a real control.
-  for (const label of [/\[D\] DECIDE/, /\[P\] PORTFOLIO/, /\[R\] RISK/]) {
-    await expect(page.getByRole('button', { name: label })).toBeVisible();
+  for (const label of [/^DECIDE/, /\[P\] PORTFOLIO/, /\[R\] RISK/]) {
+    await expect(page.getByRole('button', { name: label }).first()).toBeVisible();
   }
 });
 

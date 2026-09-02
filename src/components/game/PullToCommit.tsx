@@ -307,7 +307,7 @@ export default function PullToCommit({
         }}
         className={`w-full text-left p-3 border select-none transition-colors ${
           selected ? 'border-phosphor bg-phosphor/10'
-            : affordable ? 'border-phosphor/20 hover:border-phosphor/45'
+            : affordable ? 'border-phosphor/45 hover:border-phosphor/70'
             : 'border-phosphor/10 opacity-40 cursor-not-allowed'
         } ${armed && !reducedMotion ? 'shadow-lg' : ''} ${
           armed && reducedMotion ? 'border-phosphor' : ''
@@ -316,7 +316,7 @@ export default function PullToCommit({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-phosphor-dim/60 text-xs">[{index + 1}]</span>
-            <span className="text-sm font-bold tracking-wide text-phosphor-mid">
+            <span className="text-sm font-bold tracking-wide text-phosphor">
               {stanceTitle(branch)}
             </span>
           </div>

@@ -732,6 +732,9 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
   // (§9 keyboard parity, and the destination of a timid release). Having both
   // end in the same territory is the point.
   const isResolvePhase = phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING';
+  // While the stance cards are open the rails recede, the same device the
+  // conviction block already uses: one focal point per phase.
+  const railsDimmed = decisionPhase && activePanel === 'DECIDE';
   const isFinalCheckpoint = run.currentCheckpoint >= run.totalCheckpoints;
 
   const primaryAction = commitConfirm
@@ -741,14 +744,25 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
         keyHint: '[ENTER]',
         bindEnter: false, // the screen already binds ENTER while confirming
       }
+    : decisionPhase && activePanel !== 'DECIDE'
+      ? {
+          // One forward door per phase (2026-09-01 guidance sweep). From the
+          // signal, the only way onward is into DECIDE, and it lives here
+          // rather than as a second primary inside the panel or a third in
+          // the bar below. The [D] key and the DECIDE tab remain the
+          // keyboard and navigation equivalents (§9).
+          label: 'DECIDE',
+          onClick: () => openPanel('DECIDE'),
+          keyHint: '[D]',
+          bindEnter: false,
+        }
     : decisionPhase
       ? {
-          // The label states the blocker rather than the destination while
-          // there is nothing to review. A control that reads REVIEW & COMMIT
-          // and does nothing when pressed teaches the player that the screen is
-          // broken; this says what the screen is waiting for, which is also
-          // what main's copy said before the zone existed.
-          label: stance ? 'REVIEW & COMMIT' : 'SELECT A STANCE TO CONTINUE',
+          // While no stance is chosen the label points at the cards rather
+          // than reporting a blocker. A control that reads REVIEW & COMMIT and
+          // does nothing teaches the player that the screen is broken; this
+          // tells them where to look.
+          label: stance ? 'REVIEW & COMMIT' : 'PICK A STANCE ABOVE',
           onClick: handleReview,
           disabled: !decisionReady,
           keyHint: '[ENTER]',
@@ -764,6 +778,8 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
 
   const primaryNote = commitConfirm
     ? 'THIS DECISION BECOMES PART OF YOUR RUN RECORD.'
+    : decisionPhase && activePanel !== 'DECIDE'
+      ? `CP ${String(run.currentCheckpoint).padStart(2, '0')} · READ THE SIGNAL, THEN DECIDE`
     : decisionPhase
       ? `CP ${String(run.currentCheckpoint).padStart(2, '0')} · ${stance ? 'STANCE SELECTED' : 'NO STANCE SELECTED'}`
       : isResolvePhase
@@ -1126,7 +1142,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
              genuinely its own: where we are, the headline as orientation, the
              market data table, and the standing portfolio numbers. The signal
              itself has one home, in the centre. */}
-        <div className="hidden lg:flex w-64 flex-shrink-0 border-r border-phosphor/10 flex-col">
+        <div className={`hidden lg:flex w-64 flex-shrink-0 border-r border-phosphor/10 flex-col transition-opacity duration-300 ${railsDimmed ? 'opacity-40' : ''}`}>
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest mb-1">
               {cp.phase.replace(/_/g, ' ')} · {cp.crisisDay}
@@ -1299,13 +1315,6 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                         OBSERVATION MODE: DRAWDOWN EXCEEDS {riskLimitPct}. RUN CONTINUES BUT CANNOT PASS. USE THIS TIME TO STUDY MACHINE DECISIONS.
                       </div>
                     )}
-
-                    <button
-                      onClick={() => openPanel('DECIDE')}
-                      className="cmd-button-primary w-full py-3 text-xs tracking-widest"
-                    >
-                      DECIDE ▶ [D]
-                    </button>
                   </div>
                 )}
 
@@ -1769,7 +1778,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     Reveal side only, after resolution. */}
                 <div
                   className="mb-5 border border-phosphor/10 bg-terminal-deep/40 p-3 transition-opacity duration-500"
-                  style={{ opacity: revealDelay }}
+                  style={{ opacity: revealDelay, transitionDelay: reducedMotion ? '0ms' : '350ms' }}
                   data-testid="block-field-reveal"
                 >
                   <div className="text-phosphor-dim text-xs tracking-widest">BLOCK FIELD</div>
@@ -1800,7 +1809,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     escape. */}
                 <div
                   className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5 transition-opacity duration-500"
-                  style={{ opacity: revealDelay }}
+                  style={{ opacity: revealDelay, transitionDelay: reducedMotion ? '0ms' : '350ms' }}
                 >
                   <div className="border border-phosphor/20 bg-terminal-deep/40 p-4 min-w-0">
                     <div className="text-phosphor-dim text-xs tracking-widest mb-2">YOUR CALL</div>
@@ -1847,7 +1856,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     always matches the sign of the score. */}
                 <div
                   className={`text-sm font-bold tracking-wide mb-1 ${
-                    verdict.sign === 'UNDER_PAR' ? 'text-risk-red'
+                    verdict.sign === 'UNDER_PAR' ? 'text-alert-amber'
                       : verdict.sign === 'AT_PAR' ? 'text-phosphor-mid'
                       : 'text-paper-green'
                   }`}
@@ -1902,7 +1911,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
               </div>
 
               {/* Machine reasoning */}
-              <div className="mb-4 transition-opacity duration-700" style={{ opacity: revealDelay }}>
+              <div className="mb-4 transition-opacity duration-700" style={{ opacity: revealDelay, transitionDelay: reducedMotion ? '0ms' : '350ms' }}>
                 <div className="text-phosphor-dim text-xs tracking-widest mb-2">MACHINE REASONING</div>
                 <div className="space-y-1">
                   {cp.machineDecision.reasoning.slice(0, 3).map((r, i) => (
@@ -1912,7 +1921,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
               </div>
 
               {xpJustEarned > 0 && (
-                <div className="text-paper-green text-xs tracking-widest mb-4 transition-opacity duration-700" style={{ opacity: revealDelay }}>
+                <div className="text-paper-green text-xs tracking-widest mb-4 transition-opacity duration-700" style={{ opacity: revealDelay, transitionDelay: reducedMotion ? '0ms' : '350ms' }}>
                   + {xpJustEarned} ALPHA XP EARNED
                 </div>
               )}
@@ -1963,7 +1972,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
              B holds the pre-commit surface at two elements. Small screens reach
              all of it through the hub rather than carrying it beside the
              decision. */}
-        <div className="hidden lg:flex w-52 flex-shrink-0 border-l border-phosphor/10 flex-col">
+        <div className={`hidden lg:flex w-52 flex-shrink-0 border-l border-phosphor/10 flex-col transition-opacity duration-300 ${railsDimmed ? 'opacity-40' : ''}`}>
           <div className="px-4 py-3 border-b border-phosphor/10 bg-terminal-deep/40">
             <div className="text-phosphor-dim text-xs tracking-widest mb-2">ALPHA PROFILE</div>
             <div className="text-phosphor text-xs font-bold">{state.profile.rankCode.replace(/_/g, ' ')}</div>
@@ -2005,12 +2014,6 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
       {/* ── Contextual action bar ── */}
       {decisionPhase && (
         <div data-spotlight="cp-actions" className="border-t border-phosphor/15 px-4 py-2.5 flex items-center gap-4 bg-terminal-deep/40 flex-shrink-0">
-          <button
-            onClick={() => openPanel('DECIDE')}
-            className="text-xs tracking-widest text-phosphor-dim hover:text-phosphor transition-colors border border-phosphor/20 px-3 py-1.5 hover:border-phosphor/40"
-          >
-            [D] DECIDE
-          </button>
           <button
             onClick={() => openPanel('PORTFOLIO')}
             className="text-xs tracking-widest text-phosphor-dim hover:text-phosphor transition-colors border border-phosphor/20 px-3 py-1.5 hover:border-phosphor/40"
