@@ -23,10 +23,11 @@ import BlockFieldLadder from './BlockFieldLadder';
 //
 // It never renders on the pre-commit DECIDE surface; the e2e suite pins that.
 //
-// PnL is never colour-alone (§62): on the treemap the edge colour is
-// reinforcement, the signed number prints on any block with room for it, and
-// the SVG label reads symbol, sector, allocation and PnL for every block. On
-// the ladder PnL lives in the per-row disclosure after resolution.
+// PnL is never colour-alone (§62): on the treemap the signed number prints on
+// any block with room for it, and the SVG label reads symbol, sector,
+// allocation and PnL for every block. Block edges do NOT carry PnL; a field
+// of red outlines read as an alarm, not as information. On the ladder PnL
+// lives in the per-row disclosure after resolution.
 
 interface Props {
   blocks: BlockInput[];
@@ -151,10 +152,13 @@ function BlockFieldTreemap({
 
         {rects.map(r => {
           const hue = sectorHue(r.sector, r.isCash);
-          // Edge carries PnL as reinforcement only; the printed number is the
-          // accessible channel. Fill brightness stays constant so a crash day
-          // does not turn the field into a flashing mood board.
-          const edge = r.isCash ? '#27634E' : r.pnl > 0.001 ? '#B8FFD9' : r.pnl < -0.001 ? '#D94C4C' : '#0A8F68';
+          // The edge is quiet and uniform. PnL lives only in the printed
+          // signed number (2026-09-01 owner ruling: a red or mint outline on
+          // every block turned a down day into a wall of alarm and pulled the
+          // eye away from the decision). Red stays reserved for critical
+          // risk failure (§32.2), never for an ordinary losing checkpoint.
+          const edge = r.isCash ? '#27634E' : '#0A8F68';
+          const pnlColor = '#D8EEE5';
           const roomForTicker = r.w >= 34 && r.h >= 16;
           const roomForWeight = roomForTicker && r.h >= 30;
           const roomForPnl = roomForWeight && r.h >= 44 && !r.isCash;
@@ -166,7 +170,8 @@ function BlockFieldTreemap({
                 fill={r.isCash ? 'none' : hue}
                 fillOpacity={r.isCash ? 0 : 0.22}
                 stroke={edge}
-                strokeWidth={r.isCash ? 1 : 1.5}
+                strokeWidth={1}
+                strokeOpacity={r.isCash ? 1 : 0.6}
                 strokeDasharray={r.isCash ? '3 3' : undefined}
                 style={reducedMotion ? undefined : { transition: 'all 240ms ease-out' }}
               />
@@ -176,12 +181,12 @@ function BlockFieldTreemap({
                 </text>
               )}
               {roomForWeight && (
-                <text x={r.x + 6} y={r.y + 28} fill="#27634E" fontSize="10" fontFamily="ui-monospace, monospace">
+                <text x={r.x + 6} y={r.y + 28} fill="#0CD4A0" fontSize="10" fontFamily="ui-monospace, monospace">
                   {Math.round(r.weight * 100)}%
                 </text>
               )}
               {roomForPnl && (
-                <text x={r.x + 6} y={r.y + 41} fill={edge} fontSize="10" fontFamily="ui-monospace, monospace">
+                <text x={r.x + 6} y={r.y + 41} fill={pnlColor} fontSize="10" fontFamily="ui-monospace, monospace">
                   {pnlText(r.pnl)}
                 </text>
               )}
