@@ -657,7 +657,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                             : 'border-phosphor/10 text-phosphor-dim cursor-not-allowed'
                         }`}
                       >
-                        {stance ? 'COMMIT ▶ (TUTORIAL ONLY)' : 'SELECT A STANCE TO CONTINUE'}
+                        {stance ? 'COMMIT ▶ (TUTORIAL ONLY)' : 'PICK A STANCE ABOVE'}
                       </button>
                     </div>
                   </div>
