@@ -1145,14 +1145,14 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
               <span className="text-phosphor">{(portfolio.cashWeight * 100).toFixed(0)}%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-phosphor-dim">DRAWDOWN</span>
+              <span className="text-phosphor-dim">DRAWDOWN <span className="text-phosphor-dim/60">· LOSS FROM PEAK</span></span>
               <span className={drawdownColor}>
                 {(portfolio.drawdown * 100).toFixed(1)}%
               </span>
             </div>
             <div>
               <div className="flex justify-between">
-                <span className="text-phosphor-dim">TURNOVER BUDGET</span>
+                <span className="text-phosphor-dim">TURNOVER <span className="text-phosphor-dim/60">· TRADING BUDGET USED</span></span>
                 <span className={turnoverColor}>
                   {(portfolio.turnoverUsed * 100).toFixed(0)}% / {(turnoverBudget * 100).toFixed(0)}%
                 </span>
@@ -1513,7 +1513,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
 
                     {/* ── 1. Stance ── */}
                     <div className="text-phosphor-dim text-xs tracking-widest mb-2">
-                      1 · STANCE
+                      1 · STANCE <span className="text-phosphor-dim/60">· YOUR MOVE</span>
                     </div>
                     <div className="space-y-2 mb-6" ref={measureDecisionRegion}>
                       {branches.map((branch, i) => {
@@ -1548,7 +1548,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                         is the scale they keep. */}
                     <div className={stance ? '' : 'opacity-40 pointer-events-none'}>
                       <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-phosphor-dim text-xs tracking-widest">2 · CONVICTION</span>
+                        <span className="text-phosphor-dim text-xs tracking-widest">2 · CONVICTION <span className="text-phosphor-dim/60">· HOW STRONGLY YOU BELIEVE IT</span></span>
                         <span className="text-phosphor text-lg font-bold tabular-nums">{conviction}</span>
                       </div>
 
@@ -1819,7 +1819,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                   <div className="text-right">
                     <div className="text-phosphor-dim text-xs tracking-widest">MACHINE</div>
                     <div className="text-2xl font-bold text-phosphor-mid mt-1">{lastCheckpointScore.machineScore}</div>
-                    <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">PAR {cp.machinePar}</div>
+                    <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">PAR {cp.machinePar} <span className="text-phosphor-dim/60">· MACHINE TARGET</span></div>
                   </div>
                 </div>
 
@@ -1855,29 +1855,28 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                   aria-expanded={showBreakdown}
                   className="mt-3 text-phosphor-dim text-xs tracking-widest hover:text-phosphor transition-colors"
                 >
-                  {showBreakdown ? 'HIDE BREAKDOWN' : 'HOW THIS WAS SCORED'}
+                  {showBreakdown ? 'HIDE' : 'SEE WHY'}
                 </button>
 
                 {showBreakdown && (
                   <div className="mt-3 border-t border-phosphor/15 pt-3 space-y-3">
-                    {/* The six bare component numbers that used to sit here were
-                        a scoreboard, not an explanation: nothing said what they
-                        measure, what they are weighted at, or which of them
-                        moved the total. This is the same data, decomposed and
-                        attributed, because a player who opens a breakdown is
-                        asking to be taught. */}
-                    <CheckpointAnalysis
-                      score={lastCheckpointScore}
-                      confidence={lastDecision?.confidence ?? 0.5}
-                    />
-
+                    {/* Why first: the one-paragraph cause a player asked for
+                        when they pressed SEE WHY. The decomposition follows for
+                        anyone who wants to see which component moved the
+                        total. Same data as before, in the order a person
+                        reads it. */}
                     <div>
-                      <div className="text-phosphor-dim text-xs tracking-widest mb-1">PROCESS NOTE</div>
+                      <div className="text-phosphor-dim text-xs tracking-widest mb-1">WHY</div>
                       <div className="text-phosphor-mid text-xs leading-relaxed">{cp.teachingPoint}</div>
                       {cp.isHoldValid && lastDecision?.actionCode === 'HOLD' && cp.holdTeaching && (
                         <div className="mt-2 text-paper-green text-xs">✓ {cp.holdTeaching}</div>
                       )}
                     </div>
+
+                    <CheckpointAnalysis
+                      score={lastCheckpointScore}
+                      confidence={lastDecision?.confidence ?? 0.5}
+                    />
                   </div>
                 )}
               </div>

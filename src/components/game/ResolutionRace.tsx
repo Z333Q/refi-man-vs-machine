@@ -306,7 +306,7 @@ export default function ResolutionRace({
         <div className="mt-4 pt-3 border-t border-phosphor/15">
           <div className="flex items-baseline justify-between mb-2">
             <span className="text-phosphor-dim text-xs tracking-widest">CHECKPOINT SCORE</span>
-            <span className="text-phosphor-dim text-xs tracking-widest tabular-nums">PAR {par}</span>
+            <span className="text-phosphor-dim text-xs tracking-widest tabular-nums">PAR {par} <span className="text-phosphor-dim/60">· MACHINE TARGET</span></span>
           </div>
 
           {/* What the draw bought.

@@ -328,6 +328,17 @@ export default function PullToCommit({
           {stanceLine(branch)}
         </div>
 
+        {/* The grip. The card is two controls on one surface (tap opens the
+            precise controls, a pull commits), and nothing on it said so. This
+            is copy inside the existing card, not a new control (61A). The
+            two-mode hint shows for the first two checkpoints only. */}
+        {affordable && !clearanceWarning && !armed && (
+          <div className="flex items-center justify-between mt-2 pl-7 text-phosphor-dim/60 tracking-widest" style={{ fontSize: '10px' }}>
+            <span>{checkpointSequence <= 2 ? 'TAP = SET PRECISELY · PULL = QUICK COMMIT' : ''}</span>
+            <span className="text-phosphor-dim">PULL TO COMMIT</span>
+          </div>
+        )}
+
         {/* Strain striations: two at 60, four at 75, six at 85 and above. */}
         {armed && !reducedMotion && (
           <div className="flex gap-1 mt-2 pl-7" aria-hidden="true">

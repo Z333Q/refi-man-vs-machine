@@ -487,7 +487,7 @@ export default function TutorialScreen({ onComplete }: Props) {
 
                 {/* ── 1. Stance ── */}
                 <div data-spotlight="stances">
-                  <div className="text-phosphor-dim text-xs tracking-widest mb-2">1 · STANCE</div>
+                  <div className="text-phosphor-dim text-xs tracking-widest mb-2">1 · STANCE <span className="text-phosphor-dim/60">· YOUR MOVE</span></div>
                   {gateMessage && step.id === 'STANCE' && (
                     <div
                       role="alert"
@@ -550,7 +550,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                   className={stance && !committed ? '' : 'opacity-40 pointer-events-none'}
                 >
                   <div className="flex items-baseline justify-between mb-2">
-                    <span className="text-phosphor-dim text-xs tracking-widest">2 · CONVICTION</span>
+                    <span className="text-phosphor-dim text-xs tracking-widest">2 · CONVICTION <span className="text-phosphor-dim/60">· HOW STRONGLY YOU BELIEVE IT</span></span>
                     <span className="text-phosphor text-lg font-bold tabular-nums">{conviction}</span>
                   </div>
 
