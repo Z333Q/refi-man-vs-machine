@@ -61,6 +61,14 @@ hints are removed, not wired.
   TAP = SET PRECISELY · PULL = QUICK COMMIT.
 - Thesis prompt copy and meter read as the market arriving, not a form
   expiring. Same fifteen seconds, same THESIS_UNSTATED.
+- Hub is a launch surface: NEXT CHALLENGE with the current opponent, the
+  START door, rank and XP on one line. Dimensions and the session record live
+  on the Alpha Profile only (whose MACHINE BEAT RATE block was a typed fixture
+  and now reads the profile). Ladder summary and module inventory removed;
+  a module is acknowledged only as it unlocks. Builder is one line when locked.
+- Arena Map: LOCKED / NEXT / DONE, machine-beaten as a mark on DONE. Legend
+  and PLAYER PASS · CALIBRATING removed. Inspector in reading order. Columns
+  stack below md.
 
 ## Next, in order
 
@@ -72,5 +80,3 @@ hints are removed, not wired.
 4. CP1 coach re-runs on the first checkpoint of every arena.
 5. Briefing screen: CRITICAL DRAWDOWN, MAX SECTOR EXPOSURE, LEVERAGE,
    SHORT SELLING, TRAINING CUTOFF each get a gloss.
-6. Hub and Arena Map density, reassessed now the run screen is clean (see
-   the 2026-09-05 review notes in the PR).
