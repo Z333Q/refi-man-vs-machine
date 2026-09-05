@@ -14,6 +14,13 @@
 import { listRunRecords } from './runRecord';
 
 export const FIRST_DECISION_KEY = 'refi_first_decision';
+
+// LEGACY FALLBACK ONLY. `refi_tutorial_complete` was written by the tutorial
+// until 2026-09-05. It is read here so a player who finished the tutorial
+// before that date is not routed into CP1 as a stranger. Nothing writes it
+// any more, and no routing logic may depend on it or on tutorial completion
+// in any other form (owner ruling 2026-09-05). Remove once local profiles
+// from before that date can be assumed gone.
 const LEGACY_TUTORIAL_KEY = 'refi_tutorial_complete';
 
 function read(key: string): string | null {

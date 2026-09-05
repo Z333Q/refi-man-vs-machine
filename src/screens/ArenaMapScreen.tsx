@@ -10,15 +10,19 @@ interface Props {
   onBack: () => void;
 }
 
-type NodeState = 'locked' | 'available' | 'active' | 'passed' | 'machine-beaten';
+// Three states a player can act on: LOCKED (cannot enter), NEXT (can enter),
+// DONE (completed, win or lose). Machine-beaten is a mark on DONE, not a
+// fourth state (owner ruling 2026-09-05). The legend that explained six
+// symbols is gone; three self-evident symbols do not need one.
+type NodeState = 'locked' | 'next' | 'done';
 
 interface ArenaNode {
   id: ArenaId;
   code: string;
   label: string;
   state: NodeState;
+  beaten: boolean;
   difficulty: number;
-  passPct: string | null;
   machine: string;
   decisions: number;
   riskLimit: string;
@@ -52,19 +56,15 @@ function useArenaNodes(): ArenaNode[] {
       const prev = arenas[i - 1];
       const prevDone = nextArenaOpen(records, prev ? prev.id : null);
 
-      const state: NodeState =
-        beaten ? 'machine-beaten'
-          : passed ? 'passed'
-            : prevDone ? (runs.length > 0 ? 'active' : 'available')
-              : 'locked';
+      const state: NodeState = passed ? 'done' : prevDone ? 'next' : 'locked';
 
       return {
         id: a.id,
         code: String(a.order).padStart(2, '0'),
         label: a.name,
         state,
+        beaten,
         difficulty: a.difficulty,
-        passPct: null,
         machine: 'REFI RULES MACHINE',
         decisions: a.checkpoints.length,
         riskLimit: `${Math.round(a.criticalDrawdown * 100)}% DD`,
@@ -92,18 +92,20 @@ const SIDE_ARENAS = [
 
 const NODE_SYMBOL: Record<NodeState, string> = {
   locked: '○',
-  available: '◌',
-  active: '●',
-  passed: '✓',
-  'machine-beaten': '★',
+  next: '●',
+  done: '✓',
 };
 
 const NODE_CLASS: Record<NodeState, string> = {
   locked: 'node-locked',
-  available: 'node-available',
-  active: 'node-active',
-  passed: 'node-passed',
-  'machine-beaten': 'node-machine-beaten',
+  next: 'node-active',
+  done: 'node-passed',
+};
+
+const NODE_LABEL: Record<NodeState, string> = {
+  locked: 'LOCKED',
+  next: 'NEXT',
+  done: 'DONE',
 };
 
 function DifficultyBar({ level }: { level: number }) {
@@ -130,7 +132,7 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
     ?? [...ARENAS].reverse().find(a => a.state !== 'locked')
     ?? ARENAS[0];
   const setSelected = (a: ArenaNode) => setSelectedId(a.id);
-  const isSelectable = selected.state === 'active' || selected.state === 'available';
+  const isSelectable = selected.state === 'next';
 
   return (
     <div className="terminal-screen min-h-screen flex flex-col">
@@ -144,9 +146,12 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
         </button>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      {/* Two columns from md up; stacked and scrolling as one below it. At
+          phone width the side-by-side layout crushed the arena list into a
+          150pt column that clipped every name. */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
         {/* Left: Network map */}
-        <div className="flex-1 p-8 overflow-y-auto">
+        <div className="md:flex-1 p-6 md:p-8 md:overflow-y-auto">
           <div className="max-w-lg space-y-0">
             {/* Main linear chain */}
             {ARENAS.map((arena, i) => (
@@ -168,28 +173,19 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
                   <div className="flex items-center gap-3 flex-1">
                     <div className={`font-mono text-xs text-phosphor-dim w-6`}>[{arena.code}]</div>
                     <div className={`font-mono text-sm tracking-wider ${
-                      arena.state === 'active' ? 'text-phosphor-hot terminal-glow' :
-                      arena.state === 'passed' ? 'text-phosphor' :
-                      arena.state === 'locked' ? 'text-phosphor-dim' :
-                      'text-phosphor-mid'
+                      arena.state === 'next' ? 'text-phosphor-hot terminal-glow' :
+                      arena.state === 'done' ? 'text-phosphor' :
+                      'text-phosphor-dim'
                     }`}>
                       {arena.label}
                     </div>
                   </div>
-                  {/* Steady, not blinking. A blink is the strongest attention
-                      signal on a screen, and it was pointing at a status label
-                      rather than at the control the player is meant to press:
-                      the eye went to the one thing that is not clickable.
-                      Motion marks the action, never the state. */}
-                  {arena.state === 'active' && (
-                    <div className="font-mono text-xs text-phosphor">ACTIVE</div>
-                  )}
-                  {arena.state === 'locked' && (
-                    <div className="font-mono text-xs text-phosphor-dim">LOCKED</div>
-                  )}
-                  {arena.state === 'passed' && (
-                    <div className="font-mono text-xs text-phosphor">PASSED</div>
-                  )}
+                  {/* Steady, not blinking: motion marks the action, never the
+                      state. Machine-beaten rides on DONE as a mark. */}
+                  <div className={`font-mono text-xs ${arena.state === 'locked' ? 'text-phosphor-dim' : 'text-phosphor'}`}>
+                    {arena.beaten && <span className="node-machine-beaten mr-2">★ MACHINE BEATEN</span>}
+                    {NODE_LABEL[arena.state]}
+                  </div>
                 </div>
 
                 {i < ARENAS.length - 1 && (
@@ -220,70 +216,48 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
             ))}
           </div>
 
-          {/* Legend */}
-          <div className="mt-12 terminal-panel p-4">
-            <div className="font-mono text-xs text-phosphor-dim mb-3 tracking-widest">NODE STATES</div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-xs">
-              {[
-                { sym: '○', label: 'LOCKED', cls: 'node-locked' },
-                { sym: '◌', label: 'AVAILABLE', cls: 'node-available' },
-                { sym: '●', label: 'ACTIVE', cls: 'node-active' },
-                { sym: '✓', label: 'PASSED', cls: 'node-passed' },
-                { sym: '★', label: 'MACHINE BEATEN', cls: 'node-machine-beaten' },
-                { sym: '◆', label: 'PERFECT RISK', cls: 'text-paper-green' },
-              ].map(item => (
-                <div key={item.sym} className="flex items-center gap-2">
-                  <span className={`${item.cls} text-base`}>{item.sym}</span>
-                  <span className="text-phosphor-dim">{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
-        {/* Right: Arena detail */}
-        <div className="w-80 lg:w-96 border-l border-phosphor/20 p-6 flex flex-col gap-4 overflow-y-auto">
+        {/* Right: the selected arena, in the order a player reads it before
+            committing: what and when, what it teaches, how long, the loss
+            limit, who they face. Then the door. PLAYER PASS · CALIBRATING is
+            gone: a status with no decision consequence is noise. */}
+        <div className="w-full md:w-80 lg:w-96 border-t md:border-t-0 md:border-l border-phosphor/20 p-6 flex flex-col gap-4 md:overflow-y-auto">
           <div>
-            <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-2">
-              [{selected.code}] SELECTED
+            <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-2 flex justify-between">
+              <span>[{selected.code}] SELECTED</span>
+              <span className={NODE_CLASS[selected.state]}>
+                {selected.beaten ? '★ ' : ''}{NODE_LABEL[selected.state]}
+              </span>
             </div>
             <div className="font-mono text-xl text-phosphor-hot terminal-glow tracking-wide">
               {selected.label}
             </div>
+            <div className="font-mono text-xs text-phosphor-dim mt-1 tracking-widest">{selected.window}</div>
+          </div>
+
+          <div className="terminal-panel-deep p-4">
+            <div className="font-mono text-xs text-phosphor-dim mb-2">WHAT THIS ARENA TEACHES</div>
+            <div className="font-mono text-xs text-phosphor leading-5">{selected.lesson}</div>
           </div>
 
           <div className="space-y-3 font-mono text-xs">
-            <div className="flex justify-between items-center py-2 border-b border-phosphor/10">
-              <span className="text-phosphor-dim">STATUS</span>
-              <span className={NODE_CLASS[selected.state as NodeState]}>{selected.state.toUpperCase().replace('-', ' ')}</span>
-            </div>
-            <div className="flex justify-between items-start py-2 border-b border-phosphor/10">
-              <span className="text-phosphor-dim">DIFFICULTY</span>
-              <DifficultyBar level={selected.difficulty} />
-            </div>
-            <div className="flex justify-between items-center py-2 border-b border-phosphor/10">
-              <span className="text-phosphor-dim">PLAYER PASS</span>
-              <span className="text-phosphor">
-                {selected.passPct ? `${selected.passPct}%` : 'CALIBRATING'}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b border-phosphor/10">
-              <span className="text-phosphor-dim">MACHINE</span>
-              <span className="text-phosphor">{selected.machine}</span>
-            </div>
             <div className="flex justify-between items-center py-2 border-b border-phosphor/10">
               <span className="text-phosphor-dim">DECISIONS</span>
               <span className="text-phosphor">{selected.decisions}</span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-phosphor/10">
-              <span className="text-phosphor-dim">RISK LIMIT</span>
+              <span className="text-phosphor-dim">CRITICAL LOSS LIMIT</span>
               <span className="text-phosphor">{selected.riskLimit}</span>
             </div>
-          </div>
-
-          <div className="terminal-panel-deep p-4">
-            <div className="font-mono text-xs text-phosphor-dim mb-2">LESSON</div>
-            <div className="font-mono text-xs text-phosphor leading-5">{selected.lesson}</div>
+            <div className="flex justify-between items-center py-2 border-b border-phosphor/10">
+              <span className="text-phosphor-dim">MACHINE</span>
+              <span className="text-phosphor">{selected.machine}</span>
+            </div>
+            <div className="flex justify-between items-start py-2 border-b border-phosphor/10">
+              <span className="text-phosphor-dim">DIFFICULTY</span>
+              <DifficultyBar level={selected.difficulty} />
+            </div>
           </div>
 
         </div>

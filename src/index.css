@@ -175,7 +175,6 @@
   }
 
   .node-locked { color: #27634E; }
-  .node-available { color: #0A8F68; }
   .node-active { color: #0CD4A0; text-shadow: 0 0 4px rgba(12, 212, 160, 0.4); }
   .node-passed { color: #79FFD7; }
   .node-machine-beaten { color: #B8FFD9; }
