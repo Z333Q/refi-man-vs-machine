@@ -1657,7 +1657,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                 {stanceTitle(selectedCommittedBranch)} · CONVICTION {confidenceToConviction(lastDecision.confidence ?? 0)}
               </div>
               <div className="text-phosphor-dim text-xs tracking-widest mb-5">
-                COMMITTED. THIS CANNOT BE CHANGED.
+                DECISION LOCKED. THE MARKET RESOLVES WHEN YOU ANSWER.
               </div>
 
               <div className="text-phosphor text-2xl font-bold tracking-widest mb-5">WHY?</div>
@@ -1679,28 +1679,34 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                 onClick={() => pickThesis(THESIS_TIMEOUT_CODE)}
                 className="mt-5 text-phosphor-dim text-xs tracking-widest hover:text-phosphor-mid transition-colors"
               >
-                SKIP →
+                SKIP · RESOLVE NOW →
               </button>
 
               {/* The auto-skip is disclosed, never sprung. Text carries the
                   state as well as the bar, so the meter is not the only
-                  channel (§62). */}
+                  channel (§62).
+
+                  The bar fills toward the resolution rather than draining
+                  toward a deadline: the same fifteen seconds, read as the
+                  market arriving instead of a questionnaire expiring. The
+                  data model and timeout are untouched; on timeout the
+                  decision records THESIS_UNSTATED exactly as before. */}
               <div className="mt-4 w-56" aria-live="polite">
                 <div className="text-phosphor-dim/70 text-xs tracking-widest text-center mb-1.5">
-                  RECORDS AS THESIS UNSTATED IN {thesisSecondsLeft}s
+                  MARKET RESOLVES IN {thesisSecondsLeft}s · THEN RECORDS AS THESIS UNSTATED
                 </div>
                 <div
                   className="h-0.5 bg-phosphor/10"
                   role="meter"
-                  aria-label="TIME LEFT TO STATE A THESIS"
-                  aria-valuenow={thesisSecondsLeft}
+                  aria-label="TIME UNTIL THE MARKET RESOLVES WITHOUT A THESIS"
+                  aria-valuenow={Math.ceil(THESIS_TIMEOUT_MS / 1000) - thesisSecondsLeft}
                   aria-valuemin={0}
                   aria-valuemax={Math.ceil(THESIS_TIMEOUT_MS / 1000)}
                 >
                   <div
                     className="h-full bg-phosphor/40 transition-[width] duration-300 ease-linear"
                     style={{
-                      width: `${(thesisSecondsLeft / Math.ceil(THESIS_TIMEOUT_MS / 1000)) * 100}%`,
+                      width: `${(1 - thesisSecondsLeft / Math.ceil(THESIS_TIMEOUT_MS / 1000)) * 100}%`,
                     }}
                   />
                 </div>
