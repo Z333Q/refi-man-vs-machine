@@ -27,8 +27,10 @@ test('every keyboard action in the run has a clickable equivalent (§9)', async 
   await gotoScreen(page, 'CORE LOOP');
   await dismissOverlays(page);
 
-  // The action bar advertises the keys; each must also be a real control.
-  for (const label of [/^DECIDE/, /\[P\] PORTFOLIO/, /\[R\] RISK/]) {
+  // The tab strip advertises the keys (PORTFOLIO [P], RISK [R], DECIDE [D]);
+  // each must also be a real control. The duplicate bottom bar that used to
+  // repeat two of them is gone, so the strip is the equivalent at every width.
+  for (const label of [/^DECIDE/, /^PORTFOLIO/, /^RISK/]) {
     await expect(page.getByRole('button', { name: label }).first()).toBeVisible();
   }
 });

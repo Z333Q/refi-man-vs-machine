@@ -1996,7 +1996,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
       <FiveQuestionSpine
         focus={spineFocus}
         answers={{
-          happening: `${cp.crisisDay} · ${cp.phase.replace(/_/g, ' ')}`,
+          happening: `${getArena(run.arenaId)?.name ?? 'ARENA'} · ${cp.crisisDay} · ${cp.phase.replace(/_/g, ' ')}`,
           info: 'SIGNAL · PORTFOLIO · RISK. THEN DECIDE.',
           canDo: 'STANCE (YOUR MOVE) · CONVICTION · COMMIT',
           onCommit: 'THE MARKET RESOLVES. THEN THE MACHINE SHOWS ITS CALL.',
