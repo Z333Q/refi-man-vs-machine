@@ -243,7 +243,7 @@ export default function PullToCommit({
         >
           <div className={`text-4xl font-bold tabular-nums ${
             flash === 'LANDMARK' ? 'text-phosphor-hot' :
-            flash === 'GOVERNOR' ? 'text-risk-red' : 'text-phosphor'
+            flash === 'GOVERNOR' ? 'text-alert-amber' : 'text-phosphor'
           }`}>
             {conviction}
           </div>
@@ -252,7 +252,7 @@ export default function PullToCommit({
               <span
                 key={v}
                 className={`w-px ${isLandmark(v) ? 'h-3' : 'h-2'} ${
-                  v > governor.max ? 'bg-risk-red/30'
+                  v > governor.max ? 'bg-alert-amber/30'
                     : v <= (conviction ?? 0) ? 'bg-phosphor' : 'bg-phosphor/20'
                 }`}
               />
@@ -320,7 +320,7 @@ export default function PullToCommit({
               {stanceTitle(branch)}
             </span>
           </div>
-          <span className={`text-xs tabular-nums ${affordable ? 'text-phosphor-dim' : 'text-risk-red'}`}>
+          <span className={`text-xs tabular-nums ${affordable ? 'text-phosphor-dim' : 'text-alert-amber'}`}>
             {turnoverCost === 0 ? 'FREE' : `${(turnoverCost * 100).toFixed(0)}% TURNOVER`}
           </span>
         </div>
@@ -338,7 +338,7 @@ export default function PullToCommit({
         )}
 
         {!affordable && (
-          <div className="text-risk-red text-xs tracking-widest mt-1 pl-7">
+          <div className="text-alert-amber text-xs tracking-widest mt-1 pl-7">
             NOT ENOUGH TURNOVER BUDGET REMAINING.
           </div>
         )}

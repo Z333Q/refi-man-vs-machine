@@ -58,13 +58,13 @@ export function CorrelationPanel({
           <div className="text-phosphor-dim text-xl">→</div>
           <div>
             <div className="text-phosphor-dim text-xs tracking-widest">RISK CLUSTERS</div>
-            <div className={`text-2xl font-bold tabular-nums ${clusters <= 2 ? 'text-risk-red' : 'text-phosphor'}`}>
+            <div className={`text-2xl font-bold tabular-nums ${clusters <= 2 ? 'text-alert-amber' : 'text-phosphor'}`}>
               {clusters}
             </div>
           </div>
           <div className="ml-auto">
             <div className="text-phosphor-dim text-xs tracking-widest">CORRELATION</div>
-            <div className={`text-2xl font-bold tabular-nums ${rho >= 0.75 ? 'text-risk-red' : rho >= 0.55 ? 'text-alert-amber' : 'text-phosphor'}`}>
+            <div className={`text-2xl font-bold tabular-nums ${rho >= 0.55 ? 'text-alert-amber' : 'text-phosphor'}`}>
               {rho.toFixed(2)}
             </div>
           </div>
@@ -117,7 +117,7 @@ export function DrawdownPanel({
         <div className="flex items-baseline justify-between mb-3">
           <div>
             <div className="text-phosphor-dim text-xs tracking-widest">CURRENT</div>
-            <div className={`text-3xl font-bold tabular-nums ${dd <= criticalDrawdown * 0.75 ? 'text-risk-red' : dd < -0.05 ? 'text-alert-amber' : 'text-phosphor'}`}>
+            <div className={`text-3xl font-bold tabular-nums ${dd <= criticalDrawdown ? 'text-risk-red' : dd <= criticalDrawdown * 0.5 ? 'text-alert-amber' : 'text-phosphor'}`}>
               {pct(dd)}
             </div>
           </div>
@@ -128,7 +128,7 @@ export function DrawdownPanel({
         </div>
 
         <pre className="font-mono text-xs leading-none" aria-hidden="true">
-          <span className={used > 0.75 ? 'text-risk-red' : used > 0.5 ? 'text-alert-amber' : 'text-phosphor'}>
+          <span className={used > 0.5 ? 'text-alert-amber' : 'text-phosphor'}>
             {'█'.repeat(filled)}
           </span>
           <span className="text-phosphor-dim/40">{'░'.repeat(width - filled)}</span>
@@ -150,7 +150,7 @@ export function DrawdownPanel({
                 CP {String(d.checkpointSequence).padStart(2, '0')}
               </span>
               <span className="text-phosphor-mid tracking-widest">{d.actionCode}</span>
-              <span className={`tabular-nums font-bold ${d.scoreContribution >= 0 ? 'text-phosphor' : 'text-risk-red'}`}>
+              <span className={`tabular-nums font-bold ${d.scoreContribution >= 0 ? 'text-phosphor' : 'text-phosphor-mid'}`}>
                 {d.scoreContribution >= 0 ? '+' : ''}{d.scoreContribution}
               </span>
             </div>
@@ -180,7 +180,7 @@ export function RegimePanel({
         : portfolio.drawdown < -0.1 ? 'BEAR'
           : 'EXPANSION';
 
-  const color = regime === 'PANIC' ? 'text-risk-red'
+  const color = regime === 'PANIC' ? 'text-alert-amber'
     : regime === 'TRANSITION' || regime === 'STRESS' ? 'text-alert-amber'
       : 'text-phosphor';
 

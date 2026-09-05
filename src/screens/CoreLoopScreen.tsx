@@ -45,7 +45,7 @@ type ActivePanel =
 
 const DIRECTION_COLORS = {
   up: 'text-paper-green',
-  down: 'text-risk-red',
+  down: 'text-phosphor',
   neutral: 'text-phosphor-mid',
 };
 
@@ -827,14 +827,17 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
   const turnoverBudget = run.turnoverBudget;
   const turnoverSpentPct = turnoverBudget > 0 ? portfolio.turnoverUsed / turnoverBudget : 1;
   const turnoverExhausted = isHoldOnly(run, cp);
-  const turnoverColor =
-    turnoverSpentPct > 0.85 ? 'text-risk-red' :
-    turnoverSpentPct > 0.60 ? 'text-alert-amber' :
-    'text-phosphor';
-  const turnoverBarColor =
-    turnoverSpentPct > 0.85 ? 'bg-risk-red' :
-    turnoverSpentPct > 0.60 ? 'bg-alert-amber' :
-    'bg-phosphor';
+  // Budget state is caution at most. Red is the critical drawdown breach only.
+  const turnoverColor = turnoverSpentPct > 0.60 ? 'text-alert-amber' : 'text-phosphor';
+  const turnoverBarColor = turnoverSpentPct > 0.60 ? 'bg-alert-amber' : 'bg-phosphor';
+  // Drawdown: red once the run has actually breached the arena's limit
+  // (observation mode), amber inside the last half of the way there, plain
+  // otherwise. A 6% loss in a 20% arena is a fact, not an alarm.
+  const criticalDd = getArena(run.arenaId)?.criticalDrawdown ?? -0.2;
+  const drawdownColor =
+    isObservation ? 'text-risk-red'
+    : portfolio.drawdown <= criticalDd * 0.5 ? 'text-alert-amber'
+    : 'text-phosphor';
 
   // A run in observation mode cannot report MACHINE_BEATEN, whatever the
   // average score says. The engine resolves it; the screen only reports it.
@@ -1064,10 +1067,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           <span className="text-phosphor-dim">CASH</span>
           <span className="text-phosphor tabular-nums">{(portfolio.cashWeight * 100).toFixed(0)}%</span>
           <span className="text-phosphor-dim">DD</span>
-          <span className={`tabular-nums ${
-            portfolio.drawdown < -0.10 ? 'text-risk-red'
-            : portfolio.drawdown < -0.05 ? 'text-alert-amber' : 'text-phosphor'
-          }`}>
+          <span className={`tabular-nums ${drawdownColor}`}>
             {(portfolio.drawdown * 100).toFixed(1)}%
           </span>
           <span className="text-phosphor-dim ml-auto">TURNOVER</span>
@@ -1089,7 +1089,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           />
         </div>
         {turnoverExhausted && (
-          <div className="text-risk-red text-xs tracking-widest mt-1">
+          <div className="text-alert-amber text-xs tracking-widest mt-1">
             TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
           </div>
         )}
@@ -1146,7 +1146,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
             </div>
             <div className="flex justify-between">
               <span className="text-phosphor-dim">DRAWDOWN</span>
-              <span className={portfolio.drawdown < -0.10 ? 'text-risk-red' : portfolio.drawdown < -0.05 ? 'text-alert-amber' : 'text-phosphor'}>
+              <span className={drawdownColor}>
                 {(portfolio.drawdown * 100).toFixed(1)}%
               </span>
             </div>
@@ -1171,7 +1171,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                 />
               </div>
               {turnoverExhausted && (
-                <div className="text-risk-red text-xs tracking-widest mt-1">
+                <div className="text-alert-amber text-xs tracking-widest mt-1">
                   TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
                 </div>
               )}
@@ -1388,7 +1388,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                           </div>
                           <div className="flex items-center gap-3 tabular-nums">
                             <span>{Math.round(pos.weight * 100)}%</span>
-                            <span className={pos.pnl >= 0 ? 'text-paper-green' : 'text-risk-red'}>
+                            <span className={pos.pnl >= 0 ? 'text-paper-green' : 'text-phosphor'}>
                               {pos.pnl >= 0 ? '+' : ''}{(pos.pnl * 100).toFixed(1)}%
                             </span>
                           </div>
@@ -1597,7 +1597,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                               span this checkpoint cannot reach. */}
                           {governed && (
                             <div
-                              className="absolute top-0 h-1.5 bg-risk-red/20 border-l border-risk-red/50 pointer-events-none"
+                              className="absolute top-0 h-1.5 bg-alert-amber/20 border-l border-alert-amber/50 pointer-events-none"
                               style={{
                                 left: `${((governor.max - span.min) / (span.max - span.min)) * 100}%`,
                                 right: 0,
@@ -1905,7 +1905,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           {phase === 'COMPLETE' && (
             <div className="flex-1 flex flex-col items-center justify-center p-6">
               <div className="text-phosphor-dim text-xs tracking-widest mb-2">RUN COMPLETE</div>
-              <div className={`text-3xl font-bold mb-2 ${beatTheMachine ? 'text-paper-green' : 'text-risk-red'}`}>
+              <div className={`text-3xl font-bold mb-2 ${beatTheMachine ? 'text-paper-green' : 'text-phosphor'}`}>
                 {beatTheMachine ? 'MACHINE BEATEN' : 'MACHINE WINS'}
               </div>
               <div className="text-phosphor-mid text-sm mb-2">
@@ -1961,8 +1961,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     d.quality === 'EXCELLENT' ? 'text-paper-green' :
                     d.quality === 'GOOD' ? 'text-phosphor' :
                     d.quality === 'NEUTRAL' ? 'text-phosphor-mid' :
-                    d.quality === 'POOR' ? 'text-alert-amber' :
-                    'text-risk-red'
+                    'text-alert-amber'
                   }`}>{d.actionCode}</span>
                   <span className="text-phosphor-dim">{d.scoreContribution}</span>
                 </div>

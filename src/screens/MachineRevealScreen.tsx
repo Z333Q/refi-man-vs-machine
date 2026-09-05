@@ -45,7 +45,7 @@ export default function MachineRevealScreen({ onContinue }: Props) {
 
               <div className="space-y-2 font-mono text-xs">
                 <div className="flex items-center gap-2 py-1.5 border-b border-phosphor/10">
-                  <span className="negative-value">▼</span>
+                  <span className="text-phosphor">▼</span>
                   <span className="text-phosphor">REDUCED FINANCIALS</span>
                   <span className="text-phosphor-dim ml-auto">12% → 7%</span>
                 </div>
@@ -92,7 +92,7 @@ export default function MachineRevealScreen({ onContinue }: Props) {
                       <span className="text-phosphor-dim ml-auto">UNCHANGED</span>
                     </div>
                     <div className="flex items-center gap-2 py-1.5 border-b border-phosphor/10">
-                      <span className="negative-value">▼</span>
+                      <span className="text-phosphor">▼</span>
                       <span className="text-phosphor">REDUCED TECH CONCENTRATION</span>
                       <span className="text-phosphor-dim ml-auto">14% → 9%</span>
                     </div>

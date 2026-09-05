@@ -51,7 +51,7 @@ function SnapshotStats({ snapshot }: { snapshot: BenchmarkSnapshot }) {
         {rows.map(r => (
           <div key={r.label} className="text-xs">
             <span className="text-phosphor-dim">{r.label} </span>
-            <span className={r.warn && parseFloat(r.value) < 0 ? 'text-risk-red' : 'text-phosphor'}>
+            <span className="text-phosphor">
               {r.value}
             </span>
           </div>
@@ -249,7 +249,7 @@ export default function MachineLadderScreen({ onChallenge, onBack }: Props) {
                       <div className="mb-3">
                         <div className="text-phosphor-dim text-xs tracking-widest mb-1">RECORD</div>
                         <div className="text-paper-green font-bold text-sm">{wins}W</div>
-                        <div className="text-risk-red font-bold text-sm">{losses}L</div>
+                        <div className="text-phosphor font-bold text-sm">{losses}L</div>
                       </div>
                     )}
                     {isDefeated && (

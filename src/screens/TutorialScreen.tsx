@@ -397,7 +397,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                   {PRACTICE_SIGNAL.signals.map(sig => (
                     <div key={sig.label} className="border border-phosphor/15 p-3 text-center">
                       <div className="text-phosphor-dim text-xs mb-1">{sig.label}</div>
-                      <div className={`text-sm font-bold ${sig.direction === 'down' ? 'text-risk-red' : 'text-paper-green'}`}>
+                      <div className={`text-sm font-bold ${sig.direction === 'down' ? 'text-phosphor' : 'text-paper-green'}`}>
                         {sig.value}
                       </div>
                     </div>
@@ -424,7 +424,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                       </div>
                       <div className="flex items-center gap-3 tabular-nums">
                         <span>{Math.round(pos.weight * 100)}%</span>
-                        <span className={pos.pnl >= 0 ? 'text-paper-green' : 'text-risk-red'}>
+                        <span className={pos.pnl >= 0 ? 'text-paper-green' : 'text-phosphor'}>
                           {pos.pnl >= 0 ? '+' : ''}{pos.pnl.toFixed(1)}%
                         </span>
                       </div>
@@ -597,7 +597,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                           span this checkpoint cannot reach. */}
                       {governed && (
                         <div
-                          className="absolute top-0 h-1.5 bg-risk-red/20 border-l border-risk-red/50 pointer-events-none"
+                          className="absolute top-0 h-1.5 bg-alert-amber/20 border-l border-alert-amber/50 pointer-events-none"
                           style={{
                             left: `${((governor.max - span.min) / (span.max - span.min)) * 100}%`,
                             right: 0,

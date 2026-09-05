@@ -137,7 +137,7 @@ export default function MachineCardScreen({ onReturn }: Props) {
                         {row.cagr.toFixed(2)}% CAGR
                       </span>
                       <span className={`text-xs tabular-nums w-14 text-right ${
-                        row.sharpe < 0 ? 'text-risk-red' : row.sharpe < 2 ? 'text-alert-amber' : 'text-phosphor-mid'
+                        row.sharpe < 2 ? 'text-alert-amber' : 'text-phosphor-mid'
                       }`}>
                         {row.sharpe.toFixed(2)} SH
                       </span>

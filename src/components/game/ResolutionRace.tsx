@@ -234,7 +234,7 @@ export default function ResolutionRace({
   const liveWire = wire.length ? wire[Math.min(wire.length - 1, Math.floor(progress * wire.length))] : '';
 
   const verdictColor =
-    verdict.sign === 'UNDER_PAR' ? 'text-risk-red'
+    verdict.sign === 'UNDER_PAR' ? 'text-alert-amber'
       : verdict.sign === 'AT_PAR' ? 'text-phosphor-mid'
       : 'text-paper-green';
 

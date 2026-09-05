@@ -80,7 +80,7 @@ export default function CheckpointAnalysis({
                 </td>
                 <td className="text-right py-1.5 text-phosphor tabular-nums">{row.points.toFixed(1)}</td>
                 <td className={`text-right py-1.5 tabular-nums ${
-                  row.vsPar >= 0 ? 'text-paper-green' : 'text-risk-red'
+                  row.vsPar >= 0 ? 'text-paper-green' : 'text-phosphor'
                 }`}>
                   {signed(row.vsPar)}
                 </td>
@@ -98,7 +98,7 @@ export default function CheckpointAnalysis({
                 {a.processScore.toFixed(1)}
               </td>
               <td className={`text-right py-2 tabular-nums ${
-                conviction.distanceFromPar >= 0 ? 'text-paper-green' : 'text-risk-red'
+                conviction.distanceFromPar >= 0 ? 'text-paper-green' : 'text-phosphor'
               }`}>
                 {signed(conviction.distanceFromPar)}
               </td>
@@ -141,7 +141,7 @@ export default function CheckpointAnalysis({
         </div>
 
         <div className="space-y-1">
-          <div className="text-risk-red text-xs tracking-wide">
+          <div className="text-alert-amber text-xs tracking-wide">
             WEAKEST · {a.weakest.label} · {signed(a.weakest.vsPar)} POINTS
           </div>
           <div className="text-phosphor-mid text-xs leading-relaxed">{a.weakest.measures}</div>

@@ -172,8 +172,8 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
                     <div className="text-phosphor-dim">NOT ENOUGH DECISIONS YET.</div>
                   ) : gaps.map(d => (
                     <div key={d.code} className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-risk-red flex-shrink-0" />
-                      <span className="negative-value">{d.label}</span>
+                      <div className="w-2 h-2 rounded-full bg-alert-amber flex-shrink-0" />
+                      <span className="warning-value">{d.label}</span>
                       <span className="text-phosphor-dim ml-auto">{d.score}</span>
                     </div>
                   ))}
