@@ -17,6 +17,7 @@ import { markProgressSaved } from '../lib/alphaIdentity';
 import {
   saveRun, latestUnfinishedRun, replayRun, replayMatchesRecord,
 } from '../lib/runRecord';
+import { markFirstDecision } from '../lib/playerEntry';
 import { DEFAULT_ARENA_ID } from '../lib/arenas';
 
 // §56 checkpoint id from the arena code + sequence (e.g. cp_covid_black_swan_007).
@@ -264,7 +265,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const attachDecisionThesis = useCallback((thesis: ThesisCode) => dispatch({ type: 'ATTACH_THESIS', thesis }), []);
   const setPendingConfidence = useCallback((confidence: number) => dispatch({ type: 'SET_PENDING_CONFIDENCE', confidence }), []);
   const commitDecision = useCallback(
-    (command: DecisionCommand) => dispatch({ type: 'COMMIT_DECISION', command }),
+    (command: DecisionCommand) => {
+      // The first committed decision is what makes a player "returning".
+      markFirstDecision();
+      dispatch({ type: 'COMMIT_DECISION', command });
+    },
     [],
   );
   const advanceCheckpoint = useCallback(() => dispatch({ type: 'ADVANCE_CHECKPOINT' }), []);

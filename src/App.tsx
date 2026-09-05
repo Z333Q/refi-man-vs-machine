@@ -7,6 +7,7 @@ import { VisualEventProvider } from './components/game/VisualEventLayer';
 import BootScreen from './screens/BootScreen';
 import TitleScreen from './screens/TitleScreen';
 import { OnboardingBridge } from './components/onboarding/OnboardingBridge';
+import { hasMadeFirstDecision } from './lib/playerEntry';
 import ArenaMapScreen from './screens/ArenaMapScreen';
 import ArenaBriefingScreen from './screens/ArenaBriefingScreen';
 import MachineCardScreen from './screens/MachineCardScreen';
@@ -87,9 +88,6 @@ const FULLSCREEN_SCREENS: Screen[] = ['core-loop', 'tutorial'];
 function AppInner() {
   const [screen, setScreen] = useState<Screen>('boot');
   const [bootDone, setBootDone] = useState(false);
-  const [tutorialComplete, setTutorialComplete] = useState(() => {
-    return localStorage.getItem('refi_tutorial_complete') === '1';
-  });
   const [showHelp, setShowHelp] = useState(false);
   // The arena the player picked on the map, carried into the run they start.
   const [pendingArena, setPendingArena] = useState<ArenaId>('covid_black_swan');
@@ -137,11 +135,10 @@ function AppInner() {
     return () => window.removeEventListener('keydown', handler);
   }, [screen, go, showHelp, toggleHelp]);
 
-  const handleTutorialComplete = () => {
-    setTutorialComplete(true);
-    localStorage.setItem('refi_tutorial_complete', '1');
-    go('arena-map');
-  };
+  // The tutorial is a HELP reference now, not a gate: finishing it records
+  // nothing. Whether a player is new is read from their decisions
+  // (src/lib/playerEntry.ts), never from which screens they have seen.
+  const handleTutorialComplete = () => go('arena-map');
 
   if (!bootDone) {
     return <BootScreen onComplete={() => {
@@ -239,7 +236,10 @@ function AppInner() {
               // actually about. CP1 is already a guided checkpoint with its own
               // coach, so it teaches by being played. The tutorial survives in
               // full as a HELP reference for anyone who wants it.
-              go(tutorialComplete ? 'arena-map' : 'core-loop');
+              //
+              // A player who has made a decision before goes to the map. The
+              // question is "have you played", never "have you read".
+              go(hasMadeFirstDecision() ? 'arena-map' : 'core-loop');
             }}
           />
         )}
@@ -248,13 +248,7 @@ function AppInner() {
         )}
         {screen === 'progression-hub' && (
           <ProgressionHubScreen
-            onStartRun={() => {
-              if (!tutorialComplete) {
-                go('tutorial');
-              } else {
-                go('arena-map');
-              }
-            }}
+            onStartRun={() => go('arena-map')}
             onDailyTape={() => go('daily-tape')}
             onMachineLadder={() => go('machine-ladder')}
             onMachineBuilder={() => go('machine-builder')}

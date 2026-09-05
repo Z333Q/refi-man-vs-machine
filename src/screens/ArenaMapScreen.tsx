@@ -289,15 +289,9 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
         </div>
       </div>
 
-      {/* Bottom nav */}
-      <div className="border-t border-phosphor/20 px-6 py-2 flex items-center gap-6">
-        <span className="font-mono text-xs text-phosphor-dim">
-          <span className="nav-key">F1</span> ARENAS &nbsp;
-          <span className="nav-key">F7</span> PROFILE &nbsp;
-          <span className="nav-key">F8</span> RECORDS &nbsp;
-          <span className="nav-key">F9</span> LEADERBOARD
-        </span>
-      </div>
+      {/* No function-key strip. F1/F7/F8/F9 were printed here for screens
+          nothing bound them to; a visible shortcut either works or is not
+          shown (owner ruling 2026-09-05). The map's one door is the ActionZone. */}
 
       {/* The arena you select is the decision; entering it is the commit. This
           generalises the ad-hoc sticky block the screen carried (#26): the

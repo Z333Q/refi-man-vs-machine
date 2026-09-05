@@ -54,7 +54,7 @@ export async function enterSelectedArena(page: Page) {
 export async function resetProgress(page: Page) {
   await page.goto('/');
   await page.evaluate(() => {
-    const keep = ['refi_cp1_coached', 'refi_tutorial_complete', 'refi_guidance_mode'];
+    const keep = ['refi_cp1_coached', 'refi_first_decision', 'refi_guidance_mode'];
     const saved = keep.map(k => [k, localStorage.getItem(k)] as const);
     localStorage.clear();
     for (const [k, v] of saved) if (v !== null) localStorage.setItem(k, v);
@@ -139,7 +139,7 @@ export async function dismissOverlays(page: Page) {
 export async function skipFirstRunCoaching(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem('refi_cp1_coached', '1');
-    localStorage.setItem('refi_tutorial_complete', '1');
+    localStorage.setItem('refi_first_decision', '1');
     // Guidance OFF (§13 lists it as a real player mode).
     //
     // Tips are a queue: dismissing one lets the next open, and they fire
