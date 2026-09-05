@@ -747,7 +747,7 @@ export default function TutorialScreen({ onComplete }: Props) {
       </div>
 
       {/* §56 five-question spine: always answers "why am I here / what do I do" */}
-      <FiveQuestionSpine answers={SPINE_ANSWERS} />
+      <FiveQuestionSpine answers={SPINE_ANSWERS} focus={committed ? 'onCommit' : 'canDo'} />
 
       {/* Spotlight overlay: dims everything but the element this step teaches. */}
       <Spotlight
