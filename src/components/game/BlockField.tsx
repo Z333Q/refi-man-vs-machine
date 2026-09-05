@@ -233,7 +233,7 @@ export default function BlockField({
       {resolved && marketMove !== null && (
         <div className="mt-2 flex items-baseline gap-3" data-testid="block-field-market">
           <span className="text-xs tracking-widest text-phosphor-mid">MARKET RESULT</span>
-          <span className={`text-sm tabular-nums font-bold ${marketMove >= 0 ? 'text-paper-green' : 'text-risk-red'}`}>
+          <span className={`text-sm tabular-nums font-bold ${marketMove >= 0 ? 'text-paper-green' : 'text-phosphor'}`}>
             {pnlText(marketMove)}
           </span>
           <span className="text-[11px] text-phosphor-dim tracking-widest">PORTFOLIO MOVE</span>

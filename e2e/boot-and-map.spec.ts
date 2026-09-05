@@ -36,7 +36,7 @@ test('the map states the arena it will actually run', async ({ page }) => {
   await gotoScreen(page, 'ARENA MAP');
   const panel = page.locator('body');
   await expect(panel).toContainText('COVID BLACK SWAN');
-  await expect(panel).toContainText('AVAILABLE');
+  await expect(panel).toContainText('NEXT');
   await expect(panel).toContainText('22');
   await expect(panel).toContainText('-20% DD');
 });
@@ -64,7 +64,7 @@ test('finishing an arena unlocks the next one, and it survives a reload', async 
 
   const body = page.locator('body');
   await expect(body).toContainText('RECOVERY TRAP');
-  await expect(body).toContainText('AVAILABLE');
+  await expect(body).toContainText('NEXT');
   // Recovery's own numbers, not COVID's.
   await expect(body).toContainText('-15% DD');
   await expect(page.getByRole('button', { name: /ENTER ARENA/ })).toBeVisible();

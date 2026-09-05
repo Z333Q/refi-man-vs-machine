@@ -6,7 +6,7 @@ import { gotoScreen, resetProgress } from './helpers';
 test('a tip opens on the first checkpoint and can be dismissed with ESC', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('refi_cp1_coached', '1');
-    localStorage.setItem('refi_tutorial_complete', '1');
+    localStorage.setItem('refi_first_decision', '1');
     localStorage.setItem('refi_guidance_mode', 'FULL');
   });
   await resetProgress(page);
@@ -25,7 +25,7 @@ test('a tip states a dismissal that actually works', async ({ page }) => {
   // teaches the player not to trust the interface.
   await page.addInitScript(() => {
     localStorage.setItem('refi_cp1_coached', '1');
-    localStorage.setItem('refi_tutorial_complete', '1');
+    localStorage.setItem('refi_first_decision', '1');
     localStorage.setItem('refi_guidance_mode', 'FULL');
   });
   await resetProgress(page);
@@ -49,7 +49,7 @@ test('a tip states a dismissal that actually works', async ({ page }) => {
 test('guidance OFF suppresses tips entirely', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('refi_cp1_coached', '1');
-    localStorage.setItem('refi_tutorial_complete', '1');
+    localStorage.setItem('refi_first_decision', '1');
     localStorage.setItem('refi_guidance_mode', 'OFF');
   });
   await resetProgress(page);

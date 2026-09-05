@@ -13,10 +13,10 @@ import { test, expect, type Page } from '@playwright/test';
 // fixed the runner flags the passing test, and the mark comes off in the same
 // change. They are the audit's P0s, not aspirations.
 
-/** Mark the tutorial as complete, so landing routes to the arena map. */
+/** Mark the player as having decided before, so landing routes to the arena map. */
 async function asReturningPlayer(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem('refi_tutorial_complete', '1');
+    localStorage.setItem('refi_first_decision', '1');
     localStorage.setItem('refi_cp1_coached', '1');
     localStorage.setItem('refi_guidance_mode', 'OFF');
   });

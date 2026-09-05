@@ -243,7 +243,7 @@ export default function PullToCommit({
         >
           <div className={`text-4xl font-bold tabular-nums ${
             flash === 'LANDMARK' ? 'text-phosphor-hot' :
-            flash === 'GOVERNOR' ? 'text-risk-red' : 'text-phosphor'
+            flash === 'GOVERNOR' ? 'text-alert-amber' : 'text-phosphor'
           }`}>
             {conviction}
           </div>
@@ -252,7 +252,7 @@ export default function PullToCommit({
               <span
                 key={v}
                 className={`w-px ${isLandmark(v) ? 'h-3' : 'h-2'} ${
-                  v > governor.max ? 'bg-risk-red/30'
+                  v > governor.max ? 'bg-alert-amber/30'
                     : v <= (conviction ?? 0) ? 'bg-phosphor' : 'bg-phosphor/20'
                 }`}
               />
@@ -320,13 +320,24 @@ export default function PullToCommit({
               {stanceTitle(branch)}
             </span>
           </div>
-          <span className={`text-xs tabular-nums ${affordable ? 'text-phosphor-dim' : 'text-risk-red'}`}>
+          <span className={`text-xs tabular-nums ${affordable ? 'text-phosphor-dim' : 'text-alert-amber'}`}>
             {turnoverCost === 0 ? 'FREE' : `${(turnoverCost * 100).toFixed(0)}% TURNOVER`}
           </span>
         </div>
         <div className="text-phosphor-dim text-xs leading-snug mt-1 pl-7">
           {stanceLine(branch)}
         </div>
+
+        {/* The grip. The card is two controls on one surface (tap opens the
+            precise controls, a pull commits), and nothing on it said so. This
+            is copy inside the existing card, not a new control (61A). The
+            two-mode hint shows for the first two checkpoints only. */}
+        {affordable && !clearanceWarning && !armed && (
+          <div className="flex items-center justify-between mt-2 pl-7 text-phosphor-dim/60 tracking-widest" style={{ fontSize: '10px' }}>
+            <span>{checkpointSequence <= 2 ? 'TAP = SET PRECISELY · PULL = QUICK COMMIT' : ''}</span>
+            <span className="text-phosphor-dim">PULL TO COMMIT</span>
+          </div>
+        )}
 
         {/* Strain striations: two at 60, four at 75, six at 85 and above. */}
         {armed && !reducedMotion && (
@@ -338,7 +349,7 @@ export default function PullToCommit({
         )}
 
         {!affordable && (
-          <div className="text-risk-red text-xs tracking-widest mt-1 pl-7">
+          <div className="text-alert-amber text-xs tracking-widest mt-1 pl-7">
             NOT ENOUGH TURNOVER BUDGET REMAINING.
           </div>
         )}

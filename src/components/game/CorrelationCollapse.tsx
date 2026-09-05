@@ -295,7 +295,7 @@ export default function CorrelationCollapse({
         </div>
         <div className="flex justify-between text-phosphor-dim">
           <span>RISK CLUSTERS</span>
-          <span className={displayClusters < 3 ? 'text-risk-red' : 'text-phosphor'}>
+          <span className={displayClusters < 3 ? 'text-alert-amber' : 'text-phosphor'}>
             {displayClusters}
           </span>
         </div>

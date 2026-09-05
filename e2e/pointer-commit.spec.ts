@@ -19,7 +19,7 @@ const ENGAGE_MS = 350; // MIN_ENGAGEMENT_MS: a faster release is a flick.
 
 async function asReturningPlayer(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem('refi_tutorial_complete', '1');
+    localStorage.setItem('refi_first_decision', '1');
     localStorage.setItem('refi_cp1_coached', '1');
     localStorage.setItem('refi_guidance_mode', 'OFF');
   });

@@ -171,7 +171,6 @@ export default function ArenaBriefingScreen({
       </div>
 
       <div className="border-t border-phosphor/20 px-6 py-2 font-mono text-xs text-phosphor-dim">
-        <span className="nav-key">M</span> MACHINE CARD &nbsp;
         <span className="nav-key">ESC</span> ARENA MAP &nbsp;
         <span className="nav-key">ENTER</span> START RUN
       </div>

@@ -1055,7 +1055,7 @@ function StressTestPanel({ config }: { config: MachineConfig }) {
                 {s.signalTitle}
               </span>
               <span className={`tabular-nums w-16 text-right flex-shrink-0 ${
-                s.score >= s.par ? 'positive-value' : 'negative-value'
+                s.score >= s.par ? 'positive-value' : 'text-phosphor'
               }`}>
                 {s.score} / {s.par}
               </span>
@@ -1123,7 +1123,7 @@ function GauntletPanel({ result }: { result: GauntletResult }) {
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
               <span className="text-phosphor w-28 sm:w-40 flex-shrink-0 truncate">{leg.arenaName}</span>
               <span className={`tabular-nums w-16 text-right flex-shrink-0 ${
-                leg.vsPar >= 0 ? 'positive-value' : 'negative-value'
+                leg.vsPar >= 0 ? 'positive-value' : 'text-phosphor'
               }`}>
                 {leg.vsPar >= 0 ? '+' : ''}{leg.vsPar}
               </span>
@@ -1162,7 +1162,7 @@ function Metric({ label, value, note, tone }: {
     <div>
       <div className="text-phosphor-dim tracking-widest" style={{ fontSize: '9px' }}>{label}</div>
       <div className={`font-bold tabular-nums mt-0.5 ${
-        tone === 'good' ? 'positive-value' : tone === 'bad' ? 'negative-value' : 'text-phosphor'
+        tone === 'good' ? 'positive-value' : tone === 'bad' ? 'warning-value' : 'text-phosphor'
       }`}>
         {value}
       </div>

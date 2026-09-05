@@ -397,7 +397,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                   {PRACTICE_SIGNAL.signals.map(sig => (
                     <div key={sig.label} className="border border-phosphor/15 p-3 text-center">
                       <div className="text-phosphor-dim text-xs mb-1">{sig.label}</div>
-                      <div className={`text-sm font-bold ${sig.direction === 'down' ? 'text-risk-red' : 'text-paper-green'}`}>
+                      <div className={`text-sm font-bold ${sig.direction === 'down' ? 'text-phosphor' : 'text-paper-green'}`}>
                         {sig.value}
                       </div>
                     </div>
@@ -424,7 +424,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                       </div>
                       <div className="flex items-center gap-3 tabular-nums">
                         <span>{Math.round(pos.weight * 100)}%</span>
-                        <span className={pos.pnl >= 0 ? 'text-paper-green' : 'text-risk-red'}>
+                        <span className={pos.pnl >= 0 ? 'text-paper-green' : 'text-phosphor'}>
                           {pos.pnl >= 0 ? '+' : ''}{pos.pnl.toFixed(1)}%
                         </span>
                       </div>
@@ -487,7 +487,7 @@ export default function TutorialScreen({ onComplete }: Props) {
 
                 {/* ── 1. Stance ── */}
                 <div data-spotlight="stances">
-                  <div className="text-phosphor-dim text-xs tracking-widest mb-2">1 · STANCE</div>
+                  <div className="text-phosphor-dim text-xs tracking-widest mb-2">1 · STANCE <span className="text-phosphor-dim/60">· YOUR MOVE</span></div>
                   {gateMessage && step.id === 'STANCE' && (
                     <div
                       role="alert"
@@ -550,7 +550,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                   className={stance && !committed ? '' : 'opacity-40 pointer-events-none'}
                 >
                   <div className="flex items-baseline justify-between mb-2">
-                    <span className="text-phosphor-dim text-xs tracking-widest">2 · CONVICTION</span>
+                    <span className="text-phosphor-dim text-xs tracking-widest">2 · CONVICTION <span className="text-phosphor-dim/60">· HOW STRONGLY YOU BELIEVE IT</span></span>
                     <span className="text-phosphor text-lg font-bold tabular-nums">{conviction}</span>
                   </div>
 
@@ -597,7 +597,7 @@ export default function TutorialScreen({ onComplete }: Props) {
                           span this checkpoint cannot reach. */}
                       {governed && (
                         <div
-                          className="absolute top-0 h-1.5 bg-risk-red/20 border-l border-risk-red/50 pointer-events-none"
+                          className="absolute top-0 h-1.5 bg-alert-amber/20 border-l border-alert-amber/50 pointer-events-none"
                           style={{
                             left: `${((governor.max - span.min) / (span.max - span.min)) * 100}%`,
                             right: 0,
@@ -747,7 +747,7 @@ export default function TutorialScreen({ onComplete }: Props) {
       </div>
 
       {/* §56 five-question spine: always answers "why am I here / what do I do" */}
-      <FiveQuestionSpine answers={SPINE_ANSWERS} />
+      <FiveQuestionSpine answers={SPINE_ANSWERS} focus={committed ? 'onCommit' : 'canDo'} />
 
       {/* Spotlight overlay: dims everything but the element this step teaches. */}
       <Spotlight

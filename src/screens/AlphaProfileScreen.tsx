@@ -4,6 +4,7 @@ import { HANDOFF_MODE } from '../lib/handoff';
 import { useGame } from '../context/GameContext';
 import type { DimensionCode } from '../lib/gameTypes';
 import { isDimensionProvisional, PROVISIONAL_UNTIL_DECISIONS } from '../lib/decisionContract';
+import { getArchetypeLabel } from '../lib/scoringEngine';
 
 interface Props {
   onBasketWriter: () => void;
@@ -172,8 +173,8 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
                     <div className="text-phosphor-dim">NOT ENOUGH DECISIONS YET.</div>
                   ) : gaps.map(d => (
                     <div key={d.code} className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-risk-red flex-shrink-0" />
-                      <span className="negative-value">{d.label}</span>
+                      <div className="w-2 h-2 rounded-full bg-alert-amber flex-shrink-0" />
+                      <span className="warning-value">{d.label}</span>
                       <span className="text-phosphor-dim ml-auto">{d.score}</span>
                     </div>
                   ))}
@@ -194,17 +195,21 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
             </div>
           </div>
 
-          {/* Machine comparison */}
+          {/* The session record. This block was a typed fixture (3 arenas, 1
+              beaten, 33.3%) until 2026-09-05, when the Hub's SESSION STATS
+              moved here and brought the real profile figures with it. */}
           <div className="terminal-panel p-5 space-y-4">
-            <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-3">
-              MACHINE BEAT RATE
+            <div className="font-mono text-xs text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-3 flex justify-between">
+              <span>MACHINE BEAT RATE</span>
+              <span>{getArchetypeLabel(state.profile.archetype)}</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs">
               {[
-                { label: 'TOTAL ARENAS', value: '3' },
-                { label: 'MACHINE BEATEN', value: '1' },
-                { label: 'BEAT RATE', value: '33.3%' },
-                { label: 'BEST STREAK', value: '1' },
+                { label: 'ARENAS PLAYED', value: String(state.profile.machineAttempts) },
+                { label: 'MACHINE BEATEN', value: String(state.profile.machineBeats) },
+                { label: 'BEAT RATE', value: state.profile.machineAttempts > 0
+                    ? `${((state.profile.machineBeats / state.profile.machineAttempts) * 100).toFixed(1)}%` : '--' },
+                { label: 'BEST STREAK', value: String(state.profile.bestStreak) },
               ].map(stat => (
                 <div key={stat.label} className="text-center">
                   <div className="text-2xl font-bold text-phosphor-hot terminal-glow mb-1">{stat.value}</div>

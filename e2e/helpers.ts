@@ -54,7 +54,7 @@ export async function enterSelectedArena(page: Page) {
 export async function resetProgress(page: Page) {
   await page.goto('/');
   await page.evaluate(() => {
-    const keep = ['refi_cp1_coached', 'refi_tutorial_complete', 'refi_guidance_mode'];
+    const keep = ['refi_cp1_coached', 'refi_first_decision', 'refi_guidance_mode'];
     const saved = keep.map(k => [k, localStorage.getItem(k)] as const);
     localStorage.clear();
     for (const [k, v] of saved) if (v !== null) localStorage.setItem(k, v);
@@ -139,7 +139,7 @@ export async function dismissOverlays(page: Page) {
 export async function skipFirstRunCoaching(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem('refi_cp1_coached', '1');
-    localStorage.setItem('refi_tutorial_complete', '1');
+    localStorage.setItem('refi_first_decision', '1');
     // Guidance OFF (§13 lists it as a real player mode).
     //
     // Tips are a queue: dismissing one lets the next open, and they fire
@@ -198,8 +198,20 @@ export async function playCheckpoint(page: Page): Promise<boolean> {
   if (await page.getByRole('button', { name: /VIEW RUN RESULTS/ }).count() > 0) return false;
 
   // Open the decide panel.
+  //
+  // A blocking visual event (REGIME_SHIFT on a regime-change checkpoint) can
+  // land after the sweep above: the event queue promotes it only once the
+  // previous checkpoint's advantage flash has finished, up to about two
+  // seconds after the new signal is on screen. An unbounded click behind that
+  // dialog retried until the test timed out (seen on CP 04, 2026-09-05). Bound
+  // the click and sweep again on interception, the way a player would read the
+  // dialog and press its button.
   const decide = page.getByRole('button', { name: /^DECIDE/ }).first();
-  if (await decide.count() > 0) await decide.click().catch(() => {});
+  for (let attempt = 0; attempt < 5 && await decide.count() > 0; attempt++) {
+    const clicked = await decide.click({ timeout: 2_000 }).then(() => true, () => false);
+    if (clicked) break;
+    await dismissOverlays(page);
+  }
 
   // Pick a stance the run can still afford.
   //

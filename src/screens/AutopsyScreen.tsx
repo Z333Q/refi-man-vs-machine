@@ -31,7 +31,9 @@ type Tab = 'timeline' | 'analysis' | 'comparison' | 'profile';
 const FLAG_TONE_CLASS = {
   positive: { text: 'text-phosphor', border: 'border-phosphor', mark: '+' },
   caution: { text: 'warning-value', border: 'border-alert-amber', mark: '!' },
-  severe: { text: 'negative-value', border: 'border-risk-red', mark: '!!' },
+  // Severe is a behavioural flag, not a risk failure: it reads amber with a
+  // stronger mark. Red is reserved for the critical drawdown breach.
+  severe: { text: 'warning-value', border: 'border-alert-amber', mark: '!!' },
 } as const;
 
 /** A return, where the sign is the point. */
@@ -162,7 +164,7 @@ export default function AutopsyScreen({ onContinue }: Props) {
                       {r.decision.quality}
                     </div>
                     <div className={`font-mono text-xs w-16 text-right tabular-nums flex-shrink-0 ${
-                      r.playerReturn >= 0 ? 'positive-value' : 'negative-value'
+                      r.playerReturn >= 0 ? 'positive-value' : 'text-phosphor'
                     }`}>
                       {pct(r.playerReturn)}
                     </div>
@@ -184,7 +186,7 @@ export default function AutopsyScreen({ onContinue }: Props) {
                     </div>
                     <div
                       className={`font-mono text-xs w-16 text-right tabular-nums flex-shrink-0 ${
-                        vsPar >= 0 ? 'positive-value' : 'negative-value'
+                        vsPar >= 0 ? 'positive-value' : 'text-phosphor'
                       }`}
                       title="VERSUS THE MACHINE'S PAR FOR THIS CHECKPOINT"
                     >
@@ -221,7 +223,7 @@ export default function AutopsyScreen({ onContinue }: Props) {
                   signal={worst.signalTitle}
                   score={worst.decision.scoreContribution}
                   quality={worst.decision.quality}
-                  scoreClass="negative-value border-risk-red/40"
+                  scoreClass="warning-value border-alert-amber/40"
                 />
               </>
             ) : (

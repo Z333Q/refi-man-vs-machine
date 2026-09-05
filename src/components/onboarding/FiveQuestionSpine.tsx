@@ -1,10 +1,11 @@
-// The §60 five-question spine.
+// The §56 five-question spine, one question at a time.
 //
-// The spec: "every active game screen must answer all five [questions] or
-// it is incomplete" — what's happening / what info do I have / what can I
-// do / what happens when I commit / how am I doing vs the machine. This
-// component is the standard, always-visible strip that makes every active
-// screen pass that test. Each screen fills in its own answers.
+// The spec: "every active game screen must answer all five [questions] or it
+// is incomplete". The first build answered all five at once in a horizontally
+// scrolling strip under the workspace, which made the answer to "what do I do
+// now" one of five equally weighted items. A screen still has to be able to
+// answer every question; it shows the one the player is on. The other four are
+// answered by the phase they belong to, and by Help.
 
 export interface SpineAnswers {
   happening: string;
@@ -14,26 +15,24 @@ export interface SpineAnswers {
   vsMachine: string;
 }
 
-const QUESTIONS: { key: keyof SpineAnswers; q: string }[] = [
-  { key: 'happening', q: 'WHAT IS HAPPENING?' },
-  { key: 'info', q: 'WHAT INFO DO I HAVE?' },
-  { key: 'canDo', q: 'WHAT CAN I DO?' },
-  { key: 'onCommit', q: 'WHAT HAPPENS WHEN I COMMIT?' },
-  { key: 'vsMachine', q: 'HOW AM I DOING VS MACHINE?' },
-];
+export type SpineFocus = keyof SpineAnswers;
 
-export function FiveQuestionSpine({ answers }: { answers: SpineAnswers }) {
+const QUESTIONS: Record<SpineFocus, string> = {
+  happening: 'WHAT IS HAPPENING?',
+  info: 'WHAT INFO DO I HAVE?',
+  canDo: 'WHAT CAN I DO?',
+  onCommit: 'WHAT HAPPENS WHEN I COMMIT?',
+  vsMachine: 'HOW AM I DOING VS MACHINE?',
+};
+
+export function FiveQuestionSpine({ answers, focus }: { answers: SpineAnswers; focus: SpineFocus }) {
   return (
     <div
-      className="border-t border-phosphor/10 px-6 py-2.5 flex gap-8 overflow-x-auto scrollbar-hide"
-      aria-label="Orientation: the five questions"
+      className="border-t border-phosphor/10 px-6 py-2 flex items-baseline gap-3 overflow-hidden"
+      aria-label="Orientation"
     >
-      {QUESTIONS.map(({ key, q }) => (
-        <div key={key} className="flex-shrink-0">
-          <div className="font-mono text-phosphor-dim text-xs tracking-widest">{q}</div>
-          <div className="font-mono text-phosphor text-xs mt-0.5">{answers[key]}</div>
-        </div>
-      ))}
+      <div className="font-mono text-phosphor-dim text-xs tracking-widest whitespace-nowrap">{QUESTIONS[focus]}</div>
+      <div className="font-mono text-phosphor text-xs truncate">{answers[focus]}</div>
     </div>
   );
 }

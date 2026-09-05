@@ -110,7 +110,7 @@ export default function LandingScreen({ onEnter }: Props) {
           {TICKER_ITEMS.map((item) => (
             <span key={item.symbol} className="font-mono text-xs whitespace-nowrap">
               <span className="text-phosphor-mid">{item.symbol} </span>
-              <span className={item.neg ? 'negative-value' : 'positive-value'}>{item.value}</span>
+              <span className={item.neg ? 'text-phosphor' : 'positive-value'}>{item.value}</span>
             </span>
           ))}
         </div>
@@ -190,7 +190,7 @@ export default function LandingScreen({ onEnter }: Props) {
               <div className="space-y-2">
                 <div className="font-mono text-xs text-phosphor-dim tracking-widest">HUMAN</div>
                 <div className="font-mono text-2xl sm:text-3xl font-bold text-terminal-white tabular-nums">{current.human}</div>
-                <div className={`font-mono text-xs ${current.panic ? 'text-risk-red' : 'text-phosphor-mid'}`}>{current.hs}</div>
+                <div className={`font-mono text-xs ${current.panic ? 'text-alert-amber' : 'text-phosphor-mid'}`}>{current.hs}</div>
               </div>
               <div className="space-y-2 text-right">
                 <div className="font-mono text-xs text-phosphor-dim tracking-widest">MACHINE</div>

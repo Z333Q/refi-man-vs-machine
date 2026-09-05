@@ -14,7 +14,7 @@ interface Props {
 
 const DIRECTION_COLOR = {
   up: 'text-paper-green',
-  down: 'text-risk-red',
+  down: 'text-phosphor',
   neutral: 'text-phosphor-mid',
 };
 
@@ -188,15 +188,14 @@ export default function DailyTapeScreen({ onBack }: Props) {
                 ? 'border-paper-green/50 bg-paper-green/5'
                 : selectedAction === today.machineAction
                 ? 'border-phosphor/40 bg-phosphor/5'
-                : 'border-risk-red/40 bg-risk-red/5'
+                : 'border-phosphor/20 bg-terminal-deep/40'
             }`}>
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <div className="text-phosphor-dim text-xs tracking-widest mb-1">YOUR CALL</div>
                   <div className={`text-2xl font-bold ${
                     selectedAction === today.correctAction ? 'text-paper-green' :
-                    selectedAction === today.machineAction ? 'text-phosphor' :
-                    'text-risk-red'
+                    'text-phosphor'
                   }`}>{selectedAction}</div>
                 </div>
                 <div className="text-right">

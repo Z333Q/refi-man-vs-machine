@@ -140,7 +140,7 @@ export default function TitleScreen({ onEnter }: Props) {
           {TICKER.map(t => (
             <span key={t.symbol} className="font-mono text-xs flex-shrink-0">
               <span className="text-phosphor-mid">{t.symbol} </span>
-              <span className={t.neg ? 'negative-value' : 'positive-value'}>{t.value}</span>
+              <span className={t.neg ? 'text-phosphor' : 'positive-value'}>{t.value}</span>
             </span>
           ))}
         </div>

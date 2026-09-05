@@ -234,7 +234,7 @@ export default function ResolutionRace({
   const liveWire = wire.length ? wire[Math.min(wire.length - 1, Math.floor(progress * wire.length))] : '';
 
   const verdictColor =
-    verdict.sign === 'UNDER_PAR' ? 'text-risk-red'
+    verdict.sign === 'UNDER_PAR' ? 'text-alert-amber'
       : verdict.sign === 'AT_PAR' ? 'text-phosphor-mid'
       : 'text-paper-green';
 
@@ -306,7 +306,7 @@ export default function ResolutionRace({
         <div className="mt-4 pt-3 border-t border-phosphor/15">
           <div className="flex items-baseline justify-between mb-2">
             <span className="text-phosphor-dim text-xs tracking-widest">CHECKPOINT SCORE</span>
-            <span className="text-phosphor-dim text-xs tracking-widest tabular-nums">PAR {par}</span>
+            <span className="text-phosphor-dim text-xs tracking-widest tabular-nums">PAR {par} <span className="text-phosphor-dim/60">· MACHINE TARGET</span></span>
           </div>
 
           {/* What the draw bought.

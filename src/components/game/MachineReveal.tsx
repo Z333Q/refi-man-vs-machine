@@ -29,14 +29,12 @@ export default function MachineReveal({
   reducedMotion = false,
   onComplete,
 }: Props) {
-  // Direction colouring preserved from the decrypt version: defensive calls
-  // read amber, sells read red, adds read hot phosphor.
+  // The machine's call is information, not a warning. Adds read hot
+  // phosphor; everything else reads plain. A sell is not an alarm.
   const headlineClassName =
-    action.startsWith('HOLD') || action.startsWith('WAIT')
-      ? 'text-alert-amber'
-      : action.includes('REDUCE') || action.includes('EXIT') || action.includes('SELL')
-        ? 'text-risk-red'
-        : 'text-phosphor-hot';
+    action.includes('ADD') || action.includes('DEPLOY') || action.includes('BUY')
+      ? 'text-phosphor-hot'
+      : 'text-phosphor';
 
   return (
     <TalkingWindow

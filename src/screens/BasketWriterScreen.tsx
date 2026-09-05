@@ -145,7 +145,7 @@ export default function BasketWriterScreen({ onBack, onComplete }: Props) {
                 <div className="font-mono text-xs text-phosphor w-12 text-right">{item.weight.toFixed(1)}%</div>
                 <button
                   onClick={() => removeFromBasket(item.symbol)}
-                  className="font-mono text-xs text-phosphor-dim hover:negative-value w-4 text-center ml-1"
+                  className="font-mono text-xs text-phosphor-dim hover:text-phosphor w-4 text-center ml-1"
                 >✕</button>
               </div>
             ))}

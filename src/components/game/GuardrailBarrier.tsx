@@ -122,7 +122,7 @@ export default function GuardrailBarrier({
       <div className="flex items-start justify-between mt-1.5 text-xs">
         <div>
           <div className="text-phosphor-dim" style={{ fontSize: '9px' }}>PROPOSED</div>
-          <div className={`font-bold ${isBreaching ? 'text-risk-red' : 'text-phosphor'}`}>
+          <div className={`font-bold ${isBreaching ? 'text-alert-amber' : 'text-phosphor'}`}>
             {formatFn(animValue)}
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function GuardrailBarrier({
 
       {/* Block message */}
       <div
-        className="mt-2 border border-risk-red/40 bg-risk-red/8 px-3 py-1.5 text-xs text-risk-red tracking-widest transition-opacity duration-300"
+        className="mt-2 border border-alert-amber/40 bg-alert-amber/8 px-3 py-1.5 text-xs text-alert-amber tracking-widest transition-opacity duration-300"
         style={{ opacity: blocked ? 1 : 0 }}
       >
         ACTION BLOCKED — {label.toUpperCase()} LIMIT
@@ -142,7 +142,7 @@ export default function GuardrailBarrier({
 
       {/* Reduced-motion text */}
       {reducedMotion && isBreaching && (
-        <div className="text-risk-red text-xs mt-1 tracking-widest">
+        <div className="text-alert-amber text-xs mt-1 tracking-widest">
           GUARDRAIL BREACH: {formatFn(proposedValue)} &gt; {formatFn(limitValue)}
         </div>
       )}

@@ -123,7 +123,7 @@ export function BankingContagion({
     <div className={className}>
       <Plate color={spreading ? '#D94C4C' : undefined}>{`${graph}\n\n${bars}`}</Plate>
       <div className="font-mono text-xs mt-2 leading-snug">
-        <span className={spreading ? 'text-risk-red' : 'text-phosphor-dim'}>
+        <span className={spreading ? 'text-alert-amber' : 'text-phosphor-dim'}>
           {spreading ? 'CONTAGION PATHS DETECTED. ' : ''}
         </span>
         <span className="text-phosphor-dim">

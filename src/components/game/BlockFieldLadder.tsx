@@ -112,7 +112,7 @@ export default function BlockFieldLadder({
           <div className="mt-1.5 text-xs tabular-nums flex flex-wrap gap-x-4 gap-y-0.5" data-testid="ladder-detail">
             <span className="text-phosphor-mid">BEFORE {beforePct ?? pct}%</span>
             <span className="text-phosphor-mid">CURRENT {pct}%</span>
-            <span className={b.pnl >= 0 ? 'text-paper-green' : 'text-risk-red'}>PNL {pnlText(b.pnl)}</span>
+            <span className={b.pnl >= 0 ? 'text-paper-green' : 'text-phosphor'}>PNL {pnlText(b.pnl)}</span>
           </div>
         )}
       </>

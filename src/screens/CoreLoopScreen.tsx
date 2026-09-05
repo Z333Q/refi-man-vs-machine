@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import BuildStamp from '../components/BuildStamp';
 import { useGame } from '../context/GameContext';
 import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
 import { getArena } from '../lib/arenas';
@@ -32,8 +31,7 @@ import { useVisualEvents, visualRegistry } from '../components/game/VisualEventL
 import { Spotlight } from '../components/onboarding/Spotlight';
 import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 import CheckpointAnalysis from '../components/game/CheckpointAnalysis';
-import { FiveQuestionSpine } from '../components/onboarding/FiveQuestionSpine';
-import { ArcRail } from '../components/onboarding/ArcRail';
+import { FiveQuestionSpine, type SpineFocus } from '../components/onboarding/FiveQuestionSpine';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,7 +45,7 @@ type ActivePanel =
 
 const DIRECTION_COLORS = {
   up: 'text-paper-green',
-  down: 'text-risk-red',
+  down: 'text-phosphor',
   neutral: 'text-phosphor-mid',
 };
 
@@ -181,9 +179,9 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
       hint: 'THE SIGNAL IS YOUR INFORMATION EDGE',
     },
     {
-      sel: '[data-spotlight="cp-actions"]',
+      sel: '[data-action-zone="inline"]',
       title: 'CHOOSE YOUR STANCE',
-      body: 'Choose the stance that matches your read. HOLD is a real, scored decision. Set how strongly you believe it. Trading more is never rewarded.',
+      body: 'Press DECIDE. Pick the stance (your move) that matches your read. HOLD is a real, scored decision. Then set your conviction: how strongly you believe it. Trading more is never rewarded.',
       hint: 'STANCE · CONVICTION · COMMIT',
     },
   ];
@@ -722,6 +720,13 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
   const governor = convictionGovernor(run.currentCheckpoint);
   const governed = isGovernorActive(run.currentCheckpoint);
   const decisionReady = Boolean(stance);
+  // Which of the five questions the screen is answering right now.
+  const spineFocus: SpineFocus =
+    thesisPrompt || run.phase === 'RESOLVING' ? 'onCommit'
+    : run.phase === 'COMPARING' || run.phase === 'LEARNING' || run.phase === 'COMPLETE' ? 'vsMachine'
+    : activePanel === 'DECIDE' ? 'canDo'
+    : activePanel === 'SIGNAL' ? 'happening'
+    : 'info';
 
   // ─── Primary action ─────────────────────────────────────────────────────────
   // One control advances the run, in the same territory below the workspace in
@@ -822,14 +827,17 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
   const turnoverBudget = run.turnoverBudget;
   const turnoverSpentPct = turnoverBudget > 0 ? portfolio.turnoverUsed / turnoverBudget : 1;
   const turnoverExhausted = isHoldOnly(run, cp);
-  const turnoverColor =
-    turnoverSpentPct > 0.85 ? 'text-risk-red' :
-    turnoverSpentPct > 0.60 ? 'text-alert-amber' :
-    'text-phosphor';
-  const turnoverBarColor =
-    turnoverSpentPct > 0.85 ? 'bg-risk-red' :
-    turnoverSpentPct > 0.60 ? 'bg-alert-amber' :
-    'bg-phosphor';
+  // Budget state is caution at most. Red is the critical drawdown breach only.
+  const turnoverColor = turnoverSpentPct > 0.60 ? 'text-alert-amber' : 'text-phosphor';
+  const turnoverBarColor = turnoverSpentPct > 0.60 ? 'bg-alert-amber' : 'bg-phosphor';
+  // Drawdown: red once the run has actually breached the arena's limit
+  // (observation mode), amber inside the last half of the way there, plain
+  // otherwise. A 6% loss in a 20% arena is a fact, not an alarm.
+  const criticalDd = getArena(run.arenaId)?.criticalDrawdown ?? -0.2;
+  const drawdownColor =
+    isObservation ? 'text-risk-red'
+    : portfolio.drawdown <= criticalDd * 0.5 ? 'text-alert-amber'
+    : 'text-phosphor';
 
   // A run in observation mode cannot report MACHINE_BEATEN, whatever the
   // average score says. The engine resolves it; the screen only reports it.
@@ -854,7 +862,6 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
   const earnedProcessCredit = Boolean(lastDecision?.behavioralFlags.includes('GOOD_PROCESS')) && cp.isRegimeChange;
 
   // The arena's own name, so a run never announces itself as the wrong regime.
-  const arenaName = getArena(run.arenaId)?.name ?? 'ARENA';
 
   // §41/§42/§48 plates, chosen by what the arena is actually teaching. COVID
   // and Recovery already carry their own signature visuals, so they get none
@@ -950,68 +957,36 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           >
             ← ABORT
           </button>
-          <div className="hidden sm:block h-4 w-px bg-phosphor/20" />
-          <span className="hidden sm:inline text-phosphor-dim text-xs tracking-widest whitespace-nowrap">
-            {arenaName}
-          </span>
           <div className="h-4 w-px bg-phosphor/20" />
           <span className="text-phosphor text-xs tracking-widest whitespace-nowrap tabular-nums">
             CP {String(run.currentCheckpoint).padStart(2, '0')} / {String(run.totalCheckpoints).padStart(2, '0')}
           </span>
-          <div className="hidden lg:flex items-center gap-4">
-            <div className="h-4 w-px bg-phosphor/20" />
-            <ArcRail current="PLAY" />
-          </div>
           {isObservation && (
             <span className="text-alert-amber text-xs tracking-widest animate-pulse border border-alert-amber/40 px-2 py-0.5">
               OBSERVATION MODE
             </span>
           )}
         </div>
+        {/* Four figures, no more: where am I, how am I doing against the
+            machine, how is the money doing, and the way to Help. The arena
+            name is on the briefing, the arc rail is on the Hub, Sharpe and the
+            machine's Sharpe are in the RISK panel head-to-head, and the build
+            stamp is on the title screen. Behind is printed plainly: it is a
+            fact about the round, not an alarm (red is critical failure only). */}
         <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0 ml-auto">
           <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap tabular-nums">
-            <span className={`text-xs font-bold ${run.playerScore >= run.machineScore ? 'text-paper-green' : 'text-risk-red'}`}>
+            <span className={`text-xs font-bold ${run.playerScore >= run.machineScore ? 'text-paper-green' : 'text-phosphor'}`}>
               YOU {run.playerScore}
             </span>
-            <span className="hidden sm:inline text-phosphor-dim text-xs">·</span>
-            <span className="text-phosphor-mid text-xs">MCH {run.machineScore}</span>
-          </div>
-          {/* Return and risk-adjusted return, side by side. The game's whole
-              argument is that the second one is the real scoreboard, so it is
-              never further away than the first.
-
-              The bar is budgeted to 360pt, so below sm this shrinks to the
-              player's own figure under a two-letter label. The machine's
-              Sharpe is not dropped, only moved: the risk panel carries the
-              full head-to-head at every width. */}
-          <div
-            className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap tabular-nums"
-            title="RETURN VS RISK TAKEN TO GET IT"
-          >
-            <span className={`text-xs font-bold ${portfolioGain >= 0 ? 'text-paper-green' : 'text-risk-red'}`}>
-              {portfolioGain >= 0 ? '+' : ''}{portfolioGain.toFixed(2)}%
-            </span>
             <span className="text-phosphor-dim text-xs">·</span>
-            <span className="text-phosphor-dim text-xs tracking-widest">
-              <span className="sm:hidden">SH</span>
-              <span className="hidden sm:inline">SHARPE</span>
-            </span>
-            <span className={`text-xs font-bold ${
-              riskAdjusted.playerSharpe === null ? 'text-phosphor-dim'
-                : riskAdjusted.machineSharpe !== null && riskAdjusted.playerSharpe >= riskAdjusted.machineSharpe
-                  ? 'text-paper-green' : 'text-risk-red'
-            }`}>
-              {fmtSharpe(riskAdjusted.playerSharpe)}
-            </span>
-            <span className="hidden sm:inline text-phosphor-mid text-xs">
-              / MCH {fmtSharpe(riskAdjusted.machineSharpe)}
-            </span>
+            <span className="text-phosphor-mid text-xs">MACHINE {run.machineScore}</span>
           </div>
-          {/* The run screen is fullscreen: no nav bar and no ticker tape, and a
-              run is where a tester spends almost all of their time. Hidden on
-              the narrowest bar, which is already budgeted to the point of
-              wrapping. */}
-          <BuildStamp className="hidden sm:inline" />
+          <span
+            className={`text-xs font-bold whitespace-nowrap tabular-nums ${portfolioGain >= 0 ? 'text-paper-green' : 'text-phosphor'}`}
+            title="PORTFOLIO RETURN SINCE THE START OF THE RUN"
+          >
+            {portfolioGain >= 0 ? '+' : ''}{portfolioGain.toFixed(2)}%
+          </span>
           {onHelp && (
             <button
               onClick={onHelp}
@@ -1092,10 +1067,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           <span className="text-phosphor-dim">CASH</span>
           <span className="text-phosphor tabular-nums">{(portfolio.cashWeight * 100).toFixed(0)}%</span>
           <span className="text-phosphor-dim">DD</span>
-          <span className={`tabular-nums ${
-            portfolio.drawdown < -0.10 ? 'text-risk-red'
-            : portfolio.drawdown < -0.05 ? 'text-alert-amber' : 'text-phosphor'
-          }`}>
+          <span className={`tabular-nums ${drawdownColor}`}>
             {(portfolio.drawdown * 100).toFixed(1)}%
           </span>
           <span className="text-phosphor-dim ml-auto">TURNOVER</span>
@@ -1117,7 +1089,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           />
         </div>
         {turnoverExhausted && (
-          <div className="text-risk-red text-xs tracking-widest mt-1">
+          <div className="text-alert-amber text-xs tracking-widest mt-1">
             TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
           </div>
         )}
@@ -1173,14 +1145,14 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
               <span className="text-phosphor">{(portfolio.cashWeight * 100).toFixed(0)}%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-phosphor-dim">DRAWDOWN</span>
-              <span className={portfolio.drawdown < -0.10 ? 'text-risk-red' : portfolio.drawdown < -0.05 ? 'text-alert-amber' : 'text-phosphor'}>
+              <span className="text-phosphor-dim">DRAWDOWN <span className="text-phosphor-dim/60">· LOSS FROM PEAK</span></span>
+              <span className={drawdownColor}>
                 {(portfolio.drawdown * 100).toFixed(1)}%
               </span>
             </div>
             <div>
               <div className="flex justify-between">
-                <span className="text-phosphor-dim">TURNOVER BUDGET</span>
+                <span className="text-phosphor-dim">TURNOVER <span className="text-phosphor-dim/60">· TRADING BUDGET USED</span></span>
                 <span className={turnoverColor}>
                   {(portfolio.turnoverUsed * 100).toFixed(0)}% / {(turnoverBudget * 100).toFixed(0)}%
                 </span>
@@ -1199,7 +1171,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                 />
               </div>
               {turnoverExhausted && (
-                <div className="text-risk-red text-xs tracking-widest mt-1">
+                <div className="text-alert-amber text-xs tracking-widest mt-1">
                   TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
                 </div>
               )}
@@ -1416,7 +1388,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                           </div>
                           <div className="flex items-center gap-3 tabular-nums">
                             <span>{Math.round(pos.weight * 100)}%</span>
-                            <span className={pos.pnl >= 0 ? 'text-paper-green' : 'text-risk-red'}>
+                            <span className={pos.pnl >= 0 ? 'text-paper-green' : 'text-phosphor'}>
                               {pos.pnl >= 0 ? '+' : ''}{(pos.pnl * 100).toFixed(1)}%
                             </span>
                           </div>
@@ -1541,7 +1513,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
 
                     {/* ── 1. Stance ── */}
                     <div className="text-phosphor-dim text-xs tracking-widest mb-2">
-                      1 · STANCE
+                      1 · STANCE <span className="text-phosphor-dim/60">· YOUR MOVE</span>
                     </div>
                     <div className="space-y-2 mb-6" ref={measureDecisionRegion}>
                       {branches.map((branch, i) => {
@@ -1576,7 +1548,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                         is the scale they keep. */}
                     <div className={stance ? '' : 'opacity-40 pointer-events-none'}>
                       <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-phosphor-dim text-xs tracking-widest">2 · CONVICTION</span>
+                        <span className="text-phosphor-dim text-xs tracking-widest">2 · CONVICTION <span className="text-phosphor-dim/60">· HOW STRONGLY YOU BELIEVE IT</span></span>
                         <span className="text-phosphor text-lg font-bold tabular-nums">{conviction}</span>
                       </div>
 
@@ -1625,7 +1597,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                               span this checkpoint cannot reach. */}
                           {governed && (
                             <div
-                              className="absolute top-0 h-1.5 bg-risk-red/20 border-l border-risk-red/50 pointer-events-none"
+                              className="absolute top-0 h-1.5 bg-alert-amber/20 border-l border-alert-amber/50 pointer-events-none"
                               style={{
                                 left: `${((governor.max - span.min) / (span.max - span.min)) * 100}%`,
                                 right: 0,
@@ -1685,7 +1657,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                 {stanceTitle(selectedCommittedBranch)} · CONVICTION {confidenceToConviction(lastDecision.confidence ?? 0)}
               </div>
               <div className="text-phosphor-dim text-xs tracking-widest mb-5">
-                COMMITTED. THIS CANNOT BE CHANGED.
+                DECISION LOCKED. THE MARKET RESOLVES WHEN YOU ANSWER.
               </div>
 
               <div className="text-phosphor text-2xl font-bold tracking-widest mb-5">WHY?</div>
@@ -1707,28 +1679,34 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                 onClick={() => pickThesis(THESIS_TIMEOUT_CODE)}
                 className="mt-5 text-phosphor-dim text-xs tracking-widest hover:text-phosphor-mid transition-colors"
               >
-                SKIP →
+                SKIP · RESOLVE NOW →
               </button>
 
               {/* The auto-skip is disclosed, never sprung. Text carries the
                   state as well as the bar, so the meter is not the only
-                  channel (§62). */}
+                  channel (§62).
+
+                  The bar fills toward the resolution rather than draining
+                  toward a deadline: the same fifteen seconds, read as the
+                  market arriving instead of a questionnaire expiring. The
+                  data model and timeout are untouched; on timeout the
+                  decision records THESIS_UNSTATED exactly as before. */}
               <div className="mt-4 w-56" aria-live="polite">
                 <div className="text-phosphor-dim/70 text-xs tracking-widest text-center mb-1.5">
-                  RECORDS AS THESIS UNSTATED IN {thesisSecondsLeft}s
+                  MARKET RESOLVES IN {thesisSecondsLeft}s · THEN RECORDS AS THESIS UNSTATED
                 </div>
                 <div
                   className="h-0.5 bg-phosphor/10"
                   role="meter"
-                  aria-label="TIME LEFT TO STATE A THESIS"
-                  aria-valuenow={thesisSecondsLeft}
+                  aria-label="TIME UNTIL THE MARKET RESOLVES WITHOUT A THESIS"
+                  aria-valuenow={Math.ceil(THESIS_TIMEOUT_MS / 1000) - thesisSecondsLeft}
                   aria-valuemin={0}
                   aria-valuemax={Math.ceil(THESIS_TIMEOUT_MS / 1000)}
                 >
                   <div
                     className="h-full bg-phosphor/40 transition-[width] duration-300 ease-linear"
                     style={{
-                      width: `${(thesisSecondsLeft / Math.ceil(THESIS_TIMEOUT_MS / 1000)) * 100}%`,
+                      width: `${(1 - thesisSecondsLeft / Math.ceil(THESIS_TIMEOUT_MS / 1000)) * 100}%`,
                     }}
                   />
                 </div>
@@ -1847,7 +1825,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                   <div className="text-right">
                     <div className="text-phosphor-dim text-xs tracking-widest">MACHINE</div>
                     <div className="text-2xl font-bold text-phosphor-mid mt-1">{lastCheckpointScore.machineScore}</div>
-                    <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">PAR {cp.machinePar}</div>
+                    <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">PAR {cp.machinePar} <span className="text-phosphor-dim/60">· MACHINE TARGET</span></div>
                   </div>
                 </div>
 
@@ -1883,29 +1861,28 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                   aria-expanded={showBreakdown}
                   className="mt-3 text-phosphor-dim text-xs tracking-widest hover:text-phosphor transition-colors"
                 >
-                  {showBreakdown ? 'HIDE BREAKDOWN' : 'HOW THIS WAS SCORED'}
+                  {showBreakdown ? 'HIDE' : 'SEE WHY'}
                 </button>
 
                 {showBreakdown && (
                   <div className="mt-3 border-t border-phosphor/15 pt-3 space-y-3">
-                    {/* The six bare component numbers that used to sit here were
-                        a scoreboard, not an explanation: nothing said what they
-                        measure, what they are weighted at, or which of them
-                        moved the total. This is the same data, decomposed and
-                        attributed, because a player who opens a breakdown is
-                        asking to be taught. */}
-                    <CheckpointAnalysis
-                      score={lastCheckpointScore}
-                      confidence={lastDecision?.confidence ?? 0.5}
-                    />
-
+                    {/* Why first: the one-paragraph cause a player asked for
+                        when they pressed SEE WHY. The decomposition follows for
+                        anyone who wants to see which component moved the
+                        total. Same data as before, in the order a person
+                        reads it. */}
                     <div>
-                      <div className="text-phosphor-dim text-xs tracking-widest mb-1">PROCESS NOTE</div>
+                      <div className="text-phosphor-dim text-xs tracking-widest mb-1">WHY</div>
                       <div className="text-phosphor-mid text-xs leading-relaxed">{cp.teachingPoint}</div>
                       {cp.isHoldValid && lastDecision?.actionCode === 'HOLD' && cp.holdTeaching && (
                         <div className="mt-2 text-paper-green text-xs">✓ {cp.holdTeaching}</div>
                       )}
                     </div>
+
+                    <CheckpointAnalysis
+                      score={lastCheckpointScore}
+                      confidence={lastDecision?.confidence ?? 0.5}
+                    />
                   </div>
                 )}
               </div>
@@ -1933,7 +1910,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           {phase === 'COMPLETE' && (
             <div className="flex-1 flex flex-col items-center justify-center p-6">
               <div className="text-phosphor-dim text-xs tracking-widest mb-2">RUN COMPLETE</div>
-              <div className={`text-3xl font-bold mb-2 ${beatTheMachine ? 'text-paper-green' : 'text-risk-red'}`}>
+              <div className={`text-3xl font-bold mb-2 ${beatTheMachine ? 'text-paper-green' : 'text-phosphor'}`}>
                 {beatTheMachine ? 'MACHINE BEATEN' : 'MACHINE WINS'}
               </div>
               <div className="text-phosphor-mid text-sm mb-2">
@@ -1989,8 +1966,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     d.quality === 'EXCELLENT' ? 'text-paper-green' :
                     d.quality === 'GOOD' ? 'text-phosphor' :
                     d.quality === 'NEUTRAL' ? 'text-phosphor-mid' :
-                    d.quality === 'POOR' ? 'text-alert-amber' :
-                    'text-risk-red'
+                    'text-alert-amber'
                   }`}>{d.actionCode}</span>
                   <span className="text-phosphor-dim">{d.scoreContribution}</span>
                 </div>
@@ -2011,41 +1987,20 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
         </div>
       </div>
 
-      {/* ── Contextual action bar ── */}
-      {decisionPhase && (
-        <div data-spotlight="cp-actions" className="border-t border-phosphor/15 px-4 py-2.5 flex items-center gap-4 bg-terminal-deep/40 flex-shrink-0">
-          <button
-            onClick={() => openPanel('PORTFOLIO')}
-            className="text-xs tracking-widest text-phosphor-dim hover:text-phosphor transition-colors border border-phosphor/20 px-3 py-1.5 hover:border-phosphor/40"
-          >
-            [P] PORTFOLIO
-          </button>
-          <button
-            onClick={() => openPanel('RISK')}
-            className="text-xs tracking-widest text-phosphor-dim hover:text-phosphor transition-colors border border-phosphor/20 px-3 py-1.5 hover:border-phosphor/40"
-          >
-            [R] RISK
-          </button>
-          {onHelp && (
-            <button
-              onClick={onHelp}
-              className="text-xs tracking-widest text-phosphor-dim hover:text-phosphor transition-colors border border-phosphor/15 px-3 py-1.5 hover:border-phosphor/30"
-            >
-              [?] HELP
-            </button>
-          )}
-          <div className="flex-1" />
-        </div>
-      )}
+      {/* The second Portfolio / Risk / Help bar that sat here is gone. The tab
+          strip already opens both panels at every width, and ? HELP lives in
+          the top bar. Two rows offering the same doors read as two things to
+          do. One forward door per phase (PLAN-guidance-sweep law 1). */}
 
-      {/* §56 five-question spine — always answers "what do I do / why am I here" */}
+      {/* §56 spine: one question, the one this phase is answering. */}
       <FiveQuestionSpine
+        focus={spineFocus}
         answers={{
-          happening: `${cp.crisisDay} · ${cp.phase.replace(/_/g, ' ')}`,
-          info: 'SIGNAL · PORTFOLIO · RISK',
-          canDo: 'STANCE · CONVICTION · COMMIT',
-          onCommit: 'THESIS → MARKET RESOLVES · MACHINE COMPARES',
-          vsMachine: `YOU ${run.playerScore} · MCH ${run.machineScore}`,
+          happening: `${getArena(run.arenaId)?.name ?? 'ARENA'} · ${cp.crisisDay} · ${cp.phase.replace(/_/g, ' ')}`,
+          info: 'SIGNAL · PORTFOLIO · RISK. THEN DECIDE.',
+          canDo: 'STANCE (YOUR MOVE) · CONVICTION · COMMIT',
+          onCommit: 'THE MARKET RESOLVES. THEN THE MACHINE SHOWS ITS CALL.',
+          vsMachine: `YOU ${run.playerScore} · MACHINE ${run.machineScore}`,
         }}
       />
 

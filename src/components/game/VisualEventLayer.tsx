@@ -97,8 +97,8 @@ function EventRenderer({ event, reducedMotion, onDone }: RendererProps) {
     case 'DRAWDOWN_WARNING':
       return (
         <div className="p-5 max-w-xs">
-          <div className="text-risk-red text-xs tracking-widest mb-2 font-bold">DRAWDOWN WARNING</div>
-          <div className="text-2xl font-bold text-risk-red tabular-nums mb-2">
+          <div className="text-alert-amber text-xs tracking-widest mb-2 font-bold">DRAWDOWN WARNING</div>
+          <div className="text-2xl font-bold text-alert-amber tabular-nums mb-2">
             {typeof p.drawdown === 'number' ? `${(p.drawdown * 100).toFixed(1)}%` : '—'}
           </div>
           <div className="text-phosphor-dim text-xs leading-snug mb-4">

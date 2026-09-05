@@ -37,7 +37,8 @@ test('a run can be played from the first checkpoint to the results screen', asyn
   await enterSelectedArena(page);
   await dismissOverlays(page);
 
-  // The header names the regime being played, not always COVID.
+  // The run names the regime being played (in the WHAT IS HAPPENING line),
+  // not always COVID: proof the map's choice carried into the run.
   await expect(page.locator('body')).toContainText('RECOVERY TRAP');
 
   const played = await playToEnd(page);
