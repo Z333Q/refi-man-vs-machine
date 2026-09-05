@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { allocationChanges, layoutBlocks, sectorHue, type BlockInput } from '../../lib/blockField';
+import { allocationChanges, displayPct, layoutBlocks, type BlockInput } from '../../lib/blockField';
 import BlockFieldLadder from './BlockFieldLadder';
 
 // ─── Block field ──────────────────────────────────────────────────────────────
@@ -7,9 +7,14 @@ import BlockFieldLadder from './BlockFieldLadder';
 // two presentations (2026-08-31 mobile UX ruling): blocksFromPortfolio stays
 // the single derivation, and this component only chooses how to draw it.
 //
-//   >= sm   the treemap. Size means allocation, hue means sector, cash is
-//           drawn hollow so dry powder reads as capacity rather than as
-//           another holding. Ghost outlines carry the pre-stance allocation.
+//   >= sm   the treemap. Size means allocation. Every holding is the same
+//           quiet fill (2026-09-05 owner ruling: nine sector tints with no
+//           legend read as blocks rendering wrong, not as information; the
+//           sector is in the accessible label). Cash is drawn hollow so dry
+//           powder reads as capacity rather than as another holding. A dashed
+//           ghost marks where a block was before the stance, and only for
+//           blocks whose printed allocation actually moved: a ghost on every
+//           block over a one-pixel layout drift read as a double-exposure.
 //   <  sm   BlockFieldLadder. At phone width the treemap collapsed into ten
 //           outlined rectangles that read as disabled form fields; the ladder
 //           keeps every holding visible, stable, and legible instead.
@@ -119,10 +124,16 @@ function BlockFieldTreemap({
   caption?: string;
 }) {
   const rects = useMemo(() => layoutBlocks(blocks, W, height), [blocks, height]);
-  const ghosts = useMemo(
-    () => (previous ? layoutBlocks(previous, W, height) : []),
-    [previous, height],
-  );
+  // Ghosts only where the number the player reads moved (same precision as
+  // the change summary), plus any block that no longer exists.
+  const ghosts = useMemo(() => {
+    if (!previous) return [];
+    const now = new Map(blocks.map(b => [b.key, b]));
+    return layoutBlocks(previous, W, height).filter(g => {
+      const cur = now.get(g.key);
+      return !cur || displayPct(cur.weight) !== displayPct(g.weight);
+    });
+  }, [previous, blocks, height]);
 
   if (rects.length === 0) return null;
 
@@ -136,7 +147,8 @@ function BlockFieldTreemap({
     <>
       <svg
         viewBox={`0 0 ${W} ${height}`}
-        className="w-full"
+        className="w-full select-none"
+        style={{ userSelect: 'none' }}
         role="img"
         aria-label={`Portfolio allocation. ${label}.`}
         data-testid="block-field-treemap"
@@ -146,17 +158,17 @@ function BlockFieldTreemap({
           <rect
             key={`ghost-${g.key}`}
             x={g.x} y={g.y} width={g.w} height={g.h}
-            fill="none" stroke="#27634E" strokeWidth="1" strokeDasharray="2 3" opacity="0.5"
+            fill="none" stroke="#79FFD7" strokeWidth="1" strokeDasharray="3 3" opacity="0.55"
           />
         ))}
 
         {rects.map(r => {
-          const hue = sectorHue(r.sector, r.isCash);
-          // The edge is quiet and uniform. PnL lives only in the printed
-          // signed number (2026-09-01 owner ruling: a red or mint outline on
-          // every block turned a down day into a wall of alarm and pulled the
-          // eye away from the decision). Red stays reserved for critical
-          // risk failure (§32.2), never for an ordinary losing checkpoint.
+          // Fill and edge are quiet and uniform across every holding. PnL
+          // lives only in the printed signed number (2026-09-01 owner ruling:
+          // a red or mint outline on every block turned a down day into a
+          // wall of alarm). Red stays reserved for critical risk failure
+          // (§32.2). Dashes are reserved for the ghosts, so cash is hollow
+          // with a solid dim edge.
           const edge = r.isCash ? '#27634E' : '#0A8F68';
           const pnlColor = '#D8EEE5';
           const roomForTicker = r.w >= 34 && r.h >= 16;
@@ -167,12 +179,11 @@ function BlockFieldTreemap({
               <rect
                 x={r.x + 1} y={r.y + 1}
                 width={Math.max(0, r.w - 2)} height={Math.max(0, r.h - 2)}
-                fill={r.isCash ? 'none' : hue}
-                fillOpacity={r.isCash ? 0 : 0.22}
+                fill={r.isCash ? 'none' : '#0A8F68'}
+                fillOpacity={r.isCash ? 0 : 0.16}
                 stroke={edge}
                 strokeWidth={1}
-                strokeOpacity={r.isCash ? 1 : 0.6}
-                strokeDasharray={r.isCash ? '3 3' : undefined}
+                strokeOpacity={r.isCash ? 0.9 : 0.55}
                 style={reducedMotion ? undefined : { transition: 'all 240ms ease-out' }}
               />
               {roomForTicker && (
