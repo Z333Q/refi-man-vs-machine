@@ -1737,8 +1737,8 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     seed={raceSeed}
                     checkpointSequence={run.currentCheckpoint}
                     playerAction={lastDecision?.actionCode ?? ''}
-                    machineAction={cp.machineDecision.actionCode}
-                    machineReason={cp.machineDecision.policyReason}
+                    machineAction={lastDecision?.machineActionCode ?? cp.machineDecision.actionCode}
+                    machineReason={lastDecision?.machineReason ?? cp.machineDecision.policyReason}
                     wire={(cp.eventFeed ?? []).map(e => e.text)}
                     conviction={
                       lastDecision?.confidence !== undefined
