@@ -1,4 +1,4 @@
-import type { ArenaId, ModuleCode, TerminalModule, MachineBenchmark, BenchmarkSnapshot, RankCode, PlayerProfile, DimensionCode } from './gameTypes';
+import type { ArenaId, ModuleCode, TerminalModule, MachineBenchmark, BenchmarkSnapshot, RankCode, PlayerProfile, DimensionCode, OpponentPolicy } from './gameTypes';
 
 // ─── Terminal modules ─────────────────────────────────────────────────────────
 
@@ -83,14 +83,6 @@ export const TERMINAL_MODULES: TerminalModule[] = [
     key: 'B',
     description: 'Construct and analyze custom U.S. equity portfolios — sector, factor, concentration diagnostics',
     unlockRequirement: 'Alpha Profile unlocked',
-    alwaysAvailable: false,
-  },
-  {
-    code: 'POLICY_WRITER',
-    label: 'POLICY WRITER',
-    key: 'W',
-    description: 'Write systematic equity rules — position limits, sector caps, drawdown triggers, re-entry conditions',
-    unlockRequirement: 'Basket Writer performance threshold',
     alwaysAvailable: false,
   },
   {
@@ -297,7 +289,9 @@ export const MACHINE_LADDER: MachineBenchmark[] = [
     trainingCutoff: 'N/A',
     riskPolicy: 'Buy and hold — full U.S. equity exposure. No decisions.',
     auditId: 'RFA-MCH-SPY-001',
-    playable: false,
+    // Playable since 2026-09-06: buy and hold is a policy the engine can run
+    // exactly (OpponentPolicy HOLD), which makes this spec 28's Level 0.
+    playable: true,
     message: 'NO AI. NO SELECTION. JUST THE MARKET.',
     contestType: 'FAIR_MATCH',
     snapshot: BENCHMARK_SNAPSHOTS.spy,
@@ -421,10 +415,32 @@ export function isChallengeable(machine: MachineBenchmark, status: LadderStatus)
 export function currentOpponent(
   ladder: Record<string, { status: LadderStatus } | undefined>,
 ): MachineBenchmark | undefined {
-  return (
-    MACHINE_LADDER.find(m => m.playable && ladder[m.id]?.status === 'ACTIVE') ??
-    MACHINE_LADDER.find(m => m.playable && ladder[m.id]?.status === 'DEFEATED')
+  // The highest rung the player has reached, whether still ACTIVE or already
+  // DEFEATED (a rematch). Beating the Rules machine must not demote the Hub to
+  // the index just because the index is still undefeated below it.
+  const reached = MACHINE_LADDER.filter(m => {
+    const status = ladder[m.id]?.status;
+    return m.playable && (status === 'ACTIVE' || status === 'DEFEATED');
+  });
+  return reached.reduce<MachineBenchmark | undefined>(
+    (best, m) => (!best || m.rank > best.rank ? m : best),
+    undefined,
   );
+}
+
+/**
+ * How a ladder opponent decides at runtime. One place, so the run engine, the
+ * briefing and the machine card cannot disagree about what the player faces.
+ *
+ * Exhibition rungs (the RF/RL benchmarks) deliberately have no policy: a rules
+ * engine standing in for them would be the fabricated benchmark spec 26.1
+ * forbids. They stay unplayable and say so.
+ */
+export function opponentPolicyFor(machineId: string): OpponentPolicy {
+  switch (machineId) {
+    case 'spy_passive': return { kind: 'HOLD' };
+    default: return { kind: 'AUTHORED' };
+  }
 }
 
 // ─── Rank progression ─────────────────────────────────────────────────────────

@@ -13,7 +13,7 @@
 // configured remote is a mirror that hears about writes through the hook below
 // and may fill gaps through applyRemoteMachineVersion, never overwrite.
 
-import type { MachineConfig, MachineModuleId, PlayerMachine } from './gameTypes';
+import type { DeployedMachine, MachineConfig, MachineModuleId, PlayerMachine } from './gameTypes';
 
 /** Bumped when the record shape changes in a way a reader must notice. */
 export const MACHINE_RECORD_VERSION = 1;
@@ -209,6 +209,38 @@ export function lockMachineVersion(
   writeAll(all);
   announceToMirror(locked);
   return locked;
+}
+
+/**
+ * The machine that rides along in the next run: the most recently compiled
+ * version of any machine. Compile is deploy (docs/PLAN-endgame.md step 1);
+ * there is no separate lock ceremony, and a player who recompiles has
+ * redeployed.
+ */
+export function deployedMachine(): DeployedMachine | null {
+  const latest = readAll()
+    .slice()
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))[0];
+  if (!latest) return null;
+  return {
+    machineId: latest.machineId,
+    name: latest.machineName,
+    version: versionLabel(latest.version),
+    versionNumber: latest.version,
+    buildHash: latest.buildHash,
+    config: latest.config,
+  };
+}
+
+/** A finished run this exact build rode along in. Idempotent per arena. */
+export function recordDeployedArena(machineId: string, arenaId: string): void {
+  const all = readAll();
+  const idx = all.findIndex(r => r.machineId === machineId);
+  if (idx < 0 || all[idx].arenasCompleted.includes(arenaId)) return;
+  const updated = { ...all[idx], arenasCompleted: [...all[idx].arenasCompleted, arenaId] };
+  all[idx] = updated;
+  writeAll(all);
+  announceToMirror(updated);
 }
 
 export function clearMachineVersions(): void {

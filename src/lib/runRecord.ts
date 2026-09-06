@@ -22,8 +22,8 @@
 // this is the audit trail it leaves behind.
 
 import type {
-  ActionCode, ArenaId, BehavioralFlag, DecisionQuality, ModuleCode,
-  RunState, ThesisCode,
+  ActionCode, ArenaId, BehavioralFlag, DecisionQuality, DeployedMachine, ModuleCode,
+  OpponentPolicy, RunState, ThesisCode,
 } from './gameTypes';
 import {
   advanceRunCheckpoint, attachThesis, commitDecisionCommand, createInitialRun,
@@ -31,7 +31,7 @@ import {
 import { confidenceToConviction } from './decisionContract';
 
 /** Bumped when the record shape changes in a way a reader must notice. */
-export const RUN_RECORD_VERSION = 2;
+export const RUN_RECORD_VERSION = 3;
 
 /** How many finished runs to keep. Old runs fall off the end. */
 export const MAX_STORED_RUNS = 20;
@@ -52,6 +52,12 @@ export interface RecordedDecision {
   quality: DecisionQuality;
   behavioralFlags: BehavioralFlag[];
   machineActionCode: ActionCode;
+  /** v3: the opponent's stated reason when policy-driven; null when authored. */
+  machineReason: string | null;
+  /** v3: the deployed machine's call at this checkpoint; null when none rode along. */
+  deployedActionCode: ActionCode | null;
+  deployedReason: string | null;
+  deployedConviction: number | null;
   /**
    * Wall-clock time the player committed, stamped by the projection's caller.
    * Null on decisions recorded before v2 captured commit times: a migration
@@ -85,6 +91,12 @@ export interface RunRecord {
   turnoverUsed: number;
 
   decisions: RecordedDecision[];
+
+  /** v3: how the opponent decided, so a replay faces the same opponent. */
+  opponentPolicy: OpponentPolicy;
+  /** v3: the machine that rode along, and its final running score. */
+  deployed: DeployedMachine | null;
+  deployedScore: number | null;
 
   startedAt: string;
   updatedAt: string;
@@ -152,6 +164,10 @@ export function projectRun(
       quality: d.quality,
       behavioralFlags: d.behavioralFlags,
       machineActionCode: d.machineActionCode,
+      machineReason: d.machineReason ?? null,
+      deployedActionCode: d.deployedActionCode ?? null,
+      deployedReason: d.deployedReason ?? null,
+      deployedConviction: d.deployedConviction ?? null,
       // A commit time, once recorded, is fixed: re-projections keep the time
       // each decision was actually committed, and only decisions this write
       // introduces are stamped with the caller's clock. A prior decision whose
@@ -159,6 +175,10 @@ export function projectRun(
       // fabricate a commit time the player never made.
       committedAt: priorCommitTime(previous, d.checkpointSequence, now),
     })),
+
+    opponentPolicy: run.opponentPolicy,
+    deployed: run.deployed,
+    deployedScore: run.deployedAgent?.score ?? null,
 
     startedAt: previous?.startedAt ?? now,
     updatedAt: now,
@@ -177,11 +197,41 @@ export function projectRun(
  * migration must never do is invent the timestamp it is missing.
  */
 function migrateV1(record: RunRecord): RunRecord {
+  return migrateV2({
+    ...record,
+    recordVersion: 2,
+    decisions: record.decisions.map(d => ({ ...d, committedAt: d.committedAt ?? null })),
+  });
+}
+
+/**
+ * v2 → v3: v3 added the opponent's policy, the deployed machine and its
+ * per-checkpoint calls. A v2 run faced the authored opponent (that was the
+ * only kind) and had no machine riding along, so it says so: AUTHORED, null.
+ */
+function migrateV2(record: RunRecord): RunRecord {
   return {
     ...record,
     recordVersion: RUN_RECORD_VERSION,
-    decisions: record.decisions.map(d => ({ ...d, committedAt: d.committedAt ?? null })),
+    opponentPolicy: record.opponentPolicy ?? { kind: 'AUTHORED' },
+    deployed: record.deployed ?? null,
+    deployedScore: record.deployedScore ?? null,
+    decisions: record.decisions.map(d => ({
+      ...d,
+      machineReason: d.machineReason ?? null,
+      deployedActionCode: d.deployedActionCode ?? null,
+      deployedReason: d.deployedReason ?? null,
+      deployedConviction: d.deployedConviction ?? null,
+    })),
   };
+}
+
+const READABLE_VERSIONS = new Set([1, 2, RUN_RECORD_VERSION]);
+
+function migrate(record: RunRecord): RunRecord {
+  if (record.recordVersion === 1) return migrateV1(record);
+  if (record.recordVersion === 2) return migrateV2(record);
+  return record;
 }
 
 function readAll(): RunRecord[] {
@@ -195,8 +245,8 @@ function readAll(): RunRecord[] {
     // a run that did not happen, which is the bug this module exists to end.
     return (parsed as RunRecord[])
       .filter(r => r && typeof r === 'object' && Array.isArray(r.decisions))
-      .filter(r => r.recordVersion === RUN_RECORD_VERSION || r.recordVersion === 1)
-      .map(r => (r.recordVersion === 1 ? migrateV1(r) : r));
+      .filter(r => READABLE_VERSIONS.has(r.recordVersion))
+      .map(migrate);
   } catch {
     return [];
   }
@@ -278,8 +328,14 @@ export function replayRun(
   record: RunRecord,
   seedModules: ModuleCode[] = [],
 ): RunState | null {
+  // The same opponent and the same machine riding along, or the replay is a
+  // different run. machineId was not carried before this, so a resumed ladder
+  // challenge silently became a Rules match.
   let run: RunState = {
-    ...createInitialRun(record.seed, record.arenaId),
+    ...createInitialRun(record.seed, record.arenaId, record.machineId, {
+      opponentPolicy: record.opponentPolicy ?? { kind: 'AUTHORED' },
+      deployed: record.deployed ?? null,
+    }),
     id: record.runId,
   };
 
@@ -391,10 +447,10 @@ export function applyRemoteRun(remote: RunRecord): RemoteRunOutcome {
       || !remote.runId || !Array.isArray(remote.decisions)) {
     return { kind: 'REFUSED', reason: 'not a run record' };
   }
-  if (remote.recordVersion !== RUN_RECORD_VERSION && remote.recordVersion !== 1) {
+  if (!READABLE_VERSIONS.has(remote.recordVersion)) {
     return { kind: 'REFUSED', reason: `unknown record version ${String(remote.recordVersion)}` };
   }
-  const usable = remote.recordVersion === 1 ? migrateV1(remote) : remote;
+  const usable = migrate(remote);
 
   const local = getRunRecord(usable.runId);
   if (!local) {

@@ -1,12 +1,14 @@
 import type {
   ActionCode, ArenaId, BehavioralFlag, CheckpointData, CheckpointScore,
-  DimensionCode, PortfolioState, RunDecision, RunState, ThesisCode,
+  DeployedMachine, DimensionCode, OpponentPolicy, PortfolioState, RunDecision,
+  RunState, ShadowAgent, ThesisCode,
 } from './gameTypes';
 import { DEFAULT_ARENA_ID, getArena, getCheckpoint } from './arenas';
 // Importing the arena modules is what registers them. Without this the
 // registry is empty at runtime and every run ends at its first checkpoint.
 import './arenaIndex';
 import { scoreCheckpoint } from './scoringEngine';
+import { decideCheckpoint, REASON_TEXT } from './machinePolicy';
 import {
   clampConviction, confidenceToConviction, consultedRisk,
   CONVICTION_DEFAULT, convictionToConfidence,
@@ -129,14 +131,33 @@ function legacyCovidPortfolio(): PortfolioState {
  */
 export const DEFAULT_RUN_SEED = 0;
 
+export interface RunOptions {
+  /** How the opponent decides. Defaults to the authored content. */
+  opponentPolicy?: OpponentPolicy;
+  /** The player's compiled machine, riding along. */
+  deployed?: DeployedMachine | null;
+}
+
+/** A shadow agent's opening book: the arena's portfolio, par score. */
+function freshShadow(arenaId: ArenaId): ShadowAgent {
+  return { portfolio: createInitialPortfolio(arenaId), score: 50 };
+}
+
 export function createInitialRun(
   seed: number = DEFAULT_RUN_SEED,
   arenaId: ArenaId = DEFAULT_ARENA_ID,
   machineId: string = 'refi_rules',
+  options: RunOptions = {},
 ): RunState {
   const arena = getArena(arenaId);
   const total = arena?.checkpoints.length ?? 0;
+  const opponentPolicy: OpponentPolicy = options.opponentPolicy ?? { kind: 'AUTHORED' };
+  const deployed = options.deployed ?? null;
   return {
+    opponentPolicy,
+    opponentAgent: opponentPolicy.kind === 'AUTHORED' ? null : freshShadow(arenaId),
+    deployed,
+    deployedAgent: deployed ? freshShadow(arenaId) : null,
     id: null,
     seed,
     arenaId,
@@ -332,6 +353,73 @@ export interface CommitOutcome {
   checkpoint: CheckpointData;
 }
 
+// ─── Shadow agents ────────────────────────────────────────────────────────────
+//
+// An agent that is not the player, stepped by the engine on the same
+// checkpoint with the same information cutoff, the same action set, the same
+// costs and the same rubric (Fair Match, spec 26.5). Two live here: a
+// policy-driven opponent (S&P 500 passive) and the player's deployed machine.
+// Both are pure functions of their policy, the checkpoint and their own book.
+
+/** The passive index's stated reason. It is the same every checkpoint, on purpose. */
+export const PASSIVE_HOLD_REASON =
+  'Buy and hold. The index takes no decisions; it holds full exposure through every regime.';
+
+export interface ShadowDecision {
+  action: ActionCode;
+  conviction: number;
+  reason: string;
+}
+
+function shadowCanAfford(run: RunState, agent: ShadowAgent, action: ActionCode, cp: CheckpointData): boolean {
+  if (action === 'HOLD') return true;
+  return agent.portfolio.turnoverUsed + turnoverCostFor(action, cp) <= run.turnoverBudget + 1e-9;
+}
+
+/** What a policy does at this checkpoint, given the agent's own book. */
+export function decideShadow(
+  policy: OpponentPolicy,
+  cp: CheckpointData,
+  agent: ShadowAgent,
+  run: RunState,
+): ShadowDecision | null {
+  switch (policy.kind) {
+    case 'AUTHORED':
+      return null;
+    case 'HOLD':
+      return { action: 'HOLD', conviction: CONVICTION_DEFAULT, reason: PASSIVE_HOLD_REASON };
+    case 'CONFIG': {
+      const d = decideCheckpoint(policy.config, cp, agent.portfolio, a => shadowCanAfford(run, agent, a, cp));
+      return { action: d.action, conviction: d.conviction, reason: REASON_TEXT[d.reason] };
+    }
+  }
+}
+
+/** Score the agent's action on the shared rubric and advance its own book. */
+export function stepShadow(
+  run: RunState,
+  agent: ShadowAgent,
+  decision: ShadowDecision,
+  cp: CheckpointData,
+): { agent: ShadowAgent; score: CheckpointScore } {
+  const branch = cp.availableActions.find(a => a.actionCode === decision.action);
+  const flags: BehavioralFlag[] = branch ? [...branch.branchEffect.flagsAdd] : [];
+  const score = scoreCheckpoint({
+    action: decision.action,
+    checkpoint: cp,
+    flags,
+    confidence: convictionToConfidence(decision.conviction),
+    turnoverUsed: agent.portfolio.turnoverUsed,
+    portfolioDD: agent.portfolio.drawdown,
+    machineDD: cp.portfolioEffect.machineDrawdown,
+    riskBudgetDD: getArena(run.arenaId)?.criticalDrawdown ?? CRITICAL_DRAWDOWN,
+  });
+  const portfolio = simulatePortfolioAdvance(agent.portfolio, decision.action, run.currentCheckpoint, run.arenaId);
+  const n = run.currentCheckpoint;
+  const running = Math.round((agent.score * (n - 1) + score.totalScore) / n);
+  return { agent: { portfolio, score: running }, score };
+}
+
 /**
  * Apply the run's pending decision (stance, thesis, conviction) and advance the
  * simulated portfolio one checkpoint. Returns the new run plus the pieces the
@@ -386,6 +474,41 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
     riskBudgetDD: getArena(run.arenaId)?.criticalDrawdown ?? CRITICAL_DRAWDOWN,
   });
 
+  // The opponent. Authored: the content's decision and its par, as before.
+  // Policy-driven: the shadow decides on its own book and its checkpoint
+  // score replaces the authored par as the machine's figure for this turn.
+  // Note the player's own score still credits agreement with the authored
+  // rules machine (scoreCheckpoint's actionBias): the rubric is the same
+  // whoever the opponent is.
+  let machineActionCode: ActionCode = cp.machineDecision.actionCode;
+  let machineReason: string | undefined;
+  let opponentAgent = run.opponentAgent;
+  let checkpointScore = score;
+  const opponentDecision = opponentAgent ? decideShadow(run.opponentPolicy, cp, opponentAgent, run) : null;
+  if (opponentAgent && opponentDecision) {
+    const stepped = stepShadow(run, opponentAgent, opponentDecision, cp);
+    opponentAgent = stepped.agent;
+    machineActionCode = opponentDecision.action;
+    machineReason = opponentDecision.reason;
+    checkpointScore = {
+      ...score,
+      machineScore: stepped.score.totalScore,
+      delta: score.totalScore - stepped.score.totalScore,
+    };
+  }
+
+  // The player's deployed machine, riding along on its own book.
+  let deployedAgent = run.deployedAgent;
+  let deployedFields: Pick<RunDecision, 'deployedActionCode' | 'deployedReason' | 'deployedConviction'> = {};
+  if (run.deployed && deployedAgent) {
+    const d = decideShadow({ kind: 'CONFIG', config: run.deployed.config }, cp, deployedAgent, run);
+    if (d) {
+      const stepped = stepShadow(run, deployedAgent, d, cp);
+      deployedAgent = stepped.agent;
+      deployedFields = { deployedActionCode: d.action, deployedReason: d.reason, deployedConviction: d.conviction };
+    }
+  }
+
   const decision: RunDecision = {
     checkpointSequence: run.currentCheckpoint,
     actionCode: action,
@@ -397,7 +520,9 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
     scoreContribution: score.totalScore,
     quality: score.quality,
     behavioralFlags: flags,
-    machineActionCode: cp.machineDecision.actionCode,
+    machineActionCode,
+    machineReason,
+    ...deployedFields,
     committed: true,
   };
 
@@ -406,7 +531,9 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
   const crossedNow = portfolio.drawdown <= criticalDD;
   const n = run.currentCheckpoint;
   const playerScore = Math.round((run.playerScore * (n - 1) + score.totalScore) / n);
-  const machineScore = Math.round((run.machineScore * (n - 1) + score.machineScore) / n);
+  const machineScore = opponentAgent
+    ? opponentAgent.score
+    : Math.round((run.machineScore * (n - 1) + score.machineScore) / n);
 
   return {
     run: {
@@ -424,8 +551,10 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
       criticalFailure: crossedNow || run.criticalFailure,
       criticalFailureCheckpoint: run.criticalFailureCheckpoint
         ?? (crossedNow ? run.currentCheckpoint : null),
+      opponentAgent,
+      deployedAgent,
     },
-    score,
+    score: checkpointScore,
     flags,
     dimUpdates,
     checkpoint: cp,

@@ -84,10 +84,12 @@ const ARENA_ICON: Record<string, string> = {
   taco_protocol: '>>>',
 };
 
+// Side content that exists. POLICY WRITER was listed here and on the TACO
+// unlock as a prerequisite; no such screen was ever built. Removed from the
+// progression 2026-09-06 (docs/PLAN-endgame.md ruling 1).
 const SIDE_ARENAS = [
   { code: '06', label: 'MAN VS MACHINE', state: 'locked' as NodeState },
   { code: '07', label: 'BASKET WRITER', state: 'locked' as NodeState },
-  { code: '08', label: 'POLICY WRITER', state: 'locked' as NodeState },
 ];
 
 const NODE_SYMBOL: Record<NodeState, string> = {

@@ -20,7 +20,7 @@ import type {
 import { DEFAULT_MACHINE_CONFIG, DEFAULT_GUARDRAILS } from '../lib/gameTypes';
 import MachineCompile from '../components/game/MachineCompile';
 import { runStressTest, stressTestVerdict } from '../lib/stressTest';
-import { runGauntlet, gauntletVerdict, type GauntletResult } from '../lib/gauntlet';
+import { runGauntlet, gauntletVerdict, recordGauntlet, type GauntletResult } from '../lib/gauntlet';
 import { allArenas, getArena } from '../lib/arenas';
 
 import { REASON_TEXT } from '../lib/machinePolicy';
@@ -501,7 +501,7 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
           )}
 
           {tab === 'STRESS TEST' && !compiling && (
-            <StressTestPanel config={config} />
+            <StressTestPanel config={config} installedModules={[...installedModules]} />
           )}
         </div>
 
@@ -603,7 +603,7 @@ export default function MachineBuilderScreen({ onBack, onCompiled }: Props) {
           compiling
             ? 'COMPILING…'
             : compiled && isUnchanged
-              ? `✓ ${compiledVersion} READY`
+              ? `✓ ${compiledVersion} DEPLOYED · RIDES ALONG IN YOUR NEXT RUN`
               : `${installedModules.size}/${MODULES.length} MODULES INSTALLED`
         }
         primary={{
@@ -959,7 +959,7 @@ function getInstalledSummary(id: MachineModuleId, config: MachineConfig): string
  * transparent rules machine as RF/RL benchmark performance, and this screen
  * sits next to copy that quotes the real benchmark's numbers.
  */
-function StressTestPanel({ config }: { config: MachineConfig }) {
+function StressTestPanel({ config, installedModules }: { config: MachineConfig; installedModules: readonly MachineModuleId[] }) {
   // A machine tested against one regime has not been stress-tested, it has been
   // fitted. The panel was hardcoded to COVID, so the four arenas the game now
   // has were unreachable from the builder and the gauntlet's whole premise had
@@ -972,6 +972,12 @@ function StressTestPanel({ config }: { config: MachineConfig }) {
     () => (showGauntlet ? runGauntlet(config, { seed: 7 }) : null),
     [config, showGauntlet],
   );
+  // A gauntlet that ran is a fact the TACO gate reads (spec 5 puts the Blind
+  // Gauntlet before the final boss). Recorded against the build it tested.
+  useEffect(() => {
+    if (!gauntlet) return;
+    recordGauntlet(machineBuildHash(config, installedModules), 7, gauntlet);
+  }, [gauntlet, config, installedModules]);
   const verdict = stressTestVerdict(result);
 
   return (
