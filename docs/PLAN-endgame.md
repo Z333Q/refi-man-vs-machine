@@ -58,3 +58,33 @@ Two rulings taken as accepted when the owner said "proceed with your plan":
    primary action. The Hub already reads EVERY REGIME COMPLETE.
 6. **Policy Writer** references removed: map side branch, module strip,
    terminal modules, module code.
+
+## Done (branch feat/endgame-connective-tissue, 2026-09-06)
+
+- Step 1: `RunState.deployed` / `deployedAgent`; `decideShadow` and
+  `stepShadow` in runEngine; decisions record the passenger's call; reveal,
+  run complete, autopsy and Hub show it; `recordDeployedArena` on completion;
+  run record v3 with v1/v2 migration; replay carries machineId, policy and
+  passenger. Tests in `shadowAgents.test.ts`.
+- Step 2: `opponentPolicyFor`; SPY passive playable (HOLD); `currentOpponent`
+  is the highest rung reached. Exhibition rungs unchanged.
+- Step 3: `tacoRequirements` / `tacoUnlocked` / `tacoNextRequirement` in
+  progressionLaw; `readTacoEvidence` gathers the four stores; TACO unlock
+  screen renders real status and refuses entry; the map gates arena 05 and
+  routes it through the unlock screen; basket lock returns to the profile.
+- Step 4: `basket.ts` store (hash, lock, latest); universe is equities only;
+  Basket Writer reopens on the locked basket; profile shows it.
+- Step 5: `gameCompleted`; Alpha Profile carries the completion record and
+  the PAPER handoff as primary. BASED ON 47 DECISIONS fixture replaced by
+  the real count.
+- Step 6: Policy Writer removed from module code, module strip, map, TACO
+  list.
+- Gauntlet runs are recorded (`recordGauntlet`) so the TACO gate can read one.
+
+## Known limits
+
+- The basket is a prerequisite artifact and a record; the policy engine does
+  not read it (authored checkpoint effects, no per-symbol prices).
+- The deployed machine uses the same seed-free policy engine as the stress
+  test; its score is a GAME_RULES_ENGINE figure and is labelled as such
+  wherever it is shown next to the player.

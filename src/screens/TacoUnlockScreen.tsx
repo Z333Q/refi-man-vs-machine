@@ -1,20 +1,16 @@
-import ActionZone from '../components/ui/ActionZone';
-import { useEffect, useState } from 'react';
+import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
+import { useEffect, useMemo, useState } from 'react';
+import { tacoRequirements, tacoUnlocked, tacoNextRequirement } from '../lib/progressionLaw';
+import { readTacoEvidence } from '../lib/tacoEvidence';
 
 interface Props {
   onEnter: () => void;
+  onBack: () => void;
 }
 
-const PREREQUISITES = [
-  { label: 'COVID BLACK SWAN', status: 'PASSED' },
-  { label: 'RECOVERY TRAP', status: 'PASSED' },
-  { label: 'INFLATION SHIFT', status: 'PASSED' },
-  { label: 'BANKING STRESS', status: 'PASSED' },
-  { label: 'MACHINE SEASON', status: 'PASSED' },
-  { label: 'BASKET WRITER', status: 'COMPLETE' },
-  { label: 'POLICY WRITER', status: 'COMPLETE' },
-  { label: 'BLIND GAUNTLET', status: 'PASSED' },
-];
+// The prerequisites used to be a fixture of eight PASSED strings that no code
+// checked, and the screen was reachable by locking a basket. Every line below
+// is now read from the player's records (owner ruling 2026-09-06).
 
 const ASCII_TRUMP = `
                    ........:::::::::::::::........
@@ -40,19 +36,27 @@ const ASCII_TRUMP = `
               ..........::::::::::..........
 `;
 
-export default function TacoUnlockScreen({ onEnter }: Props) {
+export default function TacoUnlockScreen({ onEnter, onBack }: Props) {
   const [phase, setPhase] = useState(0);
   const [asciiLines, setAsciiLines] = useState(0);
+
+  const evidence = useMemo(() => readTacoEvidence(), []);
+  const requirements = useMemo(() => tacoRequirements(evidence), [evidence]);
+  const unlocked = tacoUnlocked(evidence);
+  const next = tacoNextRequirement(evidence);
 
   const lines = ASCII_TRUMP.split('\n').filter(Boolean);
 
   useEffect(() => {
+    // The boss reveal plays only for a player who has earned it. Locked, the
+    // screen stops at the list and says what is still open.
     const t1 = setTimeout(() => setPhase(1), 500);
+    if (!unlocked) return () => clearTimeout(t1);
     const t2 = setTimeout(() => setPhase(2), 1500);
     const t3 = setTimeout(() => setPhase(3), 2200);
 
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, []);
+  }, [unlocked]);
 
   useEffect(() => {
     if (phase < 2) return;
@@ -72,17 +76,28 @@ export default function TacoUnlockScreen({ onEnter }: Props) {
           {/* Prerequisites */}
           <div className="mb-8">
             <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-4">
-              PREREQUISITES VERIFIED
+              {unlocked ? 'PREREQUISITES VERIFIED' : 'PREREQUISITES'}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {PREREQUISITES.map((item, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="text-phosphor text-xs">✓</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-testid="taco-prerequisites">
+              {requirements.map(item => (
+                <div key={item.key} className="flex items-center gap-2" data-met={item.met ? '1' : '0'}>
+                  <span className={`text-xs ${item.met ? 'text-phosphor' : 'text-phosphor-dim'}`}>{item.met ? '✓' : '○'}</span>
                   <span className="font-mono text-xs text-phosphor-dim">{item.label}</span>
-                  <span className="font-mono text-xs text-phosphor ml-auto">{item.status}</span>
+                  <span className={`font-mono text-xs ml-auto ${item.met ? 'text-phosphor' : 'text-alert-amber'}`}>
+                    {item.met ? 'DONE' : 'OPEN'}
+                  </span>
                 </div>
               ))}
             </div>
+            {!unlocked && next && (
+              <div className="mt-6 border-t border-phosphor/20 pt-6 font-mono text-xs space-y-2" data-testid="taco-locked">
+                <div className="text-alert-amber tracking-widest">FINAL BOSS LOCKED</div>
+                <div className="text-phosphor-mid">NEXT: {next.label}</div>
+                <div className="text-phosphor-dim leading-5">
+                  THE MARKET THINKS IT KNOWS THE PATTERN. FINISH THE PROCESS FIRST.
+                </div>
+              </div>
+            )}
           </div>
 
           {phase >= 2 && (
@@ -158,14 +173,15 @@ export default function TacoUnlockScreen({ onEnter }: Props) {
       {/* The unlock sequence plays above; the action keeps its territory
           throughout and says what it is waiting for. */}
       <ActionZone
-        note="5 POLICY ROUNDS · DATES HIDDEN · OUTCOME UNKNOWN"
+        note={unlocked ? '5 POLICY ROUNDS · DATES HIDDEN · OUTCOME UNKNOWN' : `${requirements.filter(r => r.met).length} / ${requirements.length} PREREQUISITES MET`}
         primary={{
-          label: 'ENTER FINAL BOSS',
+          label: unlocked ? 'ENTER FINAL BOSS' : 'LOCKED',
           onClick: onEnter,
-          disabled: phase < 3,
-          disabledHint: 'VERIFYING PREREQUISITES',
+          disabled: !unlocked || phase < 3,
+          disabledHint: !unlocked && next ? `NEXT: ${next.label}` : 'VERIFYING PREREQUISITES',
           keyHint: '[ENTER]',
         }}
+        secondaryLeft={<SecondaryAction label="Arena map" onClick={onBack} />}
       />
     </div>
   );

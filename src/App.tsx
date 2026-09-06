@@ -122,6 +122,7 @@ function AppInner() {
           autopsy: 'checkpoint-score',
           'alpha-profile': 'autopsy',
           'basket-writer': 'alpha-profile',
+          'taco-unlock': 'arena-map',
           'daily-tape': 'progression-hub',
           'machine-ladder': 'progression-hub',
           'machine-builder': 'progression-hub',
@@ -262,7 +263,9 @@ function AppInner() {
               // Entering through the map faces the house machine; a ladder
               // challenge that was never started must not leak into it.
               setPendingMachine('refi_rules');
-              go('arena-briefing');
+              // The final boss is briefed by its own unlock screen, which also
+              // holds the gate (docs/PLAN-endgame.md step 3).
+              go(arenaId === 'taco_protocol' ? 'taco-unlock' : 'arena-briefing');
             }}
             onBack={() => go('progression-hub')}
           />
@@ -310,11 +313,14 @@ function AppInner() {
         {screen === 'basket-writer' && (
           <BasketWriterScreen
             onBack={() => go('alpha-profile')}
-            onComplete={() => go('taco-unlock')}
+            // Locking a basket is a record, not a door to the final boss. The
+            // boss is reached from the map once its gate is met.
+            onComplete={() => go('alpha-profile')}
           />
         )}
         {screen === 'taco-unlock' && (
           <TacoUnlockScreen
+            onBack={() => go('arena-map')}
             onEnter={() => {
               // TACO is an arena like any other. It used to open a bespoke
               // screen with five hardcoded rounds and invented market numbers,
