@@ -1,12 +1,12 @@
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import { Pool } from 'pg';
 
 import { makeServer } from '../src/server.js';
-import { runFixture, machineFixture, profileFixture, sid } from './fixtures.js';
+import { runFixture, runFixtureV2, machineFixture, profileFixture, sid } from './fixtures.js';
 
 // Integration test: every endpoint, driven over real HTTP against the real
 // founding schema. The unit tests prove the validators; only this proves that
@@ -19,10 +19,9 @@ import { runFixture, machineFixture, profileFixture, sid } from './fixtures.js';
 const DATABASE_URL = process.env.DATABASE_URL;
 // fileURLToPath, not URL.pathname: the latter percent-encodes spaces and this
 // repository lives under a path that has them.
-const SCHEMA = fileURLToPath(new URL(
-  '../../../db/migrations/0001_founding_schema.sql',
-  import.meta.url,
-));
+const MIGRATIONS = fileURLToPath(new URL('../../../db/migrations/', import.meta.url));
+const schemaSql = () => readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort()
+  .map(f => readFileSync(MIGRATIONS + f, 'utf8')).join('\n');
 
 describe('persistence-api against the founding schema', {
   skip: DATABASE_URL ? false : 'DATABASE_URL not set',
@@ -34,7 +33,7 @@ describe('persistence-api against the founding schema', {
   before(async () => {
     pool = new Pool({ connectionString: DATABASE_URL });
     await pool.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;');
-    await pool.query(readFileSync(SCHEMA, 'utf8'));
+    await pool.query(schemaSql());
 
     server = makeServer(pool);
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -273,6 +272,37 @@ describe('persistence-api against the founding schema', {
     assert.equal(nulls[0].committed_at, null);
   });
 
+  test('a v2 run record is stored and read back as v3, with the facts a v2 run carries', async () => {
+    const s = sid(0x5a);
+    const legacy = runFixtureV2({ runId: 'run_a2b2c3d4e5f60718293a4b0a' });
+    assert.equal((await put(`/v1/runs/${legacy.runId as string}`, s, legacy)).status, 204);
+    const list = await (await call('/v1/runs', s)).json() as Record<string, unknown>[];
+    assert.equal(list.length, 1);
+    assert.equal(list[0]?.recordVersion, 3);
+    assert.deepEqual(list[0]?.opponentPolicy, { kind: 'AUTHORED' });
+    assert.equal(list[0]?.deployed, null);
+    assert.equal(list[0]?.deployedScore, null);
+    const decisions = list[0]?.decisions as Record<string, unknown>[];
+    assert.equal(decisions.length, 2);
+    assert.equal(decisions[0]?.deployedActionCode, null);
+  });
+
+  test('the deployed score moves with the run; the opponent and the machine do not', async () => {
+    const s = sid(0x5b);
+    const runId = 'run_a3b2c3d4e5f60718293a4b0b';
+    const first = runFixture({ runId, decisions: [decision(1)], currentCheckpoint: 1, deployedScore: 50 });
+    assert.equal((await put(`/v1/runs/${runId}`, s, first)).status, 204);
+    const second = runFixture({
+      runId, decisions: [decision(1), decision(2)], currentCheckpoint: 2, deployedScore: 61.5,
+      updatedAt: '2026-08-25T12:30:00.000Z',
+    });
+    assert.equal((await put(`/v1/runs/${runId}`, s, second)).status, 204);
+    const list = await (await call('/v1/runs', s)).json() as Record<string, unknown>[];
+    assert.equal(list[0]?.deployedScore, 61.5);
+    assert.deepEqual(list[0]?.deployed, first.deployed);
+    assert.deepEqual(list[0]?.opponentPolicy, first.opponentPolicy);
+  });
+
   test('a run id under a different session is contradictory ownership: 409', async () => {
     const record = runFixture();
     const other = sid(0x51);
@@ -297,6 +327,10 @@ describe('persistence-api against the founding schema', {
       behavioralFlags: [],
       machineActionCode: 'HOLD',
       committedAt: `2026-08-25T12:0${String(sequence)}:00.000Z`,
+      machineReason: null,
+      deployedActionCode: null,
+      deployedReason: null,
+      deployedConviction: null,
       ...patch,
     };
   }

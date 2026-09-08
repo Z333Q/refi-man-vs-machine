@@ -1,6 +1,6 @@
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 
@@ -16,7 +16,14 @@ import { Client } from 'pg';
 const DATABASE_URL = process.env.DATABASE_URL;
 // fileURLToPath, not URL.pathname: the latter percent-encodes spaces and this
 // repository lives under a path that has them.
-const SCHEMA = fileURLToPath(new URL('./migrations/0001_founding_schema.sql', import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL('./migrations/', import.meta.url));
+
+/** Every migration, in file order: the schema under test is the chain, not
+ *  the founding file alone, or a later ALTER could drift unobserved. */
+export function migrationsSql(): string {
+  return readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort()
+    .map(f => readFileSync(MIGRATIONS + f, 'utf8')).join('\n');
+}
 
 describe('founding schema', { skip: DATABASE_URL ? false : 'DATABASE_URL not set' }, () => {
   let db: Client;
@@ -26,7 +33,7 @@ describe('founding schema', { skip: DATABASE_URL ? false : 'DATABASE_URL not set
     await db.connect();
     // A clean slate each run: the schema is applied fresh rather than migrated.
     await db.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;');
-    await db.query(readFileSync(SCHEMA, 'utf8'));
+    await db.query(migrationsSql());
   });
 
   after(async () => { await db?.end(); });
@@ -245,7 +252,7 @@ describe('founding schema', { skip: DATABASE_URL ? false : 'DATABASE_URL not set
   test('no vendor auth construct survived into the schema', async () => {
     // Comments are excluded: the header explains what was removed and has to
     // be able to name it.
-    const sql = readFileSync(SCHEMA, 'utf8')
+    const sql = migrationsSql()
       .split('\n')
       .filter(line => !line.trim().startsWith('--'))
       .join('\n');

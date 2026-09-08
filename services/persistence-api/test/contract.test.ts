@@ -6,7 +6,7 @@ import {
   validateMachineVersion, validateProfile, validateRunRecord, validateTape,
   validateTip,
 } from '../src/contract.js';
-import { runFixture, machineFixture, profileFixture, sid } from './fixtures.js';
+import { runFixture, runFixtureV2, machineFixture, profileFixture, sid } from './fixtures.js';
 
 // ─── Fail-closed validation ───────────────────────────────────────────────────
 // The validators are the API's edge: a payload that does not parse into the
@@ -54,6 +54,40 @@ test('a runId that does not match the URL is refused', () => {
 
 test('an unsupported record version is refused, not half-read', () => {
   refused(() => validateRunRecord(runFixture({ recordVersion: 1 }), RUN_URL_ID));
+  refused(() => validateRunRecord(runFixture({ recordVersion: 4 }), RUN_URL_ID));
+  refused(() => validateRunRecord(runFixture({ recordVersion: '3' }), RUN_URL_ID));
+});
+
+test('a v2 run record is read as v3: authored opponent, nothing riding along', () => {
+  const read = validateRunRecord(runFixtureV2(), RUN_URL_ID);
+  assert.equal(read.recordVersion, 3);
+  assert.deepEqual(read.opponentPolicy, { kind: 'AUTHORED' });
+  assert.equal(read.deployed, null);
+  assert.equal(read.deployedScore, null);
+  for (const d of read.decisions) {
+    assert.equal(d.machineReason, null);
+    assert.equal(d.deployedActionCode, null);
+    assert.equal(d.deployedReason, null);
+    assert.equal(d.deployedConviction, null);
+  }
+});
+
+test('v3 fields are validated, not stored as arbitrary shapes', () => {
+  const base = runFixture();
+  refused(() => validateRunRecord({ ...base, opponentPolicy: { kind: 'ORACLE' } }, RUN_URL_ID),
+    400, 'opponentPolicy');
+  refused(() => validateRunRecord(
+    { ...base, opponentPolicy: { kind: 'CONFIG', config: { universe: 'MARS' } } }, RUN_URL_ID), 400);
+  refused(() => validateRunRecord(
+    { ...base, deployed: { ...(base.deployed as object), buildHash: 7 } }, RUN_URL_ID), 400, 'buildHash');
+  const decisionWith = (patch: Record<string, unknown>) =>
+    ({ ...base, decisions: [{ ...base.decisions[0], ...patch }] });
+  refused(() => validateRunRecord(decisionWith({ deployedActionCode: 'YOLO' }), RUN_URL_ID),
+    400, 'deployedActionCode');
+  // A v3 client that omits a v3 key has not adopted the contract: refused,
+  // never defaulted, or a deployed machine's calls could silently vanish.
+  const { deployedReason: _r, ...missing } = base.decisions[0] as Record<string, unknown>;
+  refused(() => validateRunRecord({ ...base, decisions: [missing] }, RUN_URL_ID), 400, 'deployedReason');
 });
 
 test('run vocabulary is closed: state, result, action, quality, flags, modules, thesis', () => {

@@ -12,7 +12,7 @@ export function sid(n: number): string {
 
 export function runFixture(overrides: Record<string, unknown> = {}) {
   return {
-    recordVersion: 2,
+    recordVersion: 3,
     runId: 'run_a1b2c3d4e5f60718293a4b01',
     seed: 1234,
     arenaId: 'covid_black_swan',
@@ -43,6 +43,10 @@ export function runFixture(overrides: Record<string, unknown> = {}) {
         behavioralFlags: [],
         machineActionCode: 'HOLD',
         committedAt: '2026-08-25T12:00:00.000Z',
+        machineReason: 'Drift inside band; no rebalance trigger.',
+        deployedActionCode: 'REDUCE',
+        deployedReason: 'Max sector exposure breached.',
+        deployedConviction: 0.72,
       },
       {
         checkpointSequence: 2,
@@ -57,11 +61,42 @@ export function runFixture(overrides: Record<string, unknown> = {}) {
         machineActionCode: 'ROTATE_DEFENSIVE',
         // Migrated from a v1 record: the commit time was never captured.
         committedAt: null,
+        machineReason: null,
+        deployedActionCode: null,
+        deployedReason: null,
+        deployedConviction: null,
       },
     ],
+    // v3: a policy-driven opponent and a compiled machine riding along, so
+    // the round trip exercises every new column, not the defaults.
+    opponentPolicy: { kind: 'CONFIG', config: machineConfigFixture() },
+    deployed: {
+      machineId: 'mch_9f2a31d877c1',
+      name: 'Z333Q',
+      version: 'v0.3',
+      versionNumber: 3,
+      buildHash: '9F2A:31D8:77C1',
+      config: machineConfigFixture(),
+    },
+    deployedScore: 58.25,
     startedAt: '2026-08-25T11:00:00.000Z',
     updatedAt: '2026-08-25T12:05:00.000Z',
     completedAt: null,
+    ...overrides,
+  };
+}
+
+/** The same run as a v2 client still writes it: no v3 keys at all. */
+export function runFixtureV2(overrides: Record<string, unknown> = {}) {
+  const { opponentPolicy: _p, deployed: _d, deployedScore: _s, ...v3 } = runFixture();
+  return {
+    ...v3,
+    recordVersion: 2,
+    decisions: (v3.decisions as Record<string, unknown>[]).map(d => {
+      const { machineReason: _a, deployedActionCode: _b, deployedReason: _c,
+        deployedConviction: _e, ...v2 } = d;
+      return v2;
+    }),
     ...overrides,
   };
 }

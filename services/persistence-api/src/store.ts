@@ -3,6 +3,7 @@ import {
   HttpError, RUN_RECORD_VERSION, MACHINE_RECORD_VERSION, TERMINAL_RESULTS,
   derivedMachineId, phaseOrdinal,
   type WireRunRecord, type WireDecision, type WireMachineVersion,
+  type WireOpponentPolicy, type WireDeployedMachine,
   type WireProfile, type WireTip, type WireTape, type WireEvent,
 } from './contract.js';
 
@@ -356,6 +357,12 @@ function rowToDecision(row: Record<string, unknown>): WireDecision {
     behavioralFlags: (row['behavioral_flags'] as string[] | null) ?? [],
     machineActionCode: (row['machine_action_code'] as string | null) ?? 'HOLD',
     committedAt: row['committed_at'] ? iso(row['committed_at']) : null,
+    machineReason: (row['machine_reason'] as string | null) ?? null,
+    deployedActionCode: (row['deployed_action_code'] as string | null) ?? null,
+    deployedReason: (row['deployed_reason'] as string | null) ?? null,
+    deployedConviction:
+      row['deployed_conviction'] === null || row['deployed_conviction'] === undefined
+        ? null : Number(row['deployed_conviction']),
   };
 }
 
@@ -401,6 +408,9 @@ export async function listRuns(pool: Pool, sessionId: string): Promise<WireRunRe
     volatility: Number(r.volatility),
     turnoverUsed: Number(r.turnover_used),
     decisions: bySequence.get(r.id as string) ?? [],
+    opponentPolicy: (r.opponent_policy as WireOpponentPolicy | null) ?? { kind: 'AUTHORED' },
+    deployed: (r.deployed as WireDeployedMachine | null) ?? null,
+    deployedScore: r.deployed_score === null ? null : Number(r.deployed_score),
     startedAt: iso(r.started_at),
     updatedAt: iso(r.updated_at),
     completedAt: r.completed_at ? iso(r.completed_at) : null,
@@ -497,11 +507,13 @@ async function insertDecisions(
       `INSERT INTO checkpoint_decisions
          (run_id, checkpoint_sequence, action_code, thesis_code, confidence,
           modules_consulted, decision_quality, score_contribution,
-          machine_action_code, behavioral_flags, turnover_cost, committed_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          machine_action_code, behavioral_flags, turnover_cost, committed_at,
+          machine_reason, deployed_action_code, deployed_reason, deployed_conviction)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [runId, d.checkpointSequence, d.actionCode, d.thesisCode, d.confidence,
        d.modulesConsulted, d.quality, d.scoreContribution, d.machineActionCode,
-       d.behavioralFlags, d.turnoverCost, d.committedAt],
+       d.behavioralFlags, d.turnoverCost, d.committedAt,
+       d.machineReason, d.deployedActionCode, d.deployedReason, d.deployedConviction],
     );
   }
 }
@@ -522,14 +534,18 @@ export async function putRun(pool: Pool, sessionId: string, run: WireRunRecord):
            (id, session_id, arena_id, machine_id, state, current_checkpoint,
             total_checkpoints, portfolio_value, cash_weight, drawdown, volatility,
             turnover_used, player_score, machine_score, result, critical_failure,
-            critical_failure_checkpoint, seed, started_at, completed_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+            critical_failure_checkpoint, seed, started_at, completed_at, updated_at,
+            opponent_policy, deployed, deployed_score)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
+                 $22,$23,$24)`,
         [run.runId, sessionId, run.arenaId, run.machineId, run.state,
          run.currentCheckpoint, run.totalCheckpoints, run.portfolioValue,
          run.cashWeight, run.drawdown, run.volatility, run.turnoverUsed,
          run.playerScore, run.machineScore, run.result, run.criticalFailure,
          run.criticalFailureCheckpoint, run.seed, run.startedAt, run.completedAt,
-         run.updatedAt],
+         run.updatedAt,
+         JSON.stringify(run.opponentPolicy), run.deployed === null ? null : JSON.stringify(run.deployed),
+         run.deployedScore],
       );
       await insertDecisions(c, run.runId, run.decisions);
       return;
@@ -642,12 +658,13 @@ export async function putRun(pool: Pool, sessionId: string, run: WireRunRecord):
          player_score = $9, machine_score = $10, result = $11,
          critical_failure = $12, critical_failure_checkpoint = $13,
          completed_at = COALESCE(arena_runs.completed_at, $14),
-         updated_at = $15
+         updated_at = $15, deployed_score = $16
        WHERE id = $1`,
       [run.runId, run.state, run.currentCheckpoint, run.portfolioValue,
        run.cashWeight, run.drawdown, run.volatility, run.turnoverUsed,
        run.playerScore, run.machineScore, run.result, run.criticalFailure,
-       run.criticalFailureCheckpoint, run.completedAt, run.updatedAt],
+       run.criticalFailureCheckpoint, run.completedAt, run.updatedAt,
+       run.deployedScore],
     );
   });
 }
