@@ -22,7 +22,12 @@ export class HttpError extends Error {
 }
 
 /** The record shape version the client writes today (see runRecord.ts). */
-export const RUN_RECORD_VERSION = 2;
+export const RUN_RECORD_VERSION = 3;
+/** Older run record versions this service still reads. A v2 run faced the
+ *  authored opponent, the only kind that existed, and nothing rode along, so
+ *  it is read as v3 with AUTHORED and null: the client's migrateV2 says the
+ *  same. v1 is refused as before: its commit times are unknowable here. */
+export const READABLE_RUN_RECORD_VERSIONS = new Set([2, RUN_RECORD_VERSION]);
 export const MACHINE_RECORD_VERSION = 1;
 
 // ─── Canonical vocabularies (from src/lib/gameTypes.ts) ───────────────────────
@@ -186,6 +191,28 @@ export interface WireDecision {
    *  never captured. A newly authored decision carries a real timestamp; the
    *  server never invents one (the column deliberately has no default). */
   committedAt: string | null;
+  /** v3: the opponent's stated reason when policy-driven; null when authored. */
+  machineReason: string | null;
+  /** v3: the deployed machine's call at this checkpoint; null when none rode along. */
+  deployedActionCode: string | null;
+  deployedReason: string | null;
+  deployedConviction: number | null;
+}
+
+/** v3: how the opponent decided (runRecord.ts / gameTypes.ts OpponentPolicy). */
+export type WireOpponentPolicy =
+  | { kind: 'AUTHORED' }
+  | { kind: 'HOLD' }
+  | { kind: 'CONFIG'; config: Record<string, unknown> };
+
+/** v3: the compiled machine that rode along (gameTypes.ts DeployedMachine). */
+export interface WireDeployedMachine {
+  machineId: string;
+  name: string;
+  version: string;
+  versionNumber: number;
+  buildHash: string;
+  config: Record<string, unknown>;
 }
 
 export interface WireRunRecord {
@@ -208,6 +235,9 @@ export interface WireRunRecord {
   volatility: number;
   turnoverUsed: number;
   decisions: WireDecision[];
+  opponentPolicy: WireOpponentPolicy;
+  deployed: WireDeployedMachine | null;
+  deployedScore: number | null;
   startedAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -324,6 +354,12 @@ function inSet(o: Record<string, unknown>, k: string, allowed: Set<string>): str
   return v;
 }
 
+function inSetOrNull(o: Record<string, unknown>, k: string, allowed: Set<string>): string | null {
+  const v = o[k];
+  if (v === null) return null;
+  return inSet(o, k, allowed);
+}
+
 function setArray(o: Record<string, unknown>, k: string, allowed: Set<string>): string[] {
   const v = o[k];
   if (!Array.isArray(v) || v.some(x => typeof x !== 'string')) bad(k);
@@ -364,9 +400,11 @@ function rejectIdentityFields(body: Record<string, unknown>): void {
 export function validateRunRecord(body: unknown, runIdFromUrl: string): WireRunRecord {
   if (!isRecord(body)) throw new HttpError(400, 'body must be a run record');
   rejectIdentityFields(body);
-  if (body['recordVersion'] !== RUN_RECORD_VERSION) {
+  const version = body['recordVersion'];
+  if (typeof version !== 'number' || !READABLE_RUN_RECORD_VERSIONS.has(version)) {
     throw new HttpError(400, `unsupported recordVersion (expected ${String(RUN_RECORD_VERSION)})`);
   }
+  const legacy = version < RUN_RECORD_VERSION;
   const runId = str(body, 'runId');
   if (!RUN_ID.test(runId)) bad('runId');
   if (runId !== runIdFromUrl) {
@@ -398,8 +436,20 @@ export function validateRunRecord(body: unknown, runIdFromUrl: string): WireRunR
       behavioralFlags: setArray(d, 'behavioralFlags', BEHAVIORAL_FLAGS),
       machineActionCode: inSet(d, 'machineActionCode', ACTION_CODES),
       committedAt: isoDateOrNull(d, 'committedAt'),
+      // v3 fields. A v2 decision faced the authored opponent with nothing
+      // riding along; a v3 decision must say so itself, null included.
+      machineReason: legacy ? null : strOrNull(d, 'machineReason'),
+      deployedActionCode: legacy ? null : inSetOrNull(d, 'deployedActionCode', ACTION_CODES),
+      deployedReason: legacy ? null : strOrNull(d, 'deployedReason'),
+      deployedConviction: legacy ? null : numOrNull(d, 'deployedConviction'),
     };
   });
+
+  const opponentPolicy: WireOpponentPolicy = legacy
+    ? { kind: 'AUTHORED' }
+    : validateOpponentPolicy(body['opponentPolicy']);
+  const deployed = legacy ? null : validateDeployed(body['deployed']);
+  const deployedScore = legacy ? null : numOrNull(body, 'deployedScore');
 
   const state = str(body, 'state');
   if (!RUN_PHASE_SET.has(state)) {
@@ -426,9 +476,41 @@ export function validateRunRecord(body: unknown, runIdFromUrl: string): WireRunR
     volatility: num(body, 'volatility'),
     turnoverUsed: num(body, 'turnoverUsed'),
     decisions,
+    opponentPolicy,
+    deployed,
+    deployedScore,
     startedAt: isoDate(body, 'startedAt'),
     updatedAt: isoDate(body, 'updatedAt'),
     completedAt: isoDateOrNull(body, 'completedAt'),
+  };
+}
+
+function validateOpponentPolicy(value: unknown): WireOpponentPolicy {
+  if (!isRecord(value)) bad('opponentPolicy');
+  const kind = value['kind'];
+  if (kind === 'AUTHORED' || kind === 'HOLD') return { kind };
+  if (kind === 'CONFIG') {
+    const config = value['config'];
+    if (!isRecord(config)) bad('opponentPolicy.config');
+    validateMachineConfig(config);
+    return { kind, config };
+  }
+  bad('opponentPolicy.kind');
+}
+
+function validateDeployed(value: unknown): WireDeployedMachine | null {
+  if (value === null) return null;
+  if (!isRecord(value)) bad('deployed');
+  const config = value['config'];
+  if (!isRecord(config)) bad('deployed.config');
+  validateMachineConfig(config);
+  return {
+    machineId: str(value, 'machineId'),
+    name: str(value, 'name'),
+    version: str(value, 'version'),
+    versionNumber: num(value, 'versionNumber'),
+    buildHash: str(value, 'buildHash'),
+    config,
   };
 }
 

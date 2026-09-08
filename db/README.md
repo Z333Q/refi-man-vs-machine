@@ -9,11 +9,19 @@ and the application does not know which.
 ## Applying it
 
 ```sh
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0001_founding_schema.sql
+for f in db/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
 ```
 
-`0001` is a founding schema, not a step in a chain: it is applied to an empty
-database. The migrations it replaces depended on a vendor's auth schema and
+`0001` is a founding schema: it is applied to an empty database. Later files
+are additive steps applied in order after it, each written to be re-runnable
+(`ADD COLUMN IF NOT EXISTS`), so applying the whole directory to a database at
+any earlier step is safe. Both database suites apply the whole directory.
+
+A service that writes a new record version ships with the migration that
+stores it, and the migration is applied to production **before** the service
+is deployed: the service reads and writes the new columns on its first
+request. `src/lib/persistence/wireVersions.test.ts` fails the client suite when
+the client's record version runs ahead of the server's. The migrations it replaces depended on a vendor's auth schema and
 guarded prototype data that was disposable, and in practice empty, because
 every write the browser could make was rejected by policies the game could not
 satisfy.
