@@ -54,3 +54,70 @@ export function builderUnlocked(records: readonly ProgressView[]): boolean {
 /** Player-facing requirement shown on the locked Builder entry. */
 export const BUILDER_UNLOCK_REQUIREMENT =
   'COMPLETE A REGIME WITHOUT A CRITICAL RISK FAILURE';
+
+// ─── The TACO gate (owner ruling 2026-09-06) ─────────────────────────────────
+//
+// The final boss was reachable through Autopsy → Alpha Profile → Basket Writer
+// → LOCK BASKET, and its unlock screen printed eight prerequisites as a fixture
+// no code verified. The gate is now derived, here, from the four stores that
+// hold the evidence. The spec 5 journey runs COVID, Recovery, Inflation,
+// Banking, Builder, stress test, Gauntlet, then TACO; MACHINE SEASON and
+// POLICY WRITER do not exist and are not required.
+
+export const TACO_ARENA_ID = 'taco_protocol';
+
+/** The regimes that must be finished, win or lose, before TACO. */
+export const TACO_REQUIRED_ARENAS = [
+  'covid_black_swan', 'recovery_trap', 'inflation_shift', 'banking_stress',
+] as const;
+
+/** The evidence the gate reads. Structural, so screens and tests pass slices. */
+export interface TacoEvidence {
+  records: readonly ProgressView[];
+  /** A machine has been compiled (compile is deploy). */
+  machineCompiled: boolean;
+  /** A basket has been locked. */
+  basketLocked: boolean;
+  /** A Blind Gauntlet has been run. */
+  gauntletRun: boolean;
+}
+
+export interface TacoRequirement {
+  key: string;
+  label: string;
+  met: boolean;
+}
+
+/** Every requirement with its current truth, in the order the journey runs. */
+export function tacoRequirements(e: TacoEvidence): TacoRequirement[] {
+  const arenaLabel: Record<string, string> = {
+    covid_black_swan: 'COVID BLACK SWAN',
+    recovery_trap: 'RECOVERY TRAP',
+    inflation_shift: 'INFLATION SHIFT',
+    banking_stress: 'BANKING STRESS',
+  };
+  return [
+    ...TACO_REQUIRED_ARENAS.map(id => ({
+      key: id, label: arenaLabel[id], met: arenaCompleted(e.records, id),
+    })),
+    { key: 'machine', label: 'MACHINE COMPILED', met: e.machineCompiled },
+    { key: 'gauntlet', label: 'BLIND GAUNTLET RUN', met: e.gauntletRun },
+    { key: 'basket', label: 'BASKET LOCKED', met: e.basketLocked },
+  ];
+}
+
+export function tacoUnlocked(e: TacoEvidence): boolean {
+  return tacoRequirements(e).every(r => r.met);
+}
+
+/** The first thing still standing between the player and the final boss. */
+export function tacoNextRequirement(e: TacoEvidence): TacoRequirement | null {
+  return tacoRequirements(e).find(r => !r.met) ?? null;
+}
+
+// ─── Game completion ─────────────────────────────────────────────────────────
+
+/** The game is complete once TACO has been finished, win or lose. */
+export function gameCompleted(records: readonly ProgressView[]): boolean {
+  return arenaCompleted(records, TACO_ARENA_ID);
+}

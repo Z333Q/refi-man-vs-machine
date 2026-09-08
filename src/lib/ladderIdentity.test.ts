@@ -85,8 +85,11 @@ test('an unknown machine id completes without corrupting the ladder', () => {
 // declared.
 
 test('exactly the rungs with a runtime are playable', () => {
+  // SPY gained a runtime on 2026-09-06: buy and hold is a policy the engine
+  // runs exactly (OpponentPolicy HOLD). The exhibition RF/RL rungs have none
+  // by design, and TACO is an arena, not an opponent runtime.
   const playable = MACHINE_LADDER.filter(m => m.playable).map(m => m.id);
-  assert.deepEqual(playable, ['refi_rules']);
+  assert.deepEqual(playable, ['spy_passive', 'refi_rules']);
 });
 
 test('every rung declares playability explicitly', () => {
@@ -103,7 +106,7 @@ test('every rung declares playability explicitly', () => {
 // crowned SPY (no runtime) as CURRENT OPPONENT.
 
 const rules = MACHINE_LADDER.find(m => m.id === 'refi_rules')!;
-const spy = MACHINE_LADDER.find(m => m.id === 'spy_passive')!;
+const exhibition = MACHINE_LADDER.find(m => m.id === 'refi_full_basket')!;
 
 test('a defeated playable rung stays challengeable: it is an achievement, not a dead button', () => {
   assert.equal(isChallengeable(rules, 'ACTIVE'), true);
@@ -112,17 +115,18 @@ test('a defeated playable rung stays challengeable: it is an achievement, not a 
 });
 
 test('an ACTIVE rung without a runtime is never challengeable', () => {
-  assert.equal(isChallengeable(spy, 'ACTIVE'), false);
-  assert.equal(isChallengeable(spy, 'DEFEATED'), false);
+  assert.equal(isChallengeable(exhibition, 'ACTIVE'), false);
+  assert.equal(isChallengeable(exhibition, 'DEFEATED'), false);
 });
 
-test('the current opponent is never an unplayable rung', () => {
-  // Fresh profile: SPY is ACTIVE but has no runtime; the rules machine wins.
+test('the current opponent is the highest rung reached, never an unplayable one', () => {
+  // Fresh profile: SPY and Rules are both ACTIVE and both playable; the Hub
+  // names the higher rung.
   const fresh = createDefaultProfile('ses_t').machineLadder;
   assert.equal(currentOpponent(fresh)?.id, 'refi_rules');
 
   // After beating the rules machine it is still the opponent, as a rematch,
-  // not SPY by ACTIVE-status accident.
+  // not the index by ACTIVE-status accident.
   const afterWin = {
     ...fresh,
     refi_rules: { wins: 1, losses: 0, status: 'DEFEATED' as const },

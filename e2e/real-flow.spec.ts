@@ -206,9 +206,9 @@ test('a defeated rules machine stays challengeable as a rematch', async ({ page 
   await expect(page.getByText('RFA-MCH-RULES-002')).toBeVisible();
 });
 
-test('a rung without a runtime refuses the challenge and says why', async ({ page }) => {
-  // The other half of the same P0: opponents that do not exist at runtime
-  // used to funnel silently into the rules machine. Now they are explicit.
+test('the passive index is a real opponent with its own briefing', async ({ page }) => {
+  // SPY gained a runtime on 2026-09-06 (buy and hold, OpponentPolicy HOLD),
+  // so the second active rung is challengeable and the briefing names it.
   await asReturningPlayer(page);
   await bootToLanding(page);
   await gotoHub(page);
@@ -218,6 +218,9 @@ test('a rung without a runtime refuses the challenge and says why', async ({ pag
   // button is its selector (the default rung shows SELECTED instead).
   await page.getByRole('button', { name: 'SELECT', exact: true }).click();
   await expect(page.getByText(/SELECTED: S&P 500 INDEX/)).toBeVisible();
-  await expect(page.getByText('OPPONENT RUNTIME IN DEVELOPMENT', { exact: false })).toBeVisible();
-  await expect(page.getByRole('button', { name: /CHALLENGE MACHINE/ })).toBeDisabled();
+  const challenge = page.getByRole('button', { name: /CHALLENGE MACHINE/ });
+  await expect(challenge).toBeEnabled();
+  await challenge.click();
+  await page.getByRole('button', { name: /START RUN/ }).waitFor({ state: 'visible', timeout: 20_000 });
+  await expect(page.getByText('RFA-MCH-SPY-001')).toBeVisible();
 });

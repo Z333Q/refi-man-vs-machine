@@ -4,6 +4,7 @@ import { useGame } from '../context/GameContext';
 import { TERMINAL_MODULES, getRankLabel, getXpToNextRank, currentOpponent } from '../lib/progressionEngine';
 import { allArenas } from '../lib/arenas';
 import { listRunRecords } from '../lib/runRecord';
+import { deployedMachine } from '../lib/machineVersions';
 import { arenaCompleted, builderUnlocked, nextArenaOpen, BUILDER_UNLOCK_REQUIREMENT } from '../lib/progressionLaw';
 
 interface Props {
@@ -27,6 +28,7 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
   const { profile, moduleJustUnlocked } = state;
 
   const records = useMemo(() => listRunRecords(), []);
+  const deployed = useMemo(() => deployedMachine(), []);
 
   // Builder gate (owner ruling 2026-08-25): visible from the start so the
   // progression is legible, unlocked by Bronze. Locked, it is one line that
@@ -109,6 +111,12 @@ export default function ProgressionHubScreen({ onStartRun, onDailyTape, onMachin
             )}
             {nextArena && (
               <div className="text-phosphor-dim text-xs mt-1 leading-relaxed">{nextArena.lesson.toUpperCase()}</div>
+            )}
+
+            {deployed && (
+              <div className="mt-3 text-xs tracking-widest text-phosphor-mid tabular-nums" data-testid="hub-deployed">
+                YOUR MACHINE {deployed.version} RIDES ALONG · BUILD {deployed.buildHash}
+              </div>
             )}
 
             {currentMachineOpponent && (

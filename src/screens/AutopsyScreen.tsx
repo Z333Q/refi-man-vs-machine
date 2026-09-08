@@ -264,7 +264,7 @@ export default function AutopsyScreen({ onContinue }: Props) {
 
         {tab === 'comparison' && (
           <div className="max-w-3xl mx-auto space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
+            <div className={`grid grid-cols-1 gap-4 font-mono text-xs ${record.deployed ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
               <div className="terminal-panel p-4 space-y-3">
                 <div className="text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-2">YOU</div>
                 <div className="space-y-2">
@@ -290,6 +290,26 @@ export default function AutopsyScreen({ onContinue }: Props) {
                   <Row label="REFI SCORE" value={String(record.machineScore)} />
                 </div>
               </div>
+              {record.deployed && (
+                <div className="terminal-panel p-4 space-y-3" data-testid="autopsy-deployed">
+                  <div className="text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-2">
+                    YOUR MACHINE {record.deployed.version}
+                  </div>
+                  <div className="space-y-2">
+                    <Row label="BUILD" value={record.deployed.buildHash} />
+                    <Row label="SIGNAL" value={record.deployed.config.signal.replace(/_/g, ' ')} />
+                    <Row
+                      label="TRADE COUNT"
+                      value={String(record.decisions.filter(d => d.deployedActionCode && d.deployedActionCode !== 'HOLD').length)}
+                    />
+                    <Row label="REFI SCORE" value={record.deployedScore === null ? '--' : String(record.deployedScore)} emphasis />
+                    <Row
+                      label="VS YOU"
+                      value={record.deployedScore === null ? '--' : `${record.deployedScore - record.playerScore >= 0 ? '+' : ''}${record.deployedScore - record.playerScore}`}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="terminal-panel p-5 space-y-4">

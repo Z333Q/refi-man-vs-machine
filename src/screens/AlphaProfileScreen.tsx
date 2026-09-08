@@ -1,6 +1,11 @@
-import ActionZone from '../components/ui/ActionZone';
+import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 import ClaimHandoffButton from '../components/ClaimHandoffButton';
-import { HANDOFF_MODE } from '../lib/handoff';
+import { useMemo } from 'react';
+import { HANDOFF_MODE, claimHandoff } from '../lib/handoff';
+import { listRunRecords } from '../lib/runRecord';
+import { gameCompleted } from '../lib/progressionLaw';
+import { latestBasket } from '../lib/basket';
+import { allArenas } from '../lib/arenas';
 import { useGame } from '../context/GameContext';
 import type { DimensionCode } from '../lib/gameTypes';
 import { isDimensionProvisional, PROVISIONAL_UNTIL_DECISIONS } from '../lib/decisionContract';
@@ -50,6 +55,20 @@ function BarScore({ score }: { score: number }) {
 export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
   const { state } = useGame();
 
+  const records = useMemo(() => listRunRecords(), []);
+  const decisionCount = records.reduce((n, r) => n + r.decisions.length, 0);
+  const basket = useMemo(() => latestBasket(), []);
+  // The conclusion (docs/PLAN-endgame.md step 5). TACO finished, win or lose,
+  // is the end of the historical game; this screen becomes the record of it
+  // and the spec 4.6 primary handoff becomes the door.
+  const complete = gameCompleted(records);
+  const finalRows = useMemo(() => allArenas().map(a => {
+    const finished = records
+      .filter(r => r.arenaId === a.id && r.completedAt !== null)
+      .sort((x, y) => (x.completedAt! < y.completedAt! ? 1 : -1))[0];
+    return { id: a.id, name: a.name, record: finished ?? null };
+  }), [records]);
+
   // Read the player's own dimensions. sampleSize already rides on each one, so
   // the provisional rule needs no schema change.
   const rows = DIMENSION_ROWS.map(r => {
@@ -96,9 +115,46 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
       <div className="flex-1 flex items-start justify-center px-8 py-10">
         <div className="max-w-3xl w-full space-y-6">
           <div>
-            <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-2">BASED ON 47 DECISIONS</div>
+            <div className="font-mono text-xs text-phosphor-dim tracking-widest mb-2">
+              BASED ON {decisionCount} DECISION{decisionCount === 1 ? '' : 'S'}
+            </div>
             <h1 className="font-mono text-3xl font-bold text-phosphor-hot terminal-glow-strong">ALPHA PROFILE</h1>
           </div>
+
+          {complete && (
+            <div className="terminal-panel-deep p-5 space-y-4" data-testid="game-complete">
+              <div className="font-mono text-xs text-phosphor-dim tracking-widest">MAN VS MACHINE</div>
+              <div className="font-mono text-2xl font-bold text-phosphor-hot terminal-glow-strong">YOU COMPLETED THE HISTORICAL GAME</div>
+              <div className="font-mono text-xs text-phosphor-mid leading-6">
+                {finalRows.length} REGIMES. {state.profile.machineBeats} MACHINE{state.profile.machineBeats === 1 ? '' : 'S'} BEATEN IN {state.profile.machineAttempts} ARENA{state.profile.machineAttempts === 1 ? '' : 'S'}.
+                HISTORY TESTED YOUR MACHINE. THE LIVE MARKET IS NOT CLOSED.
+              </div>
+              <div className="font-mono text-xs">
+                {/* A table from sm up; on a phone each regime is one line of
+                    labelled figures, so nothing is squeezed into four columns. */}
+                <div className="hidden sm:grid sm:grid-cols-4 gap-2 text-phosphor-dim tracking-widest border-b border-phosphor/20 pb-1 mb-1">
+                  <span>REGIME</span><span className="text-right">YOU</span><span className="text-right">MACHINE</span><span className="text-right">YOUR MACHINE</span>
+                </div>
+                {finalRows.map(row => (
+                  <div key={row.id} className="py-1 sm:py-0.5 tabular-nums border-b border-phosphor/10 sm:border-0 sm:grid sm:grid-cols-4 sm:gap-2">
+                    <span className="block text-phosphor truncate">{row.name}</span>
+                    <span className="block sm:text-right text-phosphor">
+                      <span className="sm:hidden text-phosphor-dim">YOU </span>{row.record ? row.record.playerScore : '--'}
+                    </span>
+                    <span className="block sm:text-right text-phosphor-mid">
+                      <span className="sm:hidden text-phosphor-dim">MACHINE </span>{row.record ? row.record.machineScore : '--'}
+                    </span>
+                    <span className="block sm:text-right text-phosphor-mid">
+                      <span className="sm:hidden text-phosphor-dim">YOUR MACHINE </span>{row.record?.deployedScore ?? '--'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="font-mono text-xs text-phosphor-dim leading-5">
+                SIMULATION RESULT BASED ON PLAYER DECISIONS OVER HISTORICAL MARKET DATA. NOT LIVE CLIENT PERFORMANCE.
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Dimension scores */}
@@ -236,15 +292,28 @@ export default function AlphaProfileScreen({ onBasketWriter, onBack }: Props) {
                    on this device: nothing from the game travels with you yet, and
                    your in-game behavioral scores never do.`}
             </div>
+            <div className="font-mono text-xs text-phosphor-dim tracking-widest border-t border-phosphor/10 pt-3" data-testid="profile-basket">
+              {basket
+                ? `BASKET LOCKED · ${basket.constituents.length} POSITIONS · ${basket.hash}`
+                : 'NO BASKET LOCKED YET'}
+            </div>
             <ClaimHandoffButton destination="ELIGIBILITY" />
           </div>
         </div>
       </div>
 
-      <ActionZone
-        note="BUILD A BASKET AROUND YOUR STRENGTHS. WRITE RULES AROUND YOUR WEAKNESSES."
-        primary={{ label: 'BASKET WRITER', onClick: onBasketWriter, keyHint: '[ENTER]' }}
-      />
+      {complete ? (
+        <ActionZone
+          note="HISTORY IS CLOSED. THE LIVE MARKET IS NOT."
+          primary={{ label: 'ENTER PAPER MODE', onClick: () => { void claimHandoff('PAPER'); }, keyHint: '[ENTER]' }}
+          secondaryLeft={<SecondaryAction label="Basket writer" onClick={onBasketWriter} />}
+        />
+      ) : (
+        <ActionZone
+          note="BUILD A BASKET AROUND YOUR STRENGTHS. WRITE RULES AROUND YOUR WEAKNESSES."
+          primary={{ label: 'BASKET WRITER', onClick: onBasketWriter, keyHint: '[ENTER]' }}
+        />
+      )}
     </div>
   );
 }

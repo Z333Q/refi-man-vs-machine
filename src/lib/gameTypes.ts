@@ -60,8 +60,7 @@ export type ModuleCode =
   | 'REGIME_SCANNER'        // Unlock 3: After Recovery arena
   | 'STAGED_EXECUTION'      // Unlock 4: After 200 Alpha XP
   | 'BASKET_WRITER'         // Unlock 5: Progression
-  | 'POLICY_WRITER'         // Unlock 6: After Basket Writer
-  | 'MACHINE_AUDIT';        // Unlock 7: Late game
+  | 'MACHINE_AUDIT';        // Unlock 6: Late game (POLICY_WRITER removed 2026-09-06)
 
 export interface TerminalModule {
   code: ModuleCode;
@@ -238,7 +237,48 @@ export interface RunDecision {
   quality: DecisionQuality;
   behavioralFlags: BehavioralFlag[];
   machineActionCode: ActionCode;
+  /**
+   * Why the opponent acted, when the opponent is policy-driven. An authored
+   * opponent (ReFi Rules) cites the content's policyReason instead.
+   */
+  machineReason?: string;
+  /** The player's deployed machine, riding along (docs/PLAN-endgame.md). */
+  deployedActionCode?: ActionCode;
+  deployedReason?: string;
+  deployedConviction?: number;
   committed: boolean;
+}
+
+/**
+ * How an opponent decides. AUTHORED reads the checkpoint's machineDecision
+ * (the ReFi Rules machine is authored content). HOLD is buy and hold: the
+ * passive index takes no decisions. CONFIG runs a Machine Builder
+ * configuration through the policy engine.
+ */
+export type OpponentPolicy =
+  | { kind: 'AUTHORED' }
+  | { kind: 'HOLD' }
+  | { kind: 'CONFIG'; config: MachineConfig };
+
+/** The compiled machine that rides along in a run. Compile is deploy. */
+export interface DeployedMachine {
+  machineId: string;
+  name: string;
+  /** e.g. "v0.3" */
+  version: string;
+  versionNumber: number;
+  buildHash: string;
+  config: MachineConfig;
+}
+
+/**
+ * A second book kept by the engine for an agent that is not the player: its
+ * own portfolio (so turnover, drawdown and cash are its own) and its running
+ * ReFi Score on the same rubric. Pure state; the engine steps it.
+ */
+export interface ShadowAgent {
+  portfolio: PortfolioState;
+  score: number;
 }
 
 export interface RunState {
@@ -276,6 +316,13 @@ export interface RunState {
   // section C.5).
   pendingConfidence: number;
   result: 'ACTIVE' | 'PASSED' | 'FAILED' | 'MACHINE_BEATEN' | 'ABANDONED';
+  /** How the opponent named by machineId decides. */
+  opponentPolicy: OpponentPolicy;
+  /** The opponent's own book when it is policy-driven; null when authored. */
+  opponentAgent: ShadowAgent | null;
+  /** The player's compiled machine, riding along. Null when none is compiled. */
+  deployed: DeployedMachine | null;
+  deployedAgent: ShadowAgent | null;
 }
 
 // ─── Progression types ────────────────────────────────────────────────────────

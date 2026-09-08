@@ -17,7 +17,6 @@ const MODULE_DEFS: ModuleDef[] = [
   { code: 'REGIME_SCANNER',    label: 'REGIME SCANNER',    tier: 2, unlockHint: 'RECOVERY' },
   { code: 'STAGED_EXECUTION',  label: 'STAGED EXECUTION',  tier: 2, unlockHint: '200 XP' },
   { code: 'BASKET_WRITER',     label: 'BASKET WRITER',     tier: 3, unlockHint: 'PROGRESSION' },
-  { code: 'POLICY_WRITER',     label: 'POLICY WRITER',     tier: 3, unlockHint: 'BASKET' },
   { code: 'MACHINE_AUDIT',     label: 'MACHINE AUDIT',     tier: 4, unlockHint: 'LATE GAME' },
 ];
 

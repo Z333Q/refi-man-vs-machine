@@ -32,6 +32,7 @@ import { Spotlight } from '../components/onboarding/Spotlight';
 import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 import CheckpointAnalysis from '../components/game/CheckpointAnalysis';
 import { FiveQuestionSpine, type SpineFocus } from '../components/onboarding/FiveQuestionSpine';
+import { MACHINE_LADDER } from '../lib/progressionEngine';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -846,6 +847,12 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
     resolveRunResult(run, run.playerScore > run.machineScore ? 'MACHINE_BEATEN' : 'PASSED') === 'MACHINE_BEATEN';
 
   const lastDecision = run.decisions[run.decisions.length - 1];
+  // The opponent by name. The reveal cites the run record: for a policy-driven
+  // opponent that is the reason the engine recorded; for the authored one it
+  // is the content's policyReason, as before.
+  const opponentLabel = MACHINE_LADDER.find(m => m.id === run.machineId)?.label ?? 'MACHINE';
+  const opponentReasoning: string[] =
+    lastDecision?.machineReason ? [lastDecision.machineReason] : cp.machineDecision.reasoning.slice(0, 3);
 
   // Endpoints for the race, derived from the same multiplier the engine
   // applied, so the curve cannot finish where the score disagrees.
@@ -1730,8 +1737,8 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     seed={raceSeed}
                     checkpointSequence={run.currentCheckpoint}
                     playerAction={lastDecision?.actionCode ?? ''}
-                    machineAction={cp.machineDecision.actionCode}
-                    machineReason={cp.machineDecision.policyReason}
+                    machineAction={lastDecision?.machineActionCode ?? cp.machineDecision.actionCode}
+                    machineReason={lastDecision?.machineReason ?? cp.machineDecision.policyReason}
                     wire={(cp.eventFeed ?? []).map(e => e.text)}
                     conviction={
                       lastDecision?.confidence !== undefined
@@ -1799,11 +1806,35 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     </div>
                   </div>
                   <MachineReveal
-                    action={cp.machineDecision.actionCode}
-                    reasoning={cp.machineDecision.policyReason}
+                    machineName={opponentLabel}
+                    action={lastDecision?.machineActionCode ?? cp.machineDecision.actionCode}
+                    reasoning={lastDecision?.machineReason ?? cp.machineDecision.policyReason}
                     reducedMotion={reducedMotion}
                   />
                 </div>
+
+                {/* The player's own machine rode along and made its call from
+                    the same cutoff (docs/PLAN-endgame.md step 1). Shown under
+                    the two calls above so the question the builder exists to
+                    answer, "what would my rules have done here", is answered
+                    at every reveal rather than only in a stress test. */}
+                {run.deployed && lastDecision?.deployedActionCode && (
+                  <div
+                    className="mb-5 transition-opacity duration-500"
+                    style={{ opacity: revealDelay, transitionDelay: reducedMotion ? '0ms' : '350ms' }}
+                    data-testid="deployed-reveal"
+                  >
+                    <MachineReveal
+                      machineName={`YOUR MACHINE ${run.deployed.version}`}
+                      action={lastDecision.deployedActionCode}
+                      reasoning={lastDecision.deployedReason}
+                      reducedMotion={reducedMotion}
+                    />
+                    <div className="text-phosphor-dim text-xs tracking-widest mt-1 tabular-nums">
+                      CONVICTION {lastDecision.deployedConviction ?? '--'} · RUNNING SCORE {run.deployedAgent?.score ?? '--'} · BUILD {run.deployed.buildHash}
+                    </div>
+                  </div>
+                )}
                 </>
               )}
 
@@ -1889,9 +1920,9 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
 
               {/* Machine reasoning */}
               <div className="mb-4 transition-opacity duration-700" style={{ opacity: revealDelay, transitionDelay: reducedMotion ? '0ms' : '350ms' }}>
-                <div className="text-phosphor-dim text-xs tracking-widest mb-2">MACHINE REASONING</div>
+                <div className="text-phosphor-dim text-xs tracking-widest mb-2">{opponentLabel} REASONING</div>
                 <div className="space-y-1">
-                  {cp.machineDecision.reasoning.slice(0, 3).map((r, i) => (
+                  {opponentReasoning.map((r, i) => (
                     <div key={i} className="text-phosphor-dim text-xs border-l border-phosphor/20 pl-2">{r}</div>
                   ))}
                 </div>
@@ -1913,9 +1944,23 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
               <div className={`text-3xl font-bold mb-2 ${beatTheMachine ? 'text-paper-green' : 'text-phosphor'}`}>
                 {beatTheMachine ? 'MACHINE BEATEN' : 'MACHINE WINS'}
               </div>
-              <div className="text-phosphor-mid text-sm mb-2">
-                {run.playerScore} vs {run.machineScore}
+              <div className="text-phosphor-mid text-sm mb-2 tabular-nums">
+                YOU {run.playerScore} · {opponentLabel} {run.machineScore}
               </div>
+              {run.deployed && run.deployedAgent && (
+                <div className="text-center mb-4" data-testid="deployed-result">
+                  <div className="text-phosphor text-sm tabular-nums">
+                    YOUR MACHINE {run.deployed.version} · {run.deployedAgent.score}
+                  </div>
+                  <div className="text-phosphor-dim text-xs tracking-widest mt-1 max-w-md leading-relaxed">
+                    {run.deployedAgent.score > run.playerScore
+                      ? 'YOUR MACHINE OUTSCORED YOU. THE RULES HELD WHERE YOU DID NOT.'
+                      : run.deployedAgent.score < run.playerScore
+                        ? 'YOU OUTSCORED YOUR MACHINE. WRITE DOWN WHAT YOU KNEW THAT IT DID NOT.'
+                        : 'YOU AND YOUR MACHINE SCORED THE SAME. THE PROCESS IS YOURS EITHER WAY.'}
+                  </div>
+                </div>
+              )}
               {observationReason && (
                 <div className="text-risk-red text-xs tracking-widest text-center max-w-md mb-4 leading-relaxed">
                   {observationReason}

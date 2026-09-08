@@ -4,7 +4,8 @@ import type {
 } from '../lib/gameTypes';
 import { getCheckpoint } from '../lib/arenas';
 import { type DecisionCommand } from '../lib/runEngine';
-import { createDefaultProfile } from '../lib/progressionEngine';
+import { createDefaultProfile, opponentPolicyFor } from '../lib/progressionEngine';
+import { deployedMachine, recordDeployedArena } from '../lib/machineVersions';
 import {
   reducer, mintSeed, type GameState,
 } from './gameReducer';
@@ -216,8 +217,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         result,
         playerScore: run.playerScore,
         machineScore: run.machineScore,
+        deployedScore: run.deployedAgent?.score ?? null,
         checkpointsCompleted: run.decisions.length,
       }, ctx);
+      // The build that rode along has now competed in this arena (§57 machine record).
+      if (run.deployed) recordDeployedArena(run.deployed.machineId, run.arenaId);
       endRunTelemetry();
     }
     prevResult.current = result;
@@ -229,8 +233,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // The Run Record reuses that same id rather than minting a second one, so
     // a stored run and its event stream can be read against each other.
     const runId = beginRunTelemetry();
-    dispatch({ type: 'START_RUN', runId, seed: mintSeed(), arenaId, machineId });
-    emitEvent('arena.started', { arenaId, machineId }, { arenaId });
+    // Who the player faces and what rides along are fixed at the door
+    // (docs/PLAN-endgame.md): the opponent's policy from the ladder, the
+    // machine from the most recent compile. Both are read here, in the layer
+    // allowed to touch storage, and carried in the run from then on.
+    const opponentPolicy = opponentPolicyFor(machineId);
+    const deployed = deployedMachine();
+    dispatch({ type: 'START_RUN', runId, seed: mintSeed(), arenaId, machineId, opponentPolicy, deployed });
+    emitEvent('arena.started', {
+      arenaId, machineId,
+      opponentPolicy: opponentPolicy.kind,
+      deployedMachineId: deployed?.machineId ?? null,
+      deployedBuildHash: deployed?.buildHash ?? null,
+    }, { arenaId });
   }, []);
   /**
    * Re-enter the run the player left, rebuilt by replaying its decisions.

@@ -1,35 +1,21 @@
 import ActionZone from '../components/ui/ActionZone';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import {
+  BASKET_UNIVERSE, BASKET_CASH_PCT, DEFAULT_BASKET, basketHash, latestBasket, lockBasket,
+  type BasketConstituent,
+} from '../lib/basket';
 
 interface Props {
   onBack: () => void;
   onComplete: () => void;
 }
 
-interface Constituent {
-  symbol: string;
-  weight: number;
-  sector: string;
-}
+type Constituent = BasketConstituent;
 
-const UNIVERSE = [
-  { symbol: 'AAPL', sector: 'TECH' },
-  { symbol: 'MSFT', sector: 'TECH' },
-  { symbol: 'GOOGL', sector: 'TECH' },
-  { symbol: 'AMZN', sector: 'CONS DISC' },
-  { symbol: 'JNJ', sector: 'HEALTH' },
-  { symbol: 'XOM', sector: 'ENERGY' },
-  { symbol: 'JPM', sector: 'FINANCIALS' },
-  { symbol: 'PG', sector: 'CONS STAP' },
-  { symbol: 'UNH', sector: 'HEALTH' },
-  { symbol: 'HD', sector: 'CONS DISC' },
-  { symbol: 'SPY', sector: 'INDEX' },
-  { symbol: 'QQQ', sector: 'INDEX' },
-  { symbol: 'IEF', sector: 'BONDS' },
-  { symbol: 'GLD', sector: 'COMMODITIES' },
-  { symbol: 'XLV', sector: 'HEALTH' },
-  { symbol: 'XLP', sector: 'CONS STAP' },
-];
+// The universe and the default basket live in src/lib/basket.ts. The screen
+// used to offer SPY, QQQ, IEF and GLD, and defaulted to holding bonds and
+// gold, against spec 2.1 (U.S. equities and cash only).
+const UNIVERSE = BASKET_UNIVERSE;
 
 function getSectorExposure(constituents: Constituent[]) {
   const map: Record<string, number> = {};
@@ -41,16 +27,21 @@ function getSectorExposure(constituents: Constituent[]) {
 
 export default function BasketWriterScreen({ onBack, onComplete }: Props) {
   const [search, setSearch] = useState('');
-  const [basket, setBasket] = useState<Constituent[]>([
-    { symbol: 'AAPL', weight: 8.0, sector: 'TECH' },
-    { symbol: 'MSFT', weight: 8.0, sector: 'TECH' },
-    { symbol: 'JNJ', weight: 7.0, sector: 'HEALTH' },
-    { symbol: 'XOM', weight: 6.0, sector: 'ENERGY' },
-    { symbol: 'IEF', weight: 10.0, sector: 'BONDS' },
-    { symbol: 'GLD', weight: 5.0, sector: 'COMMODITIES' },
-  ]);
+  // A basket is meant to accumulate: the screen reopens on the last locked one.
+  const [lockedHash, setLockedHash] = useState<string | null>(() => latestBasket()?.hash ?? null);
+  const [basket, setBasket] = useState<Constituent[]>(
+    () => latestBasket()?.constituents.map(c => ({ ...c })) ?? DEFAULT_BASKET.map(c => ({ ...c })),
+  );
+  const currentHash = useMemo(() => basketHash(basket, BASKET_CASH_PCT), [basket]);
+  const isLocked = lockedHash === currentHash;
 
-  const totalWeight = basket.reduce((s, c) => s + c.weight, 0) + 5.0; // +5 cash
+  function handleLock() {
+    const record = lockBasket(basket, BASKET_CASH_PCT);
+    setLockedHash(record.hash);
+    onComplete();
+  }
+
+  const totalWeight = basket.reduce((s, c) => s + c.weight, 0) + BASKET_CASH_PCT;
   const sectorMap = getSectorExposure(basket);
   const maxSector = Math.max(...Object.values(sectorMap));
   const concentration = maxSector > 30 ? 'HIGH' : maxSector > 20 ? 'MEDIUM' : 'LOW';
@@ -204,12 +195,12 @@ export default function BasketWriterScreen({ onBack, onComplete }: Props) {
       {/* Basket edits are the decision; locking the basket is the commit. */}
       <ActionZone
         variant="inline"
-        note="A PORTFOLIO IS A THESIS. A POLICY IS HOW YOU KEEP IT."
+        note={isLocked ? `LOCKED · ${currentHash} · A LOCKED BASKET IS A RECORD` : 'A PORTFOLIO IS A THESIS. A POLICY IS HOW YOU KEEP IT.'}
         primary={{
-          label: 'LOCK BASKET',
-          onClick: onComplete,
-          disabled: basket.length === 0,
-          disabledHint: 'ADD AT LEAST ONE POSITION',
+          label: isLocked ? 'BASKET LOCKED' : 'LOCK BASKET',
+          onClick: handleLock,
+          disabled: basket.length === 0 || isLocked,
+          disabledHint: isLocked ? 'CHANGE A HOLDING TO LOCK A NEW BASKET' : 'ADD AT LEAST ONE POSITION',
           keyHint: '[ENTER]',
         }}
       />

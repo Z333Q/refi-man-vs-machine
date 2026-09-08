@@ -67,6 +67,78 @@ export interface GauntletResult {
   bestArena: ArenaId | null;
 }
 
+// ─── Gauntlet record ──────────────────────────────────────────────────────────
+//
+// The gauntlet result used to exist only while the builder tab was open. TACO
+// requires one (spec 5: BLIND GAUNTLET precedes TACO PROTOCOL), so a run is
+// recorded when it happens. Small on purpose: the headline figures and the
+// build that produced them, not the full leg detail, which is reproducible.
+
+export interface GauntletRecord {
+  recordVersion: number;
+  buildHash: string;
+  seed: number;
+  totalVsPar: number;
+  survivedCount: number;
+  beatParCount: number;
+  consistencySpread: number;
+  legs: number;
+  ranAt: string;
+}
+
+export const GAUNTLET_RECORD_VERSION = 1;
+const GAUNTLET_STORE_KEY = 'refi_gauntlet_records';
+
+function readGauntletRecords(): GauntletRecord[] {
+  try {
+    const raw = localStorage.getItem(GAUNTLET_STORE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as GauntletRecord[]).filter(
+      r => r && typeof r === 'object' && r.recordVersion === GAUNTLET_RECORD_VERSION,
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** Newest first. */
+export function listGauntletRecords(): GauntletRecord[] {
+  return readGauntletRecords().slice().sort((a, b) => (a.ranAt < b.ranAt ? 1 : a.ranAt > b.ranAt ? -1 : 0));
+}
+
+/** Record a gauntlet run. One record per build and seed; a re-run is the same fact. */
+export function recordGauntlet(
+  buildHash: string,
+  seed: number,
+  result: GauntletResult,
+  now: string = new Date().toISOString(),
+): GauntletRecord {
+  const all = readGauntletRecords();
+  const existing = all.find(r => r.buildHash === buildHash && r.seed === seed);
+  if (existing) return existing;
+  const record: GauntletRecord = {
+    recordVersion: GAUNTLET_RECORD_VERSION,
+    buildHash,
+    seed,
+    totalVsPar: result.totalVsPar,
+    survivedCount: result.survivedCount,
+    beatParCount: result.beatParCount,
+    consistencySpread: result.consistencySpread,
+    legs: result.legs.length,
+    ranAt: now,
+  };
+  try {
+    localStorage.setItem(GAUNTLET_STORE_KEY, JSON.stringify([record, ...all].slice(0, 20)));
+  } catch { /* storage unavailable */ }
+  return record;
+}
+
+export function clearGauntletRecords(): void {
+  try { localStorage.removeItem(GAUNTLET_STORE_KEY); } catch { /* ignore */ }
+}
+
 /**
  * Run one machine across every gauntlet regime, unchanged.
  *

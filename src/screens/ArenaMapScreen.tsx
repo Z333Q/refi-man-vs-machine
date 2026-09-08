@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import type { ArenaId } from '../lib/gameTypes';
 import { allArenas } from '../lib/arenas';
 import { listRunRecords } from '../lib/runRecord';
-import { nextArenaOpen } from '../lib/progressionLaw';
+import { nextArenaOpen, tacoUnlocked, tacoNextRequirement, TACO_ARENA_ID } from '../lib/progressionLaw';
+import { readTacoEvidence } from '../lib/tacoEvidence';
 
 interface Props {
   onSelectArena: (arena: ArenaId) => void;
@@ -29,6 +30,8 @@ interface ArenaNode {
   lesson: string;
   window: string;
   icon: string;
+  /** Why this arena cannot be entered yet, when it cannot. */
+  lockHint: string;
 }
 
 /**
@@ -44,6 +47,10 @@ function useArenaNodes(): ArenaNode[] {
   return useMemo(() => {
     const records = listRunRecords();
     const arenas = allArenas();
+    // The final boss has its own gate on top of the chain (progressionLaw).
+    const evidence = readTacoEvidence();
+    const tacoOpen = tacoUnlocked(evidence);
+    const tacoNext = tacoNextRequirement(evidence);
 
     return arenas.map((a, i) => {
       const runs = records.filter(r => r.arenaId === a.id && r.completedAt !== null);
@@ -56,7 +63,12 @@ function useArenaNodes(): ArenaNode[] {
       const prev = arenas[i - 1];
       const prevDone = nextArenaOpen(records, prev ? prev.id : null);
 
-      const state: NodeState = passed ? 'done' : prevDone ? 'next' : 'locked';
+      const isTaco = a.id === TACO_ARENA_ID;
+      const open = prevDone && (!isTaco || tacoOpen);
+      const state: NodeState = passed ? 'done' : open ? 'next' : 'locked';
+      const lockHint = isTaco && prevDone && !tacoOpen && tacoNext
+        ? `FINAL BOSS. NEXT: ${tacoNext.label}`
+        : 'FINISH THE PREVIOUS ARENA TO UNLOCK THIS ONE';
 
       return {
         id: a.id,
@@ -71,6 +83,7 @@ function useArenaNodes(): ArenaNode[] {
         lesson: a.lesson.toUpperCase(),
         window: a.window,
         icon: ARENA_ICON[a.id] ?? '///',
+        lockHint,
       };
     });
   }, []);
@@ -84,10 +97,12 @@ const ARENA_ICON: Record<string, string> = {
   taco_protocol: '>>>',
 };
 
+// Side content that exists. POLICY WRITER was listed here and on the TACO
+// unlock as a prerequisite; no such screen was ever built. Removed from the
+// progression 2026-09-06 (docs/PLAN-endgame.md ruling 1).
 const SIDE_ARENAS = [
   { code: '06', label: 'MAN VS MACHINE', state: 'locked' as NodeState },
   { code: '07', label: 'BASKET WRITER', state: 'locked' as NodeState },
-  { code: '08', label: 'POLICY WRITER', state: 'locked' as NodeState },
 ];
 
 const NODE_SYMBOL: Record<NodeState, string> = {
@@ -277,7 +292,7 @@ export default function ArenaMapScreen({ onSelectArena, onBack }: Props) {
           label: isSelectable ? 'ENTER ARENA' : 'LOCKED',
           onClick: () => onSelectArena(selected.id),
           disabled: !isSelectable,
-          disabledHint: 'FINISH THE PREVIOUS ARENA TO UNLOCK THIS ONE',
+          disabledHint: selected.lockHint,
           keyHint: '[ENTER]',
         }}
       />
