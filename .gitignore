@@ -32,3 +32,7 @@ dist-ssr
 # Vite writes these while resolving the config and deletes them again; the
 # race means `git add -A` can catch one mid-build.
 vite.config.ts.timestamp-*
+
+# Audio masters: WAV source assets, kept on disk (Dropbox) and never committed.
+# Production encodes live in public/audio and are built by scripts/audio-build.mjs.
+audio/masters/
