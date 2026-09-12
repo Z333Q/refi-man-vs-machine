@@ -34,9 +34,26 @@ import { Spotlight } from '../components/onboarding/Spotlight';
 import ActionZone, { SecondaryAction } from '../components/ui/ActionZone';
 import CheckpointAnalysis from '../components/game/CheckpointAnalysis';
 import { FiveQuestionSpine, type SpineFocus } from '../components/onboarding/FiveQuestionSpine';
-import { MACHINE_LADDER } from '../lib/progressionEngine';
+import { MACHINE_LADDER, getModuleByCode } from '../lib/progressionEngine';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+/**
+ * Where a newly earned module actually lives in the run terminal.
+ *
+ * An unlock that the player cannot find is not an unlock. Three modules get
+ * their own tab; the other two land inside a panel that already exists (the
+ * Block Field is the portfolio's geometry, staged execution is a stance on the
+ * decide surface). Anything absent from this map has no home in a run and is
+ * announced without a jump.
+ */
+const MODULE_DEST: Partial<Record<ModuleCode, { panel: ActivePanel; label: string; key: string }>> = {
+  CORRELATION_MATRIX: { panel: 'CORRELATION', label: 'CORRELATION', key: 'C' },
+  DRAWDOWN_MAP: { panel: 'DRAWDOWN', label: 'DRAWDOWN', key: 'W' },
+  REGIME_SCANNER: { panel: 'REGIME', label: 'REGIME', key: 'G' },
+  BLOCK_FIELD: { panel: 'PORTFOLIO', label: 'PORTFOLIO', key: 'P' },
+  STAGED_EXECUTION: { panel: 'DECIDE', label: 'DECIDE', key: 'D' },
+};
 
 type ActivePanel =
   | 'SIGNAL' | 'PORTFOLIO' | 'RISK' | 'DECIDE'
@@ -413,11 +430,26 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
     }
   }, [run?.phase]);
 
-  // Reset the decision surface when the checkpoint advances
+  // The module announced by the advance, read by the reset below without
+  // making it a dependency: the reset must run when the checkpoint changes and
+  // only then. Dismissing the notice later must not send the player back to
+  // the signal tab they have since navigated away from.
+  const unlockRef = useRef<ModuleCode | null>(null);
+  unlockRef.current = moduleJustUnlocked;
+
+  // Reset the decision surface when the checkpoint advances.
+  //
+  // This is the single place that decides what a new checkpoint opens on.
+  // Normally the signal; when the advance also announced a module, that
+  // module's own panel, so an unlock is the thing the player is looking at
+  // rather than a tab they have to find among the others. Two effects racing
+  // to set this was the earlier bug: declaration order decided it, and the
+  // reset won.
   useEffect(() => {
     setCommitConfirm(false);
     setThesisPrompt(false);
-    setActivePanel('SIGNAL');
+    const dest = unlockRef.current ? MODULE_DEST[unlockRef.current] : undefined;
+    setActivePanel(dest?.panel ?? 'SIGNAL');
   }, [run?.currentCheckpoint]);
 
   // The thesis prompt never blocks the reveal. On timeout the decision records
@@ -956,8 +988,13 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
     { id: 'DECIDE', label: decisionReady ? 'DECIDE ✓' : 'DECIDE', key: 'D' },
   ];
 
+  // screen-fit, not min-h-screen. The run's panes scroll internally, so the
+  // screen must be exactly the viewport rather than at least it: that is what
+  // keeps the action zone on screen without page scrolling, and it is what this
+  // class was written for (src/index.css). The run terminal is the archetypal
+  // such screen and had simply never opted in.
   return (
-    <div className="min-h-screen bg-terminal-black terminal-screen flex flex-col font-mono">
+    <div className="screen-fit bg-terminal-black terminal-screen flex flex-col font-mono">
 
       {/* ── Top bar ──
            Wraps rather than compressing. The left group could shrink but its
@@ -1029,49 +1066,17 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
         />
       </div>
 
-      {/* Module unlock. Persistent, not a toast: it holds until the player
-          leaves the checkpoint or dismisses it, because it is announcing a
-          permanent change to the terminal they are playing with. */}
+      {/* The floating MODULE UNLOCKED card is gone. It sat over the market
+          playback announcing a tab that was not rendered yet, it explained
+          nothing about what the module does, and the player's next keystroke
+          deleted it. The unlock now arrives with the next checkpoint
+          (gameReducer ADVANCE_CHECKPOINT), opens the module's own panel, and
+          is explained by a spotlight on the tab it created. What remains here
+          is the accessible announcement, for a reader who is not looking at
+          the spotlight. */}
       {moduleJustUnlocked && (
-        <div
-          role="status"
-          className="fixed top-10 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-2rem)] bg-terminal-deep border border-paper-green/60 px-4 sm:px-6 py-3 animate-boot-fade"
-        >
-          <div className="flex items-center gap-4">
-            <div className="min-w-0">
-              <div className="text-xs tracking-widest text-paper-green truncate">
-                ▲ MODULE UNLOCKED: {moduleJustUnlocked.replace(/_/g, ' ')}
-              </div>
-              {/* "ADDED TO YOUR TERMINAL" was true and useless: it did not say
-                  where, and there was nowhere. Point at the tab it just
-                  created, and give the player a way to open it from here. */}
-              {(() => {
-                const dest = MODULE_TABS.find(t => t.module === moduleJustUnlocked);
-                if (!dest) {
-                  return (
-                    <div className="text-phosphor-dim text-xs tracking-widest mt-0.5">
-                      ADDED TO YOUR MACHINE
-                    </div>
-                  );
-                }
-                return (
-                  <button
-                    onClick={() => { openPanel(dest.id); clearModuleUnlock(); }}
-                    className="text-phosphor text-xs tracking-widest mt-0.5 underline underline-offset-2 hover:text-phosphor-hot transition-colors"
-                  >
-                    OPEN {dest.label} · [{dest.key}]
-                  </button>
-                );
-              })()}
-            </div>
-            <button
-              onClick={clearModuleUnlock}
-              aria-label="DISMISS MODULE UNLOCK"
-              className="text-phosphor-dim text-xs hover:text-phosphor transition-colors flex-shrink-0"
-            >
-              ✕
-            </button>
-          </div>
+        <div role="status" className="sr-only">
+          MODULE UNLOCKED: {moduleJustUnlocked.replace(/_/g, ' ')}
         </div>
       )}
 
@@ -1118,7 +1123,10 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
         )}
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      {/* min-h-0: a flex item will not shrink below its content without it,
+          so this row grew to fit the resolve pane and pushed the action zone
+          off the viewport. */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* ── Left: signal sidebar ──
              Desktop only. Below lg the rails would consume 464px of a 390px
@@ -1202,8 +1210,15 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           </div>
         </div>
 
-        {/* ── Center: decision workspace ── */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        {/* ── Center: decision workspace ──
+             min-h-0 is load-bearing. A flex item defaults to min-height:auto,
+             which refuses to shrink below its content, so the resolve pane's
+             overflow-y-auto never engaged: the column grew to fit the race,
+             the reveal, the score card and the analysis, and pushed the action
+             zone (NEXT SIGNAL) off the bottom of the viewport. The player had
+             to scroll for the one control that advances the run, every single
+             checkpoint (2026-09-12 playtest). */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
           {decisionPhase && (
             <>
@@ -1229,6 +1244,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                 {PANEL_TABS.map(tab => (
                   <button
                     key={tab.id}
+                    data-spotlight={`tab-${tab.id}`}
                     onClick={() => openPanel(tab.id)}
                     className={`px-4 py-2.5 text-xs tracking-widest border-r border-phosphor/10 transition-colors flex-shrink-0 ${
                       activePanel === tab.id
@@ -1739,7 +1755,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
 
           {/* ── Resolve / Compare / Learn ── */}
           {!thesisPrompt && (phase === 'RESOLVING' || phase === 'COMPARING' || phase === 'LEARNING') && lastCheckpointScore && verdict && (
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6">
               {/* The race. Five beats: lock, resolve, flip, score, verdict.
                   Replaces the instant text result: the payoff of a trading
                   game is watching the market answer the call you locked. */}
@@ -2067,6 +2083,48 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
 
       {/* First-run guided spotlight on Checkpoint 1 — points at the signal,
           then the moves, so the player is never dropped in without direction. */}
+      {/* Module unlock spotlight. One overlay at a time (§11), so it yields
+          to the CP1 coach; in practice they never collide, since the earliest
+          unlock lands on CP4. It points at the tab the unlock just created,
+          says what the module is for, and leaves the panel open behind it. */}
+      {(() => {
+        const coachActive = !coachDone && run.currentCheckpoint === 1;
+        // Only over the decision surface. The tab it points at exists only
+        // there, and a notice with no target degrades into a full-screen
+        // modal, which must never land over a resolution.
+        if (!moduleJustUnlocked || coachActive || !decisionPhase) return null;
+        const dest = MODULE_DEST[moduleJustUnlocked];
+        const def = getModuleByCode(moduleJustUnlocked);
+        const name = def?.label ?? moduleJustUnlocked.replace(/_/g, ' ');
+        return (
+          <Spotlight
+            targetSelector={dest ? `[data-spotlight="tab-${dest.panel}"]` : null}
+            watch={[moduleJustUnlocked, activePanel]}
+            title={`MODULE UNLOCKED · ${name}`}
+            body={
+              <>
+                {/* The module table's descriptions are phrases, not sentences,
+                    so they carry no terminating period of their own. */}
+                {def ? `${def.description}.` : 'A new module is available in your terminal.'}
+                {dest && (
+                  <>
+                    {' '}It is open now, on the {dest.label} tab. Press [{dest.key}] to
+                    return to it at any checkpoint.
+                  </>
+                )}
+              </>
+            }
+            hint={def?.unlockRequirement ? `EARNED: ${def.unlockRequirement.toUpperCase()}` : undefined}
+            step={{ current: 1, total: 1 }}
+            nextLabel="GOT IT ▶"
+            onNext={clearModuleUnlock}
+            /* No onSkip: this is a one-step notice, and the Spotlight renders
+               that affordance as "SKIP TUTORIAL", which this is not. */
+            reducedMotion={reducedMotion}
+          />
+        );
+      })()}
+
       {(() => {
         const coachActive = !coachDone && run.currentCheckpoint === 1 &&
           (run.phase === 'SIGNAL' || run.phase === 'INVESTIGATING');

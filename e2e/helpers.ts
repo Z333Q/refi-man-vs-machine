@@ -119,8 +119,10 @@ export async function dismissOverlays(page: Page) {
       continue;
     }
 
-    // The coaching spotlight and blocking visual events carry real buttons.
-    const blocking = ['SKIP TUTORIAL →', 'GOT IT — LET ME PLAY ▶', '[CONTINUE]', '[ACKNOWLEDGE]', 'ENTER COVID', 'UNDERSTOOD'];
+    // The coaching spotlight, the module-unlock spotlight and blocking visual
+    // events carry real buttons. A player dismisses these to get on with the
+    // checkpoint, so the helper does too.
+    const blocking = ['SKIP TUTORIAL →', 'GOT IT — LET ME PLAY ▶', 'GOT IT ▶', '[CONTINUE]', '[ACKNOWLEDGE]', 'ENTER COVID', 'UNDERSTOOD'];
     const hit = state.labels.find(l => blocking.some(b => l.startsWith(b)));
     if (!hit) break;
     await page.getByRole('button', { name: hit, exact: true }).first()

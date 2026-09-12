@@ -252,6 +252,7 @@ function stateInRun(arenaId: string, checkpoint: number): GameState {
     lastCheckpointScore: null,
     lastCheckpointFlags: [],
     moduleJustUnlocked: null,
+    pendingModuleUnlock: null,
     xpJustEarned: 0,
     loaded: true,
   };
@@ -293,12 +294,14 @@ test('reducer integration: committing COVID CP3 earns the module for CP4', () =>
     type: 'COMMIT_DECISION',
     command: { action: 'HOLD', conviction: 70 },
   });
-  assert.equal(committed.moduleJustUnlocked, 'BLOCK_FIELD');
+  assert.equal(committed.pendingModuleUnlock, 'BLOCK_FIELD', 'earned at commit');
+  assert.equal(committed.moduleJustUnlocked, null, 'but not announced under the playback');
   assert.ok(committed.profile.unlockedModules.includes('BLOCK_FIELD'));
   assert.ok(committed.run!.activeModules.includes('BLOCK_FIELD'), 'active in the very run that earned it');
 
   const advanced = reducer(committed, { type: 'ADVANCE_CHECKPOINT' });
   assert.equal(advanced.run!.currentCheckpoint, 4);
+  assert.equal(advanced.moduleJustUnlocked, 'BLOCK_FIELD', 'announced on the checkpoint where it can be opened');
   assert.ok(advanced.run!.activeModules.includes('BLOCK_FIELD'), 'still active entering CP4');
 
   // And committing CP1/CP2 must not have unlocked it.

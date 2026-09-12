@@ -27,7 +27,13 @@ export interface GameState {
   // Behavioural flags from the checkpoint just scored. The verdict grammar
   // reads these to decide whether a winning result carries a forward nudge.
   lastCheckpointFlags: BehavioralFlag[];
+  // The module being announced right now: opened, spotlit and explained on
+  // the checkpoint after the one that earned it.
   moduleJustUnlocked: ModuleCode | null;
+  // A module earned by the commit just made, held back until the player
+  // advances. Raising it at commit put the announcement under the market
+  // playback, and pressing NEXT SIGNAL was the very thing that deleted it.
+  pendingModuleUnlock: ModuleCode | null;
   xpJustEarned: number;
   loaded: boolean;
 }
@@ -172,7 +178,13 @@ export function reducer(state: GameState, action: GameAction): GameState {
         lastCheckpointScore: score,
         lastCheckpointFlags: flags,
         xpJustEarned: xpEarned,
-        moduleJustUnlocked: newModuleUnlocks[0] ?? null,
+        // The notice belongs to the decision surface it was shown on, and the
+        // commit is the end of that surface. Left standing it survived into
+        // the resolve phase, where the tab it points at is not rendered, so it
+        // degraded into a full-screen modal over the market resolution: the
+        // very complaint this change set out to fix, in a new costume.
+        moduleJustUnlocked: null,
+        pendingModuleUnlock: newModuleUnlocks[0] ?? null,
         profile: {
           ...state.profile,
           alphaXp: newXp,
@@ -195,10 +207,12 @@ export function reducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         run: advanceRunCheckpoint(state.run),
-        // An unlock belongs to the checkpoint that earned it. Leaving that
-        // checkpoint is the moment it stops being news, and it is a boundary
-        // the player chose, unlike the timer this replaced.
-        moduleJustUnlocked: null,
+        // The advance is the player's own boundary. A module earned by the
+        // commit they just watched resolve becomes news now, on the checkpoint
+        // where they can actually open it; the one announced last checkpoint
+        // stops being news.
+        moduleJustUnlocked: state.pendingModuleUnlock,
+        pendingModuleUnlock: null,
         xpJustEarned: 0,
       };
     }
@@ -228,6 +242,10 @@ export function reducer(state: GameState, action: GameAction): GameState {
         : state.profile.machineLadder;
       return {
         ...state,
+        // A module earned on the final checkpoint has no next checkpoint to be
+        // announced on; the hub announces it instead.
+        moduleJustUnlocked: state.pendingModuleUnlock ?? state.moduleJustUnlocked,
+        pendingModuleUnlock: null,
         run: { ...state.run, result, phase: 'COMPLETE' },
         profile: {
           ...state.profile,

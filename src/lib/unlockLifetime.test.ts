@@ -15,8 +15,14 @@ import type { ModuleCode } from './gameTypes';
 //      the commit, those three seconds were spent underneath the resolution
 //      animation, so the announcement came and went while the player was
 //      watching something else.
+//   3. Made persistent, it was still raised at commit, so it sat over the
+//      market playback, and NEXT SIGNAL, the one control the player was about
+//      to press, was what deleted it (2026-09-12 playtest). The unlock is now
+//      held as `pendingModuleUnlock` and promoted to `moduleJustUnlocked` by
+//      the advance, so it is announced on the checkpoint where the module can
+//      actually be opened.
 //
-// Both are reducer rules, invisible from the engine and expensive to reach
+// All are reducer rules, invisible from the engine and expensive to reach
 // through the UI. They are asserted here instead.
 
 function baseState(overrides: Partial<GameState> = {}): GameState {
@@ -26,6 +32,7 @@ function baseState(overrides: Partial<GameState> = {}): GameState {
     lastCheckpointScore: null,
     lastCheckpointFlags: [],
     moduleJustUnlocked: null,
+    pendingModuleUnlock: null,
     xpJustEarned: 0,
     loaded: true,
     ...overrides,
@@ -67,10 +74,33 @@ test('an unlock survives everything that is not the player moving on', () => {
   }
 });
 
-test('advancing the checkpoint clears it: that is the player moving on', () => {
+test('advancing the checkpoint retires the current notice and raises the pending one', () => {
   const next = reducer(withUnlock(), { type: 'ADVANCE_CHECKPOINT' });
-  assert.equal(next.moduleJustUnlocked, null);
+  assert.equal(next.moduleJustUnlocked, null, 'last checkpoint\'s news is over');
   assert.equal(next.xpJustEarned, 0, 'the XP line belongs to the same checkpoint');
+
+  const earned = { ...withUnlock(), moduleJustUnlocked: null, pendingModuleUnlock: 'REGIME_SCANNER' as ModuleCode };
+  const announced = reducer(earned, { type: 'ADVANCE_CHECKPOINT' });
+  assert.equal(announced.moduleJustUnlocked, 'REGIME_SCANNER', 'announced where it can be opened');
+  assert.equal(announced.pendingModuleUnlock, null);
+});
+
+test('a module earned on the final checkpoint is announced by the run completing', () => {
+  const earned = { ...withUnlock(), moduleJustUnlocked: null, pendingModuleUnlock: 'REGIME_SCANNER' as ModuleCode };
+  const done = reducer(earned, { type: 'COMPLETE_RUN', result: 'PASSED' });
+  assert.equal(done.moduleJustUnlocked, 'REGIME_SCANNER');
+  assert.equal(done.pendingModuleUnlock, null);
+});
+
+test('committing ends the notice: it belongs to the decision surface it opened on', () => {
+  const s = withUnlock();
+  const next = reducer(s, { type: 'COMMIT_DECISION', command: { action: 'HOLD', conviction: 70 } });
+  assert.equal(
+    next.moduleJustUnlocked,
+    null,
+    'a notice left standing through a commit reappears over the market resolution, ' +
+    'where its target tab does not exist and it becomes a full-screen modal',
+  );
 });
 
 test('the player can dismiss it directly', () => {
