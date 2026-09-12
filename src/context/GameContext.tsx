@@ -56,6 +56,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     lastCheckpointScore: null,
     lastCheckpointFlags: [],
     moduleJustUnlocked: null,
+    pendingModuleUnlock: null,
     xpJustEarned: 0,
     loaded: false,
   });

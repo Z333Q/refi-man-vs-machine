@@ -22,6 +22,7 @@ function baseState(overrides: Partial<GameState> = {}): GameState {
     lastCheckpointScore: null,
     lastCheckpointFlags: [],
     moduleJustUnlocked: null,
+    pendingModuleUnlock: null,
     xpJustEarned: 0,
     loaded: true,
     ...overrides,
