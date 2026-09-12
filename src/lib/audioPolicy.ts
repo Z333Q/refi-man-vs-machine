@@ -149,17 +149,21 @@ export function sceneFor(input: SceneInput): Scene {
     case 'title':
       return { music: TITLE_MUSIC, ambient: null, duck: false };
     case 'hub':
-      return { music: 'capital-moves', ambient: null, duck: false };
+      return { music: 'capital-moves', ambient: 'office-hum', duck: false };
     case 'briefing':
-      // Cue 4, The Tape, is not generated yet. Silence rather than a stand-in.
-      return { music: null, ambient: null, duck: false };
+      // Reading history before placing capital: the newsroom underscore over
+      // a quiet floor.
+      return { music: 'the-tape', ambient: 'trading-floor-calm', duck: false };
     case 'run':
       return runScene(input);
     case 'review':
+      // Numbers under review on an empty floor at night.
+      return { music: 'after-hours', ambient: 'office-hum', duck: false };
     case 'builder':
+      // The Firm: low intensity so the player stays on the rules, not the music.
+      return { music: 'the-firm', ambient: 'office-hum', duck: false };
     case 'other':
     default:
-      // After Hours (cue 12) and the office hum (cue 33) are not generated yet.
       return { music: null, ambient: null, duck: false };
   }
 }
@@ -175,11 +179,12 @@ function runScene(input: SceneInput): Scene {
     case 'RESULT_COMPUTING':
       return {
         music: stress ? 'margin' : 'the-position',
-        ambient: stress ? 'trading-floor-panic' : null,
+        ambient: stress ? 'trading-floor-panic' : 'trading-floor-calm',
         duck: true,
       };
     case 'COMPLETE':
-      return { music: null, ambient: null, duck: false };
+      // The closing piece plays once (manifest loop: false) and then silence.
+      return { music: 'final-score', ambient: null, duck: false };
     case 'IDLE':
       return { music: null, ambient: null, duck: false };
     case 'DECISION_REQUIRED':
@@ -188,7 +193,7 @@ function runScene(input: SceneInput): Scene {
     default:
       return {
         music: stress ? 'margin' : 'the-position',
-        ambient: stress ? 'trading-floor-panic' : null,
+        ambient: stress ? 'trading-floor-panic' : 'trading-floor-calm',
         duck: false,
       };
   }
@@ -208,6 +213,12 @@ export function sfxForTransition(prev: SceneInput | null, next: SceneInput): str
   // Entering the map from anywhere but the title is a return to the overview.
   if (next.screen === 'arena-map' && prevScreen !== 'arena-map' && screenFamily(prevScreen) !== 'title') {
     out.push('return-to-map');
+  }
+
+  // The market opens when the player walks onto the floor. Once per entry,
+  // never on a result.
+  if (screenFamily(next.screen) === 'run' && screenFamily(prevScreen) !== 'run') {
+    out.push('market-open');
   }
 
   if (screenFamily(next.screen) === 'run' && next.state !== prevState) {
@@ -280,6 +291,7 @@ export function reachableCues(): string[] {
     for (const prev of [null, ...inputs]) for (const id of sfxForTransition(prev, input)) ids.add(id);
   }
   const eventTypes: GameVisualEventType[] = ['MARKET_SHOCK', 'MACHINE_VERSION_COMPILED'];
+  ids.add('market-open');
   for (const t of eventTypes) { const id = sfxForEvent(t); if (id) ids.add(id); }
   return [...ids].sort();
 }

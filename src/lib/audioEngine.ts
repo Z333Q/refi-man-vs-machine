@@ -162,8 +162,11 @@ export function createSoundEngine(manifestUrl: string = MANIFEST_URL): SoundEngi
       if (!loop) return null;
       return intro ? [{ buffer: intro, loop: false }, { buffer: loop, loop: true }] : [{ buffer: loop, loop: true }];
     }
-    const b = await loadBuffer(id);
-    return b ? [{ buffer: b, loop: true }] : null;
+    const [b, m] = await Promise.all([loadBuffer(id), loadManifest()]);
+    if (!b) return null;
+    // A cue the manifest marks non-looping (the closing piece) plays once and
+    // leaves silence behind it rather than restarting.
+    return [{ buffer: b, loop: m.get(id)?.loop ?? true }];
   }
 
   function applyMusic(): void {

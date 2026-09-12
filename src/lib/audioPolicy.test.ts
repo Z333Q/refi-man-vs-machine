@@ -126,10 +126,31 @@ test('the reveal ducks the music; the decision does not', () => {
   assert.equal(sceneFor({ screen: 'core-loop', state: 'DECISION_REQUIRED', intensity: 'CALM' }).duck, false);
 });
 
-test('screens without a generated cue are silent, not substituted', () => {
-  for (const screen of ['arena-briefing', 'autopsy', 'machine-builder']) {
-    const s = sceneFor({ screen, state: 'IDLE', intensity: 'CALM' });
-    assert.equal(s.music, null, screen);
-    assert.equal(s.ambient, null, screen);
-  }
+test('every screen family has its own room', () => {
+  assert.equal(sceneFor({ screen: 'arena-briefing', state: 'IDLE', intensity: 'CALM' }).music, 'the-tape');
+  assert.equal(sceneFor({ screen: 'autopsy', state: 'IDLE', intensity: 'CALM' }).music, 'after-hours');
+  assert.equal(sceneFor({ screen: 'machine-builder', state: 'IDLE', intensity: 'CALM' }).music, 'the-firm');
+  assert.equal(sceneFor({ screen: 'arena-map', state: 'IDLE', intensity: 'CALM' }).ambient, 'office-hum');
+  assert.equal(sceneFor({ screen: 'core-loop', state: 'DECISION_REQUIRED', intensity: 'CALM' }).ambient, 'trading-floor-calm');
+});
+
+test('the closing piece is a play-once cue in the manifest', () => {
+  const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { cues: { id: string; loop: boolean }[] };
+  const closing = m.cues.find(c => c.id === 'final-score');
+  assert.ok(closing, 'final-score is built');
+  assert.equal(closing.loop, false);
+  assert.equal(sceneFor({ screen: 'core-loop', state: 'COMPLETE', intensity: 'CALM' }).music, 'final-score');
+});
+
+test('the market opens once on entering the run, never on a result', () => {
+  const enter = sfxForTransition(
+    { screen: 'arena-briefing', state: 'IDLE', intensity: 'CALM' },
+    { screen: 'core-loop', state: 'DECISION_REQUIRED', intensity: 'CALM' },
+  );
+  assert.deepEqual(enter, ['market-open']);
+  const reveal = sfxForTransition(
+    { screen: 'core-loop', state: 'MARKET_ADVANCING', intensity: 'CALM' },
+    { screen: 'core-loop', state: 'MACHINE_REVEAL', intensity: 'CALM' },
+  );
+  assert.ok(!reveal.includes('market-open'));
 });

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-12T04:22:46.140Z",
+  "generatedAt": "2026-09-12T04:55:31.979Z",
   "sampleRate": 48000,
   "cues": [
     {
@@ -33,6 +33,16 @@
       "master": "0930-theme.wav"
     },
     {
+      "cue": 2,
+      "id": "the-firm",
+      "title": "Main Menu, The Firm",
+      "kind": "music",
+      "src": "/audio/music/the-firm.opus",
+      "loop": true,
+      "durationSec": 74.81,
+      "master": "the-firm.wav"
+    },
+    {
       "cue": 3,
       "id": "capital-moves",
       "title": "Arena Map, Capital Moves",
@@ -51,6 +61,16 @@
       "loop": true,
       "durationSec": 89.77,
       "master": "capital-moves-alt.wav"
+    },
+    {
+      "cue": 4,
+      "id": "the-tape",
+      "title": "Historical Briefing, The Tape",
+      "kind": "music",
+      "src": "/audio/music/the-tape.opus",
+      "loop": true,
+      "durationSec": 89.97,
+      "master": "the-tape.wav"
     },
     {
       "cue": 5,
@@ -113,6 +133,16 @@
       "master": "machine-reveal.wav"
     },
     {
+      "cue": 10,
+      "id": "market-open",
+      "title": "Market Open (run start, outcome-neutral)",
+      "kind": "sfx",
+      "src": "/audio/sfx/market-open.ogg",
+      "loop": false,
+      "durationSec": 7.84,
+      "master": "market-open.wav"
+    },
+    {
       "cue": 11,
       "id": "machine-beats-player",
       "title": "Machine Beats Player",
@@ -121,6 +151,46 @@
       "loop": false,
       "durationSec": 9.2,
       "master": "machine-beats-player.wav"
+    },
+    {
+      "cue": 12,
+      "id": "after-hours",
+      "title": "Results Screen, After Hours",
+      "kind": "music",
+      "src": "/audio/music/after-hours.opus",
+      "loop": true,
+      "durationSec": 90.01,
+      "master": "after-hours.wav"
+    },
+    {
+      "cue": 13,
+      "id": "final-score",
+      "title": "Final Session Score",
+      "kind": "music",
+      "src": "/audio/music/final-score.opus",
+      "loop": false,
+      "durationSec": 38.41,
+      "master": "final-score.mp4"
+    },
+    {
+      "cue": 14,
+      "id": "trading-floor-bed",
+      "title": "Trading Floor Bed",
+      "kind": "ambience",
+      "src": "/audio/ambience/trading-floor-bed.opus",
+      "loop": true,
+      "durationSec": 13.09,
+      "master": "trading-floor-bed.wav"
+    },
+    {
+      "cue": 15,
+      "id": "trading-floor-calm",
+      "title": "Calm Trading Floor",
+      "kind": "ambience",
+      "src": "/audio/ambience/trading-floor-calm.opus",
+      "loop": true,
+      "durationSec": 12.38,
+      "master": "trading-floor-calm.m4a"
     },
     {
       "cue": 16,
@@ -151,6 +221,16 @@
       "loop": false,
       "durationSec": 9.2,
       "master": "exchange-bell.wav"
+    },
+    {
+      "cue": 33,
+      "id": "office-hum",
+      "title": "Fluorescent Office Hum",
+      "kind": "ambience",
+      "src": "/audio/ambience/office-hum.opus",
+      "loop": true,
+      "durationSec": 12.13,
+      "master": "office-hum.wav"
     },
     {
       "cue": 35,

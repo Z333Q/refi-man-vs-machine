@@ -48,29 +48,34 @@ Delivered and mapped (cue numbers from the prompt set):
 | Cue | Slot | Master | Status |
 |---|---|---|---|
 | 1 | Title Theme, 9:30 | 0930-theme.wav | intro, loop and full encoded |
+| 2 | Main Menu, The Firm | the-firm.wav | builder screens |
 | 3 | Arena Map, Capital Moves | capital-moves.wav, capital-moves-alt.wav | two takes, choose one |
+| 4 | Historical Briefing, The Tape | the-tape.wav | briefing screens |
 | 5 | Decision Screen, The Position | the-position.wav, the-position-alt.wav | two takes, choose one |
 | 6 | Order Submitted | order-submitted.wav | ok |
 | 7 | Market Opens, The Floor | the-floor.wav | loop-in point after the build not set |
 | 8 | High Volatility, Margin | margin.wav | ok |
 | 9 | Machine Reveal | machine-reveal.wav | ok |
-| 11 | Machine Beats Player | machine-beats-player.wav | ok |
-| 16 | Panic Trading Floor | trading-floor-panic.wav | ok |
-| 21 | Continuous Market Printer | printer-continuous.wav | ok |
+| 10 | Market Open (rewritten, outcome-neutral) | market-open.wav | plays on entering a run |
+| 11 | Machine Beats Player | machine-beats-player.wav | encoded, barred by policy (61A) |
+| 12 | Results Screen, After Hours | after-hours.wav | review screens |
+| 13 | Final Session Score | final-score.mp4 | plays once at run complete; AAC source, replace with WAV |
+| 14 | Trading Floor Bed | trading-floor-bed.wav | encoded, not yet scheduled |
+| 15 | Calm Trading Floor | trading-floor-calm.m4a | briefing and calm decisions; Opus source, replace with WAV |
+| 16 | Panic Trading Floor | trading-floor-panic.wav | stress decisions |
+| 21 | Continuous Market Printer | printer-continuous.wav | market advance |
 | 31 | Exchange Bell | exchange-bell.wav | 9 s master against a 2 to 3 s spec, trim to one strike |
-| 35 | Executive Office Door | office-door-close.wav | 10 s master, needs trim to 2 s |
+| 33 | Fluorescent Office Hum | office-hum.wav | hub, review and builder screens |
+| 35 | Executive Office Door | office-door-close.wav | 10 s master, needs trim to 2 s; not yet scheduled |
 | 42 | Machine Calculation | machine-calculation.wav | ok |
 | 47 | Big Market Shock | market-shock.mp4 | AAC source, replace with WAV |
-| 48 | Successful Risk Control | risk-control-ok.wav | 12 s master, needs trim |
+| 48 | Successful Risk Control | risk-control-ok.wav | 12 s master, needs trim; not yet scheduled |
 | 50 | Return to Arena Map | return-to-map.wav | ok |
 | none | Market Watch (start) | market-watch-start.wav | unmapped spare |
 
-Still to generate:
+Still to generate (prompts in PROMPTS.md):
 
-- Music: 2 The Firm, 4 The Tape, 10 Player Beats Machine, 12 After Hours,
-  13 Final Session Score.
-- Ambience: 14 Trading Floor Bed, 15 Calm Trading Floor, 33 Fluorescent Office
-  Hum, 46 Newsroom Radio Texture.
+- Ambience: 46 Newsroom Radio Texture.
 - SFX: 17 to 20, 22 to 30, 32, 34, 36 to 41, 43 to 45, 49.
 
 Tempo of each music master was measured by onset autocorrelation and recorded as

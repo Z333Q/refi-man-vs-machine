@@ -57,6 +57,15 @@
       "note": "0:30 to 1:30 of the master, repeated under the title UI. Master is 3:00; the remaining 1:30 is unused until the loop point is confirmed."
     },
     {
+      "cue": 2,
+      "id": "the-firm",
+      "title": "Main Menu, The Firm",
+      "kind": "music",
+      "master": "the-firm.wav",
+      "source": "Marble Lobby Motif",
+      "loop": true
+    },
+    {
       "cue": 3,
       "id": "capital-moves",
       "title": "Arena Map, Capital Moves",
@@ -76,6 +85,15 @@
       "loop": true,
       "bpmMeasured": 91,
       "note": "Second take at the same tempo. Pick one by ear; the other is a candidate for cue 2 (The Firm) if it sits quieter."
+    },
+    {
+      "cue": 4,
+      "id": "the-tape",
+      "title": "Historical Briefing, The Tape",
+      "kind": "music",
+      "master": "the-tape.wav",
+      "source": "Market Watch",
+      "loop": true
     },
     {
       "cue": 5,
@@ -138,6 +156,16 @@
       "loop": false
     },
     {
+      "cue": 10,
+      "id": "market-open",
+      "title": "Market Open (run start, outcome-neutral)",
+      "kind": "sfx",
+      "master": "market-open.wav",
+      "source": "Market Open",
+      "loop": false,
+      "note": "Generated against the rewritten cue 10 prompt. Scheduled on entering a run, never on a result."
+    },
+    {
       "cue": 11,
       "id": "machine-beats-player",
       "title": "Machine Beats Player",
@@ -145,6 +173,44 @@
       "master": "machine-beats-player.wav",
       "source": "Consequence Lost",
       "loop": false
+    },
+    {
+      "cue": 12,
+      "id": "after-hours",
+      "title": "Results Screen, After Hours",
+      "kind": "music",
+      "master": "after-hours.wav",
+      "source": "Final Numbers",
+      "loop": true
+    },
+    {
+      "cue": 13,
+      "id": "final-score",
+      "title": "Final Session Score",
+      "kind": "music",
+      "master": "final-score.mp4",
+      "source": "Closing Motif",
+      "loop": false,
+      "note": "Plays once at run complete. Master is AAC in mp4, not WAV; replace with a WAV export when available."
+    },
+    {
+      "cue": 14,
+      "id": "trading-floor-bed",
+      "title": "Trading Floor Bed",
+      "kind": "ambience",
+      "master": "trading-floor-bed.wav",
+      "source": "Trading Floor Bed",
+      "loop": true
+    },
+    {
+      "cue": 15,
+      "id": "trading-floor-calm",
+      "title": "Calm Trading Floor",
+      "kind": "ambience",
+      "master": "trading-floor-calm.m4a",
+      "source": "Calm Trading Floor",
+      "loop": true,
+      "note": "Master is Opus in m4a, not WAV. Lossy-to-lossy encode."
     },
     {
       "cue": 16,
@@ -172,6 +238,15 @@
       "master": "exchange-bell.wav",
       "source": "Financial Exchange Opening Bell",
       "loop": false
+    },
+    {
+      "cue": 33,
+      "id": "office-hum",
+      "title": "Fluorescent Office Hum",
+      "kind": "ambience",
+      "master": "office-hum.wav",
+      "source": "Fluorescent Office Hum",
+      "loop": true
     },
     {
       "cue": 35,
