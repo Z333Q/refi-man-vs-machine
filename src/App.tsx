@@ -4,6 +4,7 @@ import type { ArenaId } from './lib/gameTypes';
 import { TipProvider } from './context/TipContext';
 import TipOverlay from './components/TipOverlay';
 import { VisualEventProvider } from './components/game/VisualEventLayer';
+import { SoundProvider, SoundToggle, useSound } from './context/SoundContext';
 import BootScreen from './screens/BootScreen';
 import TitleScreen from './screens/TitleScreen';
 import { OnboardingBridge } from './components/onboarding/OnboardingBridge';
@@ -96,6 +97,11 @@ function AppInner() {
   const [pendingMachine, setPendingMachine] = useState<string>('refi_rules');
 
   const go = useCallback((s: Screen) => setScreen(s), []);
+
+  // The sound system follows the screen; it never names a cue itself
+  // (src/lib/audioPolicy.ts decides what a screen sounds like).
+  const { setScreen: reportScreenToSound } = useSound();
+  useEffect(() => { reportScreenToSound(screen); }, [screen, reportScreenToSound]);
 
   const toggleHelp = useCallback(() => setShowHelp(h => !h), []);
 
@@ -216,9 +222,12 @@ function AppInner() {
                 REFI ALPHA
               </span>
             )}
+            <div className="ml-auto flex items-center h-full">
+              <SoundToggle />
+            </div>
             <button
               onClick={toggleHelp}
-              className="font-mono text-xs px-2.5 h-full text-phosphor-dim hover:text-phosphor-mid transition-colors whitespace-nowrap ml-auto"
+              className="font-mono text-xs px-2.5 h-full text-phosphor-dim hover:text-phosphor-mid transition-colors whitespace-nowrap"
             >
               ? HELP
             </button>
@@ -361,9 +370,11 @@ export default function App() {
   return (
     <GameProvider>
       <TipProvider>
-        <VisualEventProvider>
-          <AppInner />
-        </VisualEventProvider>
+        <SoundProvider>
+          <VisualEventProvider>
+            <AppInner />
+          </VisualEventProvider>
+        </SoundProvider>
       </TipProvider>
     </GameProvider>
   );

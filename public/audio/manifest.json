@@ -1,0 +1,296 @@
+{
+  "generatedAt": "2026-09-12T04:55:31.979Z",
+  "sampleRate": 48000,
+  "cues": [
+    {
+      "cue": 1,
+      "id": "0930-full",
+      "title": "Title Theme, 9:30 (full)",
+      "kind": "music",
+      "src": "/audio/music/0930-full.opus",
+      "loop": false,
+      "durationSec": 179.96,
+      "master": "0930-theme.wav"
+    },
+    {
+      "cue": 1,
+      "id": "0930-intro",
+      "title": "Title Theme, 9:30 (intro)",
+      "kind": "music",
+      "src": "/audio/music/0930-intro.opus",
+      "loop": false,
+      "durationSec": 30.01,
+      "master": "0930-theme.wav"
+    },
+    {
+      "cue": 1,
+      "id": "0930-loop",
+      "title": "Title Theme, 9:30 (loop)",
+      "kind": "music",
+      "src": "/audio/music/0930-loop.opus",
+      "loop": true,
+      "durationSec": 60.01,
+      "master": "0930-theme.wav"
+    },
+    {
+      "cue": 2,
+      "id": "the-firm",
+      "title": "Main Menu, The Firm",
+      "kind": "music",
+      "src": "/audio/music/the-firm.opus",
+      "loop": true,
+      "durationSec": 74.81,
+      "master": "the-firm.wav"
+    },
+    {
+      "cue": 3,
+      "id": "capital-moves",
+      "title": "Arena Map, Capital Moves",
+      "kind": "music",
+      "src": "/audio/music/capital-moves.opus",
+      "loop": true,
+      "durationSec": 89.73,
+      "master": "capital-moves.wav"
+    },
+    {
+      "cue": 3,
+      "id": "capital-moves-alt",
+      "title": "Arena Map, Capital Moves (alt)",
+      "kind": "music",
+      "src": "/audio/music/capital-moves-alt.opus",
+      "loop": true,
+      "durationSec": 89.77,
+      "master": "capital-moves-alt.wav"
+    },
+    {
+      "cue": 4,
+      "id": "the-tape",
+      "title": "Historical Briefing, The Tape",
+      "kind": "music",
+      "src": "/audio/music/the-tape.opus",
+      "loop": true,
+      "durationSec": 89.97,
+      "master": "the-tape.wav"
+    },
+    {
+      "cue": 5,
+      "id": "the-position",
+      "title": "Decision Screen, The Position",
+      "kind": "music",
+      "src": "/audio/music/the-position.opus",
+      "loop": true,
+      "durationSec": 49.77,
+      "master": "the-position.wav"
+    },
+    {
+      "cue": 5,
+      "id": "the-position-alt",
+      "title": "Decision Screen, The Position (alt)",
+      "kind": "music",
+      "src": "/audio/music/the-position-alt.opus",
+      "loop": true,
+      "durationSec": 56.37,
+      "master": "the-position-alt.wav"
+    },
+    {
+      "cue": 6,
+      "id": "order-submitted",
+      "title": "Order Submitted",
+      "kind": "sfx",
+      "src": "/audio/sfx/order-submitted.ogg",
+      "loop": false,
+      "durationSec": 2.76,
+      "master": "order-submitted.wav"
+    },
+    {
+      "cue": 7,
+      "id": "the-floor",
+      "title": "Market Opens, The Floor",
+      "kind": "music",
+      "src": "/audio/music/the-floor.opus",
+      "loop": true,
+      "durationSec": 88.81,
+      "master": "the-floor.wav"
+    },
+    {
+      "cue": 8,
+      "id": "margin",
+      "title": "High Volatility, Margin",
+      "kind": "music",
+      "src": "/audio/music/margin.opus",
+      "loop": true,
+      "durationSec": 74.81,
+      "master": "margin.wav"
+    },
+    {
+      "cue": 9,
+      "id": "machine-reveal",
+      "title": "Machine Reveal, The Model",
+      "kind": "sfx",
+      "src": "/audio/sfx/machine-reveal.ogg",
+      "loop": false,
+      "durationSec": 5,
+      "master": "machine-reveal.wav"
+    },
+    {
+      "cue": 10,
+      "id": "market-open",
+      "title": "Market Open (run start, outcome-neutral)",
+      "kind": "sfx",
+      "src": "/audio/sfx/market-open.ogg",
+      "loop": false,
+      "durationSec": 7.84,
+      "master": "market-open.wav"
+    },
+    {
+      "cue": 11,
+      "id": "machine-beats-player",
+      "title": "Machine Beats Player",
+      "kind": "sfx",
+      "src": "/audio/sfx/machine-beats-player.ogg",
+      "loop": false,
+      "durationSec": 9.2,
+      "master": "machine-beats-player.wav"
+    },
+    {
+      "cue": 12,
+      "id": "after-hours",
+      "title": "Results Screen, After Hours",
+      "kind": "music",
+      "src": "/audio/music/after-hours.opus",
+      "loop": true,
+      "durationSec": 90.01,
+      "master": "after-hours.wav"
+    },
+    {
+      "cue": 13,
+      "id": "final-score",
+      "title": "Final Session Score",
+      "kind": "music",
+      "src": "/audio/music/final-score.opus",
+      "loop": false,
+      "durationSec": 38.41,
+      "master": "final-score.mp4"
+    },
+    {
+      "cue": 14,
+      "id": "trading-floor-bed",
+      "title": "Trading Floor Bed",
+      "kind": "ambience",
+      "src": "/audio/ambience/trading-floor-bed.opus",
+      "loop": true,
+      "durationSec": 13.09,
+      "master": "trading-floor-bed.wav"
+    },
+    {
+      "cue": 15,
+      "id": "trading-floor-calm",
+      "title": "Calm Trading Floor",
+      "kind": "ambience",
+      "src": "/audio/ambience/trading-floor-calm.opus",
+      "loop": true,
+      "durationSec": 12.38,
+      "master": "trading-floor-calm.m4a"
+    },
+    {
+      "cue": 16,
+      "id": "trading-floor-panic",
+      "title": "Panic Trading Floor",
+      "kind": "ambience",
+      "src": "/audio/ambience/trading-floor-panic.opus",
+      "loop": true,
+      "durationSec": 13.57,
+      "master": "trading-floor-panic.wav"
+    },
+    {
+      "cue": 21,
+      "id": "printer-continuous",
+      "title": "Continuous Market Printer",
+      "kind": "ambience",
+      "src": "/audio/ambience/printer-continuous.opus",
+      "loop": true,
+      "durationSec": 17.85,
+      "master": "printer-continuous.wav"
+    },
+    {
+      "cue": 31,
+      "id": "exchange-bell",
+      "title": "Exchange Bell",
+      "kind": "sfx",
+      "src": "/audio/sfx/exchange-bell.ogg",
+      "loop": false,
+      "durationSec": 9.2,
+      "master": "exchange-bell.wav"
+    },
+    {
+      "cue": 33,
+      "id": "office-hum",
+      "title": "Fluorescent Office Hum",
+      "kind": "ambience",
+      "src": "/audio/ambience/office-hum.opus",
+      "loop": true,
+      "durationSec": 12.13,
+      "master": "office-hum.wav"
+    },
+    {
+      "cue": 35,
+      "id": "office-door-close",
+      "title": "Executive Office Door",
+      "kind": "sfx",
+      "src": "/audio/sfx/office-door-close.ogg",
+      "loop": false,
+      "durationSec": 9.96,
+      "master": "office-door-close.wav"
+    },
+    {
+      "cue": 42,
+      "id": "machine-calculation",
+      "title": "Machine Calculation",
+      "kind": "sfx",
+      "src": "/audio/sfx/machine-calculation.ogg",
+      "loop": false,
+      "durationSec": 3.92,
+      "master": "machine-calculation.wav"
+    },
+    {
+      "cue": 47,
+      "id": "market-shock",
+      "title": "Big Market Shock",
+      "kind": "sfx",
+      "src": "/audio/sfx/market-shock.ogg",
+      "loop": false,
+      "durationSec": 6.4,
+      "master": "market-shock.mp4"
+    },
+    {
+      "cue": 48,
+      "id": "risk-control-ok",
+      "title": "Successful Risk Control",
+      "kind": "sfx",
+      "src": "/audio/sfx/risk-control-ok.ogg",
+      "loop": false,
+      "durationSec": 12.12,
+      "master": "risk-control-ok.wav"
+    },
+    {
+      "cue": 50,
+      "id": "return-to-map",
+      "title": "Return to Arena Map",
+      "kind": "sfx",
+      "src": "/audio/sfx/return-to-map.ogg",
+      "loop": false,
+      "durationSec": 2.72,
+      "master": "return-to-map.wav"
+    },
+    {
+      "cue": null,
+      "id": "market-watch-start",
+      "title": "Market Watch (start)",
+      "kind": "music",
+      "src": "/audio/music/market-watch-start.opus",
+      "loop": false,
+      "durationSec": 24.61,
+      "master": "market-watch-start.wav"
+    }
+  ]
+}

@@ -22,7 +22,8 @@
     "vendor-gate": "node scripts/vendor-coupling-gate.mjs",
     "test:schema": "node --import tsx --test db/schema.test.ts",
     "schema-drift-gate": "node scripts/schema-drift-gate.mjs",
-    "pointer-lane-gate": "node scripts/pointer-lane-gate.mjs"
+    "pointer-lane-gate": "node scripts/pointer-lane-gate.mjs",
+    "audio:build": "node scripts/audio-build.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
