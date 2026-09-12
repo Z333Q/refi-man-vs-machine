@@ -1,3 +1,5 @@
+import { SoundToggle } from '../context/SoundContext';
+
 interface Props {
   onClose: () => void;
 }
@@ -57,6 +59,15 @@ const SECTIONS = [
       'ENTER: Confirm commit (when in confirm state)',
       'ESC: Cancel order / close overlay',
       '? or F10: Open this help screen',
+    ],
+  },
+  {
+    title: 'SOUND',
+    items: [
+      'FX: Interface confirmation. The commit stamp, the reveal, the closing bell. Same cue on every result.',
+      'AMB: Room tone. The tape printer under the market advance, the floor in stress phases.',
+      'MUS: Music. Off until you turn it on. Decision, market and title cues.',
+      'Switches are at the top of this screen and in the chrome bar. Nothing plays before your first key or tap.',
     ],
   },
   {
@@ -120,6 +131,7 @@ export default function HelpScreen({ onClose }: Props) {
           <div className="text-phosphor text-lg font-bold">PLAYER REFERENCE</div>
         </div>
         <div className="flex items-center gap-4">
+          <div className="h-4"><SoundToggle /></div>
           <div className="text-phosphor-dim text-xs tracking-widest">F10 OR ? TO TOGGLE</div>
           <button
             onClick={onClose}

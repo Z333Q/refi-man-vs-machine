@@ -3,7 +3,7 @@ import { useGame } from '../context/GameContext';
 import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
 import { getArena } from '../lib/arenas';
 import { useTips, type TipGameState } from '../context/TipContext';
-import { useSound } from '../context/SoundContext';
+import { useSound, SoundToggle } from '../context/SoundContext';
 import { runIntensity } from '../lib/audioPolicy';
 import type { ActionBranch, ActionCode, ArenaId, ModuleCode, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
@@ -1004,6 +1004,12 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           >
             {portfolioGain >= 0 ? '+' : ''}{portfolioGain.toFixed(2)}%
           </span>
+          {/* The run is fullscreen, so the chrome bar's sound switches are
+              not on screen. Compact copy here on wide layouts; on narrow ones
+              the help screen carries them. */}
+          <div className="hidden sm:flex items-center h-4 pl-1">
+            <SoundToggle compact />
+          </div>
           {onHelp && (
             <button
               onClick={onHelp}

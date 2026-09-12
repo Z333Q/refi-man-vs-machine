@@ -142,11 +142,13 @@ const CHANNEL_LABEL: Record<SoundChannel, string> = { fx: 'FX', ambient: 'AMB', 
  * Three switches in the chrome bar. State is written in the label, not only
  * in the colour (§62): an off channel reads as struck through.
  */
-export function SoundToggle() {
+export function SoundToggle({ compact = false }: { compact?: boolean }) {
   const { prefs, toggle } = useSound();
   return (
     <div className="flex items-center h-full flex-shrink-0" role="group" aria-label="Sound">
-      <span className="font-mono text-xs text-phosphor-dim tracking-widest pr-1.5 select-none">SOUND</span>
+      {!compact && (
+        <span className="font-mono text-xs text-phosphor-dim tracking-widest pr-1.5 select-none">SOUND</span>
+      )}
       {(['fx', 'ambient', 'music'] as SoundChannel[]).map(ch => {
         const on = prefs[ch];
         return (
