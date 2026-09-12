@@ -84,6 +84,15 @@ function audioContextCtor(): AudioContextCtor | null {
 let context: AudioContext | null = null;
 
 /**
+ * The page's one AudioContext, or null before the unlock gesture. The asset
+ * engine (src/lib/audioEngine.ts) builds its graph on this rather than
+ * opening a second context, so the same gesture unlocks both.
+ */
+export function getAudioContext(): AudioContext | null {
+  return context;
+}
+
+/**
  * Unlock audio from a real user gesture. The grip that starts a pull is
  * exactly that gesture, so this is called on the first pointerdown of a run
  * and is a no-op afterwards.

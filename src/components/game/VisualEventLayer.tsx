@@ -8,6 +8,7 @@ import {
 } from 'react';
 import type { GameVisualEvent, GameVisualEventType } from '../../lib/gameTypes';
 import { VISUAL_PRIORITY } from '../../lib/gameTypes';
+import { useSound } from '../../context/SoundContext';
 import CorrelationCollapse from './CorrelationCollapse';
 import MachineCompile from './MachineCompile';
 import CashReservoir from './CashReservoir';
@@ -155,8 +156,12 @@ export function VisualEventProvider({ children, reducedMotion = false }: Provide
   const [queue, setQueue] = useState<GameVisualEvent[]>([]);
   const [active, setActive] = useState<GameVisualEvent | null>(null);
   const idCounterRef = useRef(0);
+  const { event: soundEvent } = useSound();
 
   const emit = useCallback((event: Omit<GameVisualEvent, 'id' | 'createdAt'>) => {
+    // The sound layer hears every visual event; the policy decides which are
+    // audible (most are not, and outcome events never are).
+    soundEvent(event.type);
     const fullEvent: GameVisualEvent = {
       ...event,
       id: `vis_${Date.now()}_${++idCounterRef.current}`,
@@ -171,7 +176,7 @@ export function VisualEventProvider({ children, reducedMotion = false }: Provide
       );
       return updated;
     });
-  }, []);
+  }, [soundEvent]);
 
   // Promote from queue to active when nothing is running
   useEffect(() => {

@@ -3,6 +3,8 @@ import { useGame } from '../context/GameContext';
 import { latestUnfinishedRun, type RunRecord } from '../lib/runRecord';
 import { getArena } from '../lib/arenas';
 import { useTips, type TipGameState } from '../context/TipContext';
+import { useSound } from '../context/SoundContext';
+import { runIntensity } from '../lib/audioPolicy';
 import type { ActionBranch, ActionCode, ArenaId, ModuleCode, ThesisCode } from '../lib/gameTypes';
 import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
@@ -90,6 +92,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
 
   const { run, lastCheckpointScore, lastCheckpointFlags, moduleJustUnlocked, xpJustEarned } = state;
   const { triggerEvent, reportGameState } = useTips();
+  const { prefs: soundPrefs, setRunState: reportRunStateToSound } = useSound();
   const { emit: emitVisual } = useVisualEvents();
 
   // ─── Tip tracking refs (prevent duplicate triggers) ──────────────────────────
@@ -388,11 +391,17 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
       : run ? 'DECISION_REQUIRED'
       : 'IDLE';
     reportGameState(state);
-  }, [thesisPrompt, commitConfirm, run?.phase, revealDelay, run, reportGameState]);
+    // The same presentation state drives the sound scene: decision music,
+    // the tape under the advance, the duck under the reveal, the closing bell.
+    reportRunStateToSound(state, runIntensity(currentCheckpointData?.phase));
+  }, [thesisPrompt, commitConfirm, run?.phase, revealDelay, run, reportGameState, reportRunStateToSound, currentCheckpointData?.phase]);
 
   // Leaving the run screen must reopen the gate, or a tip queued during a
   // resolution would be stuck behind a state nothing is going to change.
-  useEffect(() => () => reportGameState('IDLE'), [reportGameState]);
+  useEffect(() => () => {
+    reportGameState('IDLE');
+    reportRunStateToSound('IDLE', 'CALM');
+  }, [reportGameState, reportRunStateToSound]);
 
   // RESOLVING: MachinePipeline drives reveal via onComplete → setRevealDelay(1)
   // COMPARING/LEARNING: show content immediately
@@ -821,7 +830,8 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
   // TODO(addendum-c): the player-facing mute/settings surface is not built yet,
   // so the tick channel is left audible and only reduced motion is honoured.
   // Tracked as outstanding Addendum C work; see the PR report.
-  const audioMuted = false;
+  // The gesture click follows the FX switch in the chrome bar.
+  const audioMuted = !soundPrefs.fx;
 
   // ─── Turnover ────────────────────────────────────────────────────────────────
 
