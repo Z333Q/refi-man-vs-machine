@@ -92,6 +92,17 @@ test('a module earned on the final checkpoint is announced by the run completing
   assert.equal(done.pendingModuleUnlock, null);
 });
 
+test('committing ends the notice: it belongs to the decision surface it opened on', () => {
+  const s = withUnlock();
+  const next = reducer(s, { type: 'COMMIT_DECISION', command: { action: 'HOLD', conviction: 70 } });
+  assert.equal(
+    next.moduleJustUnlocked,
+    null,
+    'a notice left standing through a commit reappears over the market resolution, ' +
+    'where its target tab does not exist and it becomes a full-screen modal',
+  );
+});
+
 test('the player can dismiss it directly', () => {
   const next = reducer(withUnlock(), { type: 'CLEAR_MODULE_UNLOCK' });
   assert.equal(next.moduleJustUnlocked, null);

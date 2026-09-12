@@ -178,6 +178,12 @@ export function reducer(state: GameState, action: GameAction): GameState {
         lastCheckpointScore: score,
         lastCheckpointFlags: flags,
         xpJustEarned: xpEarned,
+        // The notice belongs to the decision surface it was shown on, and the
+        // commit is the end of that surface. Left standing it survived into
+        // the resolve phase, where the tab it points at is not rendered, so it
+        // degraded into a full-screen modal over the market resolution: the
+        // very complaint this change set out to fix, in a new costume.
+        moduleJustUnlocked: null,
         pendingModuleUnlock: newModuleUnlocks[0] ?? null,
         profile: {
           ...state.profile,

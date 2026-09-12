@@ -2089,7 +2089,10 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           says what the module is for, and leaves the panel open behind it. */}
       {(() => {
         const coachActive = !coachDone && run.currentCheckpoint === 1;
-        if (!moduleJustUnlocked || coachActive) return null;
+        // Only over the decision surface. The tab it points at exists only
+        // there, and a notice with no target degrades into a full-screen
+        // modal, which must never land over a resolution.
+        if (!moduleJustUnlocked || coachActive || !decisionPhase) return null;
         const dest = MODULE_DEST[moduleJustUnlocked];
         const def = getModuleByCode(moduleJustUnlocked);
         const name = def?.label ?? moduleJustUnlocked.replace(/_/g, ' ');
