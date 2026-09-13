@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { gotoScreen, resetProgress, dismissOverlays, skipFirstRunCoaching } from './helpers';
+import { gotoScreen, resetProgress, dismissOverlays, skipFirstRunCoaching, seedOverspentRun } from './helpers';
 
 // §62 makes specific, checkable claims. They have never been checked.
 
@@ -84,5 +84,29 @@ test('the turnover meter exposes its state to assistive tech', async ({ page }) 
 
   const meter = page.getByRole('meter', { name: /TURNOVER ALLOWANCE SPENT/ });
   await expect(meter).toHaveCount(1);
-  await expect(meter).toHaveAttribute('aria-valuenow', /\d+/);
+  await expect(meter).toHaveAttribute('aria-valuenow', /^\d+$/);
+  await expect(meter).toHaveAttribute('aria-valuemax', '100');
+  // valuetext carries the real figure in words, under and over the allowance.
+  await expect(meter).toHaveAttribute('aria-valuetext', /^\d+% of turnover allowance spent$/);
+});
+
+test('an overspent turnover meter keeps a valid ARIA range and says so in words', async ({ page }) => {
+  // The allowance is scored, never a lock, so the spend can pass 100%. The
+  // meter contract cannot: valuenow is clamped to valuemax and the true
+  // percentage, with the consequence, travels in valuetext (owner review, #77).
+  await resetProgress(page);
+  await seedOverspentRun(page);
+  await gotoScreen(page, 'CORE LOOP');
+  await page.getByRole('button', { name: /RESUME RUN/ }).click();
+  await dismissOverlays(page);
+
+  const meter = page.getByRole('meter', { name: /TURNOVER ALLOWANCE SPENT/ });
+  await expect(meter).toHaveCount(1);
+  await expect(meter).toHaveAttribute('aria-valuenow', '100');
+  await expect(meter).toHaveAttribute('aria-valuemax', '100');
+  const text = await meter.getAttribute('aria-valuetext');
+  expect(text).toMatch(/^(1[0-9][0-9]|[2-9][0-9][0-9])% of turnover allowance spent\. Allowance exceeded; stances remain available and turnover discipline is penalized\.$/);
+  // And the visual bar is clamped too.
+  const width = await meter.locator('div').first().evaluate(el => (el as HTMLElement).style.width);
+  expect(width).toBe('100%');
 });

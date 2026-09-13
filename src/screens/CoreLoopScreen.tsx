@@ -874,6 +874,13 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
   // notice says so, because a spent meter used to grey the stances out with
   // no explanation and read as a bug (2026-09-13).
   const overAllowance = portfolio.turnoverUsed > turnoverBudget + 1e-9;
+  // The meter's ARIA contract is 0..100; the spend is not, so valuenow is
+  // clamped and the real figure travels in valuetext (owner review of #77).
+  const turnoverPct = Math.round(turnoverSpentPct * 100);
+  const turnoverValueNow = Math.min(100, turnoverPct);
+  const turnoverValueText = overAllowance
+    ? `${turnoverPct}% of turnover allowance spent. Allowance exceeded; stances remain available and turnover discipline is penalized.`
+    : `${turnoverPct}% of turnover allowance spent`;
   // Allowance state is caution at most. Red is the critical drawdown breach only.
   const turnoverColor = turnoverSpentPct > 0.60 ? 'text-alert-amber' : 'text-phosphor';
   const turnoverBarColor = turnoverSpentPct > 0.60 ? 'bg-alert-amber' : 'bg-phosphor';
@@ -1119,9 +1126,10 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
           className="mt-1 h-1 bg-phosphor/10"
           role="meter"
           aria-label="TURNOVER ALLOWANCE SPENT"
-          aria-valuenow={Math.round(turnoverSpentPct * 100)}
+          aria-valuenow={turnoverValueNow}
           aria-valuemin={0}
           aria-valuemax={100}
+          aria-valuetext={turnoverValueText}
         >
           <div
             className={`h-full ${turnoverBarColor}`}
@@ -1204,9 +1212,10 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                 className="mt-1 h-1.5 bg-phosphor/10"
                 role="meter"
                 aria-label="TURNOVER ALLOWANCE SPENT"
-                aria-valuenow={Math.round(turnoverSpentPct * 100)}
+                aria-valuenow={turnoverValueNow}
                 aria-valuemin={0}
                 aria-valuemax={100}
+                aria-valuetext={turnoverValueText}
               >
                 <div
                   className={`h-full ${turnoverBarColor}`}

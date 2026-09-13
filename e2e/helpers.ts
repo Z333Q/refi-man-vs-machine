@@ -334,3 +334,38 @@ export async function playCheckpoint(page: Page): Promise<boolean> {
   await clickThrough(page.getByRole('button', { name: /NEXT SIGNAL/ }), 'NEXT SIGNAL');
   return true;
 }
+
+/**
+ * Seed a resumable run whose turnover spend is past its allowance.
+ *
+ * Built through the engine, not forged: resume replays the recorded decisions
+ * and refuses a record whose numbers it cannot reproduce, so the only honest
+ * way to put an overspent meter on screen is to commit the stances that
+ * overspend it. Defensive stances every checkpoint do that inside COVID.
+ */
+export async function seedOverspentRun(page: Page): Promise<void> {
+  const [{ createInitialRun, commitDecisionCommand, advanceRunCheckpoint, attachThesis }, { projectRun }] =
+    await Promise.all([import('../src/lib/runEngine'), import('../src/lib/runRecord')]);
+  await import('../src/lib/arenaIndex');
+  const { getCheckpoint } = await import('../src/lib/arenas');
+
+  let run = { ...createInitialRun(3, 'covid_black_swan'), id: 'seed_overspent' };
+  for (let guard = 0; guard < 30 && run.portfolio.turnoverUsed <= run.turnoverBudget; guard++) {
+    const cp = getCheckpoint(run.arenaId, run.currentCheckpoint);
+    if (!cp) break;
+    const offered = cp.availableActions.map(a => a.actionCode);
+    const action = offered.find(a => a === 'ROTATE_DEFENSIVE' || a === 'RAISE_CASH')
+      ?? offered.find(a => a !== 'HOLD') ?? 'HOLD';
+    const out = commitDecisionCommand(run, { action, conviction: 60 });
+    if (!out) throw new Error(`seedOverspentRun: ${action} refused at CP${run.currentCheckpoint}`);
+    run = attachThesis(out.run, 'THESIS_UNCHANGED');
+    if (run.portfolio.turnoverUsed > run.turnoverBudget) break;
+    run = advanceRunCheckpoint(run);
+  }
+  if (run.portfolio.turnoverUsed <= run.turnoverBudget) throw new Error('seedOverspentRun: never overspent');
+  // Leave the run mid-resolution on its last commit so the resume gate offers it.
+  const record = projectRun(run, '2026-01-02T00:00:00.000Z');
+  await page.evaluate((rec) => {
+    localStorage.setItem('refi_run_records', JSON.stringify([rec]));
+  }, record);
+}
