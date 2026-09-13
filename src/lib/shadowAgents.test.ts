@@ -37,17 +37,31 @@ const deployed: DeployedMachine = {
   buildHash: 'AAAA:BBBB:CCCC', config: { ...DEFAULT_MACHINE_CONFIG, signal: 'REGIME_CLASSIFIER' },
 };
 
-test('an authored opponent leaves the run exactly as before', () => {
+test('an authored opponent plays the content stance on a book of its own', () => {
+  // It used to be a no-op scored by its authored par while the player was
+  // scored by the seven-component model: the headline contest compared two
+  // different rubrics (2026-09-12 review). The stance stays authored and
+  // point-in-time; what changed is that it now costs turnover, carries
+  // drawdown and earns a Sharpe like any other competitor.
   const run = createInitialRun(1, ARENA, 'refi_rules');
   assert.equal(run.opponentPolicy.kind, 'AUTHORED');
-  assert.equal(run.opponentAgent, null);
+  assert.ok(run.opponentAgent, 'the authored opponent carries a book');
   assert.equal(run.deployed, null);
+
   const out = commitDecisionCommand(run, { action: 'HOLD', conviction: 60 });
   assert.ok(out);
   const cp = getCheckpoint(ARENA, 1)!;
-  assert.equal(out.run.decisions[0].machineActionCode, cp.machineDecision.actionCode);
-  assert.equal(out.run.decisions[0].machineReason, undefined);
+  assert.equal(
+    out.run.decisions[0].machineActionCode,
+    cp.machineDecision.actionCode,
+    'the stance is still the content\u2019s own call',
+  );
+  assert.equal(out.run.decisions[0].machineReason, cp.machineDecision.policyReason);
   assert.equal(out.run.decisions[0].deployedActionCode, undefined);
+
+  const agent = out.run.opponentAgent!;
+  assert.notEqual(agent.portfolio.value, run.opponentAgent!.portfolio.value, 'its book moved');
+  assert.ok(agent.score > 0 && agent.score <= 100, 'and it earned a real score');
 });
 
 test('the passive index holds every checkpoint and says why', () => {

@@ -43,10 +43,10 @@ export interface ComponentDoc {
 export const SCORE_COMPONENTS: ComponentDoc[] = [
   {
     key: 'raerScore',
-    label: 'RISK-ADJUSTED EXCESS RETURN',
-    measures: 'Your return against the machine’s, divided by how far apart the two paths ran.',
-    matters: 'Beating a benchmark by taking more risk is not skill. This asks what the return cost in risk.',
-    improve: 'Look for stances that change the outcome without widening the range of outcomes.',
+    label: 'RISK-ADJUSTED RETURN',
+    measures: 'Your run’s return so far divided by how much it moved around: Sharpe, on a fixed scale where 0 is 50 and +1 is 70.',
+    matters: 'Beating a benchmark by taking more risk is not skill. This asks what the return cost in risk. The machine is measured the same way, on the same scale, so neither score is defined by the other.',
+    improve: 'Steadier returns score better than the same total taken in lurches. It is measured across the whole run, so one loud checkpoint does not settle it.',
   },
   {
     key: 'drawdownScore',

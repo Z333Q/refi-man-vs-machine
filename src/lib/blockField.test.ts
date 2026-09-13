@@ -7,10 +7,10 @@ import {
   type BlockInput,
 } from './blockField';
 import {
-  createInitialPortfolio, simulatePortfolioAdvance, nextCashWeight,
+  createInitialPortfolio, simulatePortfolioAdvance, stanceAllocation, nextCashWeight, allocationEffectFor,
   stanceCashDelta, CASH_WEIGHT_MIN, CASH_WEIGHT_MAX,
 } from './runEngine';
-import { allArenas } from '../lib/arenas';
+import { allArenas, getCheckpoint } from '../lib/arenas';
 import '../lib/arenaIndex';
 import { reducer, type GameState } from '../context/gameReducer';
 import { createDefaultProfile, checkModuleUnlocks, TERMINAL_MODULES } from './progressionEngine';
@@ -82,8 +82,13 @@ test('preview cash equals committed cash for every stance, in every arena', () =
   for (const arena of allArenas()) {
     const p = createInitialPortfolio(arena.id);
     for (const action of ALL_ACTIONS) {
-      const preview = previewStanceBlocks(p.positions, p.cashWeight, action);
-      const committed = simulatePortfolioAdvance(p, action, 1, arena.id);
+      const cp = getCheckpoint(arena.id, 1)!;
+      const preview = previewStanceBlocks(p.positions, p.cashWeight, action, allocationEffectFor(action, cp));
+      // Against the stance's own allocation, not the resolved book: weights
+      // drift with the market now, so the committed portfolio is the stance
+      // plus a checkpoint of returns. The preview promises the first of those
+      // and must equal it exactly.
+      const committed = stanceAllocation(p, action, cp);
       const previewCash = preview.find(b => b.isCash)!.weight;
       assert.ok(
         Math.abs(previewCash - committed.cashWeight) < EPS,
@@ -100,14 +105,14 @@ test('preview and engine agree at both cash boundaries', () => {
   assert.equal(nextCashWeight(atMin.cashWeight, 'ADD_RISK'), CASH_WEIGHT_MIN);
   assert.ok(Math.abs(
     previewStanceBlocks(atMin.positions, atMin.cashWeight, 'ADD_RISK').find(b => b.isCash)!.weight
-    - simulatePortfolioAdvance(atMin, 'ADD_RISK', 1, 'covid_black_swan').cashWeight,
+    - stanceAllocation(atMin, 'ADD_RISK').cashWeight,
   ) < EPS);
   // Pinned at the ceiling: RAISE_CASH cannot take cash above the maximum.
   const atMax = { ...p, cashWeight: CASH_WEIGHT_MAX };
   assert.equal(nextCashWeight(atMax.cashWeight, 'RAISE_CASH'), CASH_WEIGHT_MAX);
   assert.ok(Math.abs(
     previewStanceBlocks(atMax.positions, atMax.cashWeight, 'RAISE_CASH').find(b => b.isCash)!.weight
-    - simulatePortfolioAdvance(atMax, 'RAISE_CASH', 1, 'covid_black_swan').cashWeight,
+    - stanceAllocation(atMax, 'RAISE_CASH').cashWeight,
   ) < EPS);
 });
 

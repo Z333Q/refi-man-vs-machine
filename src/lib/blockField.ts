@@ -1,5 +1,6 @@
-import type { ActionCode } from './gameTypes';
+import type { ActionCode, AllocationEffect, PortfolioPosition } from './gameTypes';
 import { nextCashWeight } from './runEngine';
+import { reallocate } from './allocation';
 
 // ─── Block field ──────────────────────────────────────────────────────────────
 // The portfolio as area: one block per position, area proportional to
@@ -108,7 +109,15 @@ export function previewStanceBlocks(
   positions: readonly PositionView[],
   currentCashWeight: number,
   action: ActionCode,
+  effect?: AllocationEffect,
 ): BlockInput[] {
+  // Where the card promises a specific trade, preview that trade. Previewing
+  // the generic reading of the code would draw a picture of a portfolio the
+  // commit is not going to produce.
+  if (effect && effect.moves.length > 0) {
+    const moved = reallocate(positions as PortfolioPosition[], 0, 'HOLD', effect);
+    return blocksFromPortfolio(moved.positions, moved.cashWeight);
+  }
   return blocksFromPortfolio(positions, nextCashWeight(currentCashWeight, action));
 }
 

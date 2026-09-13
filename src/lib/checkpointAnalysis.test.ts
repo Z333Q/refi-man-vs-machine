@@ -18,7 +18,12 @@ function sampleScore(confidence: number) {
     flags: [],
     confidence,
     turnoverUsed: 0.05,
+    turnoverBudget: 0.40,
+    checkpointReturn: -0.02,
+    sharpe: null,
+    sharpeSamples: 0,
     portfolioDD: -0.03,
+    troughDD: -0.03,
   });
 }
 

@@ -1,5 +1,6 @@
+import { reallocate, sectorExposureOf } from './allocation';
 import type {
-  ActionCode, ArenaId, BehavioralFlag, CheckpointData, CheckpointScore,
+  ActionCode, AllocationEffect, ArenaId, BehavioralFlag, CheckpointData, CheckpointScore,
   DeployedMachine, DimensionCode, OpponentPolicy, PortfolioState, RunDecision,
   RunState, ShadowAgent, ThesisCode,
 } from './gameTypes';
@@ -44,7 +45,29 @@ export const CRITICAL_DRAWDOWN = -0.20;
  * so a 14-checkpoint arena still gets 0.40 and the scarcity ratio every
  * existing branch price was authored against is unchanged.
  */
-export const TURNOVER_PER_CHECKPOINT = 0.40 / 14;
+/**
+ * The allowance, restated once turnover became a derived quantity.
+ *
+ * The old figure was 0.40 over 14 checkpoints, calibrated against a table of
+ * authored per-stance fees averaging 5.00% for a non-HOLD stance. Turnover is
+ * now the traded weight a stance actually implies, measured across every
+ * offered stance at every checkpoint of all five arenas: a mean of 6.92%, or
+ * 1.382 times the fees the budget was sized against.
+ *
+ * That mean rose once the stance cards began executing the trades they
+ * describe. "ROTATE: sell travel, add JNJ/PG" moves more weight than the
+ * generic reading of ROTATE_DEFENSIVE did, because it is a larger trade, and
+ * the meter should say so.
+ *
+ * So the allowance is scaled by exactly that ratio and nothing else. A run
+ * affords the same number of stances it always did; what changed is that the
+ * price of each one now follows from the trades it makes, and a round trip
+ * costs twice a one-legged move rather than 1.4 times it.
+ */
+const LEGACY_ALLOWANCE_PER_CHECKPOINT = 0.40 / 14;
+const DERIVED_COST_RATIO = 1.382;
+export const TURNOVER_PER_CHECKPOINT =
+  Math.round(LEGACY_ALLOWANCE_PER_CHECKPOINT * DERIVED_COST_RATIO * 100000) / 100000;
 
 /** A run's total turnover budget, for an arena of the given length. */
 export function turnoverBudgetFor(totalCheckpoints: number): number {
@@ -59,22 +82,15 @@ export function turnoverBudgetFor(totalCheckpoints: number): number {
  */
 export const TURNOVER_BUDGET_START = turnoverBudgetFor(14);
 
-// Fallback turnover price per action code, used only where content has not
-// authored a branch for the committed action. Authored branch costs win.
+// The per-stance fee table that used to price turnover is gone. Turnover is
+// now derived from the trades a stance actually makes (see turnoverCostFor),
+// so a table of fees that nothing charges would be a second, wrong answer to
+// the same question sitting next to the right one.
 //
-// TUNING CONSTANTS, not game-design truth. These are provisional engine
-// defaults; the real values get calibrated against the 14-checkpoint
-// difficulty curve in the tuning pass.
-export const DEFAULT_TURNOVER_COST: Record<ActionCode, number> = {
-  HOLD: 0,
-  REDUCE: 0.05,
-  ROTATE_DEFENSIVE: 0.07,
-  ROTATE_RISK: 0.07,
-  RAISE_CASH: 0.04,
-  ADD_RISK: 0.06,
-  STAGED_BUY: 0.03,
-  STAGED_SELL: 0.03,
-};
+// Content still authors `turnoverCost` on each branch. It documents what the
+// author expected the stance to cost and the content tests hold it to the
+// shape of that intent (HOLD free, everything else positive); it no longer
+// prices anything.
 
 // ─── Initial state ────────────────────────────────────────────────────────────
 
@@ -111,6 +127,7 @@ function legacyCovidPortfolio(): PortfolioState {
     ],
     peakValue: STARTING_CAPITAL,
     drawdown: 0,
+    troughDrawdown: 0,
     volatility: 0.16,
     sectorExposure: {
       TECHNOLOGY: 0.20, FINANCIALS: 0.10, AIRLINES: 0.08,
@@ -155,7 +172,11 @@ export function createInitialRun(
   const deployed = options.deployed ?? null;
   return {
     opponentPolicy,
-    opponentAgent: opponentPolicy.kind === 'AUTHORED' ? null : freshShadow(arenaId),
+    // Every opponent carries a book, the authored one included. It used to be
+    // scored by its authored par while the player was scored by the component
+    // model, which made the headline Man vs Machine contest a comparison
+    // between two different rubrics.
+    opponentAgent: freshShadow(arenaId),
     deployed,
     deployedAgent: deployed ? freshShadow(arenaId) : null,
     id: null,
@@ -182,9 +203,51 @@ export function createInitialRun(
 
 // ─── Turnover budget ──────────────────────────────────────────────────────────
 
-export function turnoverCostFor(action: ActionCode, checkpoint?: CheckpointData): number {
-  const branch = checkpoint?.availableActions.find(a => a.actionCode === action);
-  return branch?.turnoverCost ?? DEFAULT_TURNOVER_COST[action];
+/**
+ * What a stance would cost this book, in traded weight.
+ *
+ * Derived from the transition the stance actually implies rather than read off
+ * an authored per-stance fee. The fee table priced ROTATE at 0.07 and
+ * RAISE_CASH at 0.04 while ROTATE moved no weight at all, so the meter was
+ * charging for trades that never happened and pricing a round trip at less
+ * than twice a sale (2026-09-12 playtest). Now a sale into cash costs its one
+ * leg and a rotation costs both of its own.
+ *
+ * Book-dependent, so it takes the portfolio: the same stance costs a
+ * concentrated book more than a balanced one, which is the lesson.
+ */
+/**
+ * The transition a stance means at a checkpoint: the authored one where the
+ * card promises a specific trade, the generic reading of the code otherwise.
+ *
+ * Every consumer goes through here — the commit, the shadow, the turnover
+ * meter, the Block Field preview and the replay — so the price quoted, the
+ * picture previewed and the trade executed cannot disagree.
+ */
+export function allocationEffectFor(
+  action: ActionCode,
+  checkpoint?: CheckpointData,
+): AllocationEffect | undefined {
+  return checkpoint?.availableActions.find(a => a.actionCode === action)?.allocationEffect;
+}
+
+export function stanceTransition(
+  portfolio: PortfolioState,
+  action: ActionCode,
+  checkpoint?: CheckpointData,
+) {
+  const effect = allocationEffectFor(action, checkpoint);
+  const nextCash = nextCashWeight(portfolio.cashWeight, action);
+  return reallocate(portfolio.positions, nextCash, action, effect);
+}
+
+export function turnoverCostFor(
+  portfolio: PortfolioState,
+  action: ActionCode,
+  checkpoint?: CheckpointData,
+): number {
+  if (action === 'HOLD') return 0;
+  return stanceTransition(portfolio, action, checkpoint).turnover;
 }
 
 export function turnoverRemaining(run: RunState): number {
@@ -209,7 +272,7 @@ export function canAffordAction(run: RunState, action: ActionCode, checkpoint?: 
   const cp = checkpoint ?? getCheckpoint(run.arenaId, run.currentCheckpoint);
   // Cents-scale epsilon so accumulated float error cannot bar an action that
   // exactly fits the remaining budget.
-  return run.portfolio.turnoverUsed + turnoverCostFor(action, cp) <= run.turnoverBudget + 1e-9;
+  return run.portfolio.turnoverUsed + turnoverCostFor(run.portfolio, action, cp) <= run.turnoverBudget + 1e-9;
 }
 
 /** The stances this checkpoint offers that the remaining budget still covers. */
@@ -226,23 +289,6 @@ export function isHoldOnly(run: RunState, checkpoint?: CheckpointData): boolean 
 
 // ─── Portfolio advance ────────────────────────────────────────────────────────
 
-/**
- * How much of the checkpoint's authored return a stance actually takes.
- *
- * Exported because the resolution race draws the same outcome it applies. If
- * the renderer carried its own copy of this table the two would drift, and the
- * curve would finish somewhere the score disagreed with. One table, both uses.
- */
-export function actionReturnMultiplier(action: ActionCode): number {
-  return (
-    action === 'REDUCE' ? 0.6 :
-    action === 'RAISE_CASH' ? 0.3 :
-    action === 'ADD_RISK' ? 1.4 :
-    action === 'ROTATE_DEFENSIVE' ? 0.7 :
-    1.0
-  );
-}
-
 // ─── Cash authority ───────────────────────────────────────────────────────────
 //
 // One place owns what a stance does to cash and where cash may sit. The Block
@@ -255,50 +301,183 @@ export function actionReturnMultiplier(action: ActionCode): number {
 export const CASH_WEIGHT_MIN = 0.05;
 export const CASH_WEIGHT_MAX = 0.60;
 
-/** What a stance does to cash, before clamping. */
+/**
+ * What a stance does to cash, before clamping.
+ *
+ * The staged pair move half of their full-sized equivalents, which is what
+ * staging means: the same direction, taken in two bites. They used to move
+ * nothing at all, so STAGED_BUY and STAGED_SELL were priced stances that did
+ * nothing to the book (2026-09-12 playtest).
+ */
 export function stanceCashDelta(action: ActionCode): number {
-  return action === 'RAISE_CASH' ? 0.10 : action === 'ADD_RISK' ? -0.05 : action === 'REDUCE' ? 0.05 : 0;
+  switch (action) {
+    case 'RAISE_CASH': return 0.10;
+    case 'REDUCE': return 0.05;
+    case 'ADD_RISK': return -0.05;
+    case 'STAGED_SELL': return 0.025;
+    case 'STAGED_BUY': return -0.025;
+    default: return 0;
+  }
 }
 
-/** The cash weight a stance produces, clamped to the engine's bounds. */
+/**
+ * The cash weight a stance produces.
+ *
+ * The bounds limit the *movement*, never the book. Weights drift with returns,
+ * so a deep enough selloff carries cash past 60% on its own, and a portfolio
+ * that drifted outside the band is a fact rather than an error.
+ *
+ * Clamping the absolute result inverted the stances at the boundary: from 70%
+ * cash, RAISE_CASH returned 60% — a command named "raise cash" that bought
+ * equities (2026-09-12 review). So the rule is directional. Outside the band,
+ * a stance that would push further out does nothing, and a stance that moves
+ * back toward the band moves by its full delta even if it does not get inside.
+ */
 export function nextCashWeight(currentCash: number, action: ActionCode): number {
-  return Math.max(CASH_WEIGHT_MIN, Math.min(CASH_WEIGHT_MAX, currentCash + stanceCashDelta(action)));
+  const delta = stanceCashDelta(action);
+  if (delta === 0) return currentCash;
+
+  if (delta > 0) {
+    // Raising cash. Already at or above the ceiling: refuse rather than sell.
+    if (currentCash >= CASH_WEIGHT_MAX) return currentCash;
+    return Math.min(CASH_WEIGHT_MAX, currentCash + delta);
+  }
+
+  // Deploying cash. Already at or below the floor: refuse rather than buy.
+  if (currentCash <= CASH_WEIGHT_MIN) return currentCash;
+  // From above the ceiling, deploy the full delta: moving toward the band is
+  // always allowed, even when one step does not reach it.
+  if (currentCash + delta > CASH_WEIGHT_MAX) return round4(currentCash + delta);
+  return Math.max(CASH_WEIGHT_MIN, currentCash + delta);
 }
 
+/** A checkpoint resolved once: the book it produced and the return it earned. */
+export interface ResolvedTransition {
+  portfolio: PortfolioState;
+  /** This checkpoint's portfolio return, as a fraction. */
+  checkpointReturn: number;
+  /** Traded weight this stance cost, before it was added to the run total. */
+  turnoverCost: number;
+}
+
+/**
+ * Execute a stance and let the market answer it, once.
+ *
+ * Callers need the resolved book *and* the return that produced it, and used
+ * to get them by running the advance twice or by dividing values afterwards.
+ * One call, one answer: the score and the run's next portfolio are the same
+ * transition, and cannot disagree.
+ */
+export function resolveTransition(
+  portfolio: PortfolioState,
+  action: ActionCode,
+  checkpointSeq: number,
+  arenaId: ArenaId = DEFAULT_ARENA_ID,
+): ResolvedTransition {
+  const cp = getCheckpoint(arenaId, checkpointSeq);
+  if (!cp) return { portfolio, checkpointReturn: 0, turnoverCost: 0 };
+
+  const { returnBias, volatilityDelta, correlationLevel, positionReturns } = cp.portfolioEffect;
+
+  // 1. The stance executes: the trade the card promised where it promised one,
+  //    the generic reading of the code otherwise. The trades are priced from
+  //    the transition itself.
+  const moved = stanceTransition(portfolio, action, cp);
+
+  // 2. Then the market moves the book the stance left behind.
+  //
+  //    This is the whole point of the rework. The return used to be the
+  //    checkpoint's authored bias times a per-stance multiplier, so a
+  //    defensive rotation helped by fiat rather than by what it held. Now it
+  //    helps exactly as much as the weights it moved into names the checkpoint
+  //    treated kindly, and cash earns nothing.
+  const symbolReturn = (symbol: string) => positionReturns?.[symbol] ?? returnBias;
+  const grown = moved.positions.map(pos => ({
+    pos,
+    value: pos.weight * (1 + symbolReturn(pos.symbol)),
+  }));
+
+  // 3. And the book drifts.
+  //
+  //    Weights are a consequence of what each holding is now worth, not the
+  //    target the stance set. Holding them at target would mean a portfolio
+  //    that silently rebalanced itself for free every checkpoint, which is
+  //    both a fiction and the death of the Recovery arena's drift lesson: the
+  //    winners are supposed to grow into a concentration the player has to
+  //    notice.
+  const equityValue = grown.reduce((a, g) => a + g.value, 0);
+  const total = equityValue + moved.cashWeight;
+  const portfolioReturn = total - 1;
+
+  const newValue = portfolio.value * (1 + portfolioReturn);
+  const peakValue = Math.max(portfolio.peakValue, newValue);
+  const newDrawdown = Math.min(0, (newValue - peakValue) / peakValue);
+  // Ratchets down only: the hole the book has been in is a fact about the run,
+  // and recovery is measured from it.
+  const troughDrawdown = Math.min(portfolio.troughDrawdown ?? 0, newDrawdown);
+  const newVolatility = Math.max(0.08, portfolio.volatility + volatilityDelta);
+
+  const drifted = grown.map(({ pos, value }) => ({
+    ...pos,
+    weight: round4(total > 0 ? value / total : 0),
+    pnl: pos.pnl + symbolReturn(pos.symbol),
+  }));
+
+  return {
+    checkpointReturn: portfolioReturn,
+    turnoverCost: moved.turnover,
+    portfolio: {
+      ...portfolio,
+      value: newValue,
+      peakValue,
+      drawdown: newDrawdown,
+      troughDrawdown,
+      volatility: newVolatility,
+      cashWeight: round4(total > 0 ? moved.cashWeight / total : moved.cashWeight),
+      turnoverUsed: round4(portfolio.turnoverUsed + moved.turnover),
+      correlationIndex: correlationLevel,
+      positions: drifted,
+      // Derived, every advance. A stored aggregate nothing recomputed is how
+      // the risk panel came to display the opening book for a whole run.
+      sectorExposure: sectorExposureOf(drifted),
+    },
+  };
+}
+
+/**
+ * The book a stance produces, before the market answers it.
+ *
+ * This is what the Block Field previews: "your portfolio after this stance".
+ * The resolved book is that plus a checkpoint of market drift, so the two are
+ * no longer the same object and the preview must be checked against this one.
+ */
+export function stanceAllocation(
+  portfolio: PortfolioState,
+  action: ActionCode,
+  checkpoint?: CheckpointData,
+): PortfolioState {
+  const moved = stanceTransition(portfolio, action, checkpoint);
+  return {
+    ...portfolio,
+    cashWeight: moved.cashWeight,
+    positions: moved.positions,
+    sectorExposure: sectorExposureOf(moved.positions),
+  };
+}
+
+/** The resolved book alone, for callers that do not need the return. */
 export function simulatePortfolioAdvance(
   portfolio: PortfolioState,
   action: ActionCode,
   checkpointSeq: number,
   arenaId: ArenaId = DEFAULT_ARENA_ID,
 ): PortfolioState {
-  const cp = getCheckpoint(arenaId, checkpointSeq);
-  if (!cp) return portfolio;
+  return resolveTransition(portfolio, action, checkpointSeq, arenaId).portfolio;
+}
 
-  const { returnBias, volatilityDelta, correlationLevel, positionReturns } = cp.portfolioEffect;
-  const actionMultiplier = actionReturnMultiplier(action);
-
-  const portfolioReturn = returnBias * actionMultiplier;
-  const newValue = portfolio.value * (1 + portfolioReturn);
-  const peakValue = Math.max(portfolio.peakValue, newValue);
-  const newDrawdown = Math.min(0, (newValue - peakValue) / peakValue);
-  const newVolatility = Math.max(0.08, portfolio.volatility + volatilityDelta);
-  const newCash = nextCashWeight(portfolio.cashWeight, action);
-  const newTurnover = portfolio.turnoverUsed + turnoverCostFor(action, cp);
-
-  return {
-    ...portfolio,
-    value: newValue,
-    peakValue,
-    drawdown: newDrawdown,
-    volatility: newVolatility,
-    cashWeight: newCash,
-    turnoverUsed: newTurnover,
-    correlationIndex: correlationLevel,
-    positions: portfolio.positions.map(pos => ({
-      ...pos,
-      pnl: pos.pnl + (positionReturns?.[pos.symbol] ?? returnBias) * actionMultiplier,
-    })),
-  };
+/** Turnover is carried to four places, like the weights it is made of. */
+function round4(n: number): number {
+  return Math.round(n * 10000) / 10000;
 }
 
 // ─── The decision command ─────────────────────────────────────────────────────
@@ -343,6 +522,70 @@ export function commitDecisionCommand(run: RunState, command: DecisionCommand): 
   return commitPendingDecision(prepareDecisionCommand(run, command));
 }
 
+/**
+ * The run-so-far Sharpe for one side, including the stance about to be scored.
+ *
+ * Both the player and the shadow go through here with their own decision
+ * history, so the two components are computed by identical independent
+ * normalisation and neither is defined in terms of the other (owner ruling,
+ * 2026-09-12). The replay is O(checkpoints) per call and a run is at most 22,
+ * so recomputing beats storing a series that could drift from the engine.
+ */
+export function sharpeSoFarFor(
+  history: readonly RunDecision[],
+  pick: (d: RunDecision) => ActionCode,
+  arenaId: ArenaId,
+): { sharpe: number | null; samples: number } {
+  const risk = runRiskAdjusted(
+    history.map(d => ({
+      checkpointSequence: d.checkpointSequence,
+      actionCode: pick(d),
+      machineActionCode: pick(d),
+    })),
+    arenaId,
+  );
+  return { sharpe: risk.playerSharpe, samples: risk.samples };
+}
+
+function sharpeSoFar(
+  history: readonly RunDecision[],
+  pick: (d: RunDecision) => ActionCode,
+  current: { sequence: number; action: ActionCode },
+  arenaId: ArenaId,
+): { sharpe: number | null; samples: number } {
+  const series: ReturnSeriesInput[] = [
+    ...history.map(d => ({
+      checkpointSequence: d.checkpointSequence,
+      actionCode: pick(d),
+      machineActionCode: pick(d),
+    })),
+    {
+      checkpointSequence: current.sequence,
+      actionCode: current.action,
+      machineActionCode: current.action,
+    },
+  ];
+  const risk = runRiskAdjusted(series, arenaId);
+  return { sharpe: risk.playerSharpe, samples: risk.samples };
+}
+
+/**
+ * The player's book as it stood entering a checkpoint, by replay.
+ *
+ * The run only carries its current portfolio, and the resolution race has to
+ * draw the move a single checkpoint made. Replaying the decisions before it is
+ * exact and deterministic, where the alternative — inverting the current book —
+ * is not.
+ */
+export function portfolioBeforeCheckpoint(run: RunState, sequence: number): PortfolioState {
+  let book = createInitialPortfolio(run.arenaId);
+  for (const d of run.decisions) {
+    if (d.checkpointSequence >= sequence) break;
+    book = simulatePortfolioAdvance(book, d.actionCode, d.checkpointSequence, run.arenaId);
+  }
+  return book;
+}
+
 // ─── Commit ───────────────────────────────────────────────────────────────────
 
 export interface CommitOutcome {
@@ -362,6 +605,10 @@ export interface CommitOutcome {
 // Both are pure functions of their policy, the checkpoint and their own book.
 
 /** The passive index's stated reason. It is the same every checkpoint, on purpose. */
+/** Why an opponent held when its own budget could not pay for its call. */
+export const TURNOVER_EXHAUSTED_REASON =
+  'Turnover budget exhausted. The policy call is unaffordable on this book, so the machine holds.';
+
 export const PASSIVE_HOLD_REASON =
   'Buy and hold. The index takes no decisions; it holds full exposure through every regime.';
 
@@ -371,9 +618,10 @@ export interface ShadowDecision {
   reason: string;
 }
 
-function shadowCanAfford(run: RunState, agent: ShadowAgent, action: ActionCode, cp: CheckpointData): boolean {
+export function shadowCanAfford(run: RunState, agent: ShadowAgent, action: ActionCode, cp: CheckpointData): boolean {
   if (action === 'HOLD') return true;
-  return agent.portfolio.turnoverUsed + turnoverCostFor(action, cp) <= run.turnoverBudget + 1e-9;
+  // The shadow pays for its own book, not the player's.
+  return agent.portfolio.turnoverUsed + turnoverCostFor(agent.portfolio, action, cp) <= run.turnoverBudget + 1e-9;
 }
 
 /** What a policy does at this checkpoint, given the agent's own book. */
@@ -384,8 +632,32 @@ export function decideShadow(
   run: RunState,
 ): ShadowDecision | null {
   switch (policy.kind) {
-    case 'AUTHORED':
-      return null;
+    case 'AUTHORED': {
+      // The content's own point-in-time call, stepped through a real book so
+      // it earns a real score. Still authored, still no hindsight: the arena
+      // decided this stance when it was written, not from the outcome.
+      //
+      // And it pays for it. Fair Match (§26.5) means the same constraints, and
+      // an opponent allowed to spend turnover the human is barred from
+      // spending is not playing the same game: the authored path used to skip
+      // the affordability check entirely (2026-09-12 review). Valid shipped
+      // content never reaches the fallback — the content test asserts every
+      // authored path stays inside its arena's budget — but malformed content
+      // degrades to HOLD rather than violating the constraint.
+      const authored = cp.machineDecision.actionCode;
+      if (shadowCanAfford(run, agent, authored, cp)) {
+        return {
+          action: authored,
+          conviction: CONVICTION_DEFAULT,
+          reason: cp.machineDecision.policyReason,
+        };
+      }
+      return {
+        action: 'HOLD',
+        conviction: CONVICTION_DEFAULT,
+        reason: TURNOVER_EXHAUSTED_REASON,
+      };
+    }
     case 'HOLD':
       return { action: 'HOLD', conviction: CONVICTION_DEFAULT, reason: PASSIVE_HOLD_REASON };
     case 'CONFIG': {
@@ -404,17 +676,31 @@ export function stepShadow(
 ): { agent: ShadowAgent; score: CheckpointScore } {
   const branch = cp.availableActions.find(a => a.actionCode === decision.action);
   const flags: BehavioralFlag[] = branch ? [...branch.branchEffect.flagsAdd] : [];
+  // The shadow's own history, scored by the same function on the same scale.
+  const shadowRisk = sharpeSoFar(
+    run.decisions,
+    d => d.machineActionCode,
+    { sequence: cp.sequence, action: decision.action },
+    run.arenaId,
+  );
+  // Resolve first, score the consequences. Identical ordering to the player.
+  const resolved = resolveTransition(agent.portfolio, decision.action, run.currentCheckpoint, run.arenaId);
   const score = scoreCheckpoint({
     action: decision.action,
     checkpoint: cp,
     flags,
     confidence: convictionToConfidence(decision.conviction),
-    turnoverUsed: agent.portfolio.turnoverUsed,
-    portfolioDD: agent.portfolio.drawdown,
+    turnoverUsed: resolved.portfolio.turnoverUsed,
+    turnoverBudget: run.turnoverBudget,
+    sharpe: shadowRisk.sharpe,
+    sharpeSamples: shadowRisk.samples,
+    checkpointReturn: resolved.checkpointReturn,
+    portfolioDD: resolved.portfolio.drawdown,
+    troughDD: resolved.portfolio.troughDrawdown,
     machineDD: cp.portfolioEffect.machineDrawdown,
     riskBudgetDD: getArena(run.arenaId)?.criticalDrawdown ?? CRITICAL_DRAWDOWN,
   });
-  const portfolio = simulatePortfolioAdvance(agent.portfolio, decision.action, run.currentCheckpoint, run.arenaId);
+  const portfolio = resolved.portfolio;
   const n = run.currentCheckpoint;
   const running = Math.round((agent.score * (n - 1) + score.totalScore) / n);
   return { agent: { portfolio, score: running }, score };
@@ -449,7 +735,12 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
 
   const flags: BehavioralFlag[] = [...branch.branchEffect.flagsAdd];
   const dimUpdates = branch.branchEffect.alphaImpact;
-  const turnoverCost = turnoverCostFor(action, cp);
+  // One resolution for the whole commit: the score reads this transition and
+  // the run carries the same object forward. Scoring used to see the turnover
+  // and drawdown from *before* the decision, so every checkpoint scored the
+  // one before it and the final decision's consequences never landed anywhere.
+  const resolved = resolveTransition(run.portfolio, action, run.currentCheckpoint, run.arenaId);
+  const turnoverCost = resolved.turnoverCost;
   // The UI clamps conviction to the range this checkpoint exposes; the engine
   // guarantees it, so a stale or out-of-range value can never reach scoring.
   const conviction = clampConviction(confidenceToConviction(run.pendingConfidence), run.currentCheckpoint);
@@ -461,25 +752,37 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
     flags.push('GOOD_PROCESS');
   }
 
+  const playerRisk = sharpeSoFar(
+    run.decisions,
+    d => d.actionCode,
+    { sequence: cp.sequence, action },
+    run.arenaId,
+  );
+
   const score = scoreCheckpoint({
     action,
     checkpoint: cp,
     flags,
     confidence,
-    turnoverUsed: run.portfolio.turnoverUsed,
-    portfolioDD: run.portfolio.drawdown,
+    turnoverUsed: resolved.portfolio.turnoverUsed,
+    turnoverBudget: run.turnoverBudget,
+    sharpe: playerRisk.sharpe,
+    sharpeSamples: playerRisk.samples,
+    checkpointReturn: resolved.checkpointReturn,
+    portfolioDD: resolved.portfolio.drawdown,
+    troughDD: resolved.portfolio.troughDrawdown,
     // No fabricated machine drawdown. Where content authors one it is used;
     // otherwise drawdown scores against the arena risk budget.
     machineDD: cp.portfolioEffect.machineDrawdown,
     riskBudgetDD: getArena(run.arenaId)?.criticalDrawdown ?? CRITICAL_DRAWDOWN,
   });
 
-  // The opponent. Authored: the content's decision and its par, as before.
-  // Policy-driven: the shadow decides on its own book and its checkpoint
-  // score replaces the authored par as the machine's figure for this turn.
-  // Note the player's own score still credits agreement with the authored
-  // rules machine (scoreCheckpoint's actionBias): the rubric is the same
-  // whoever the opponent is.
+  // The opponent, whoever it is, decides on its own book and is scored by the
+  // same component model as the player. Authored opponents contribute the
+  // content's point-in-time stance; policy-driven ones decide from their own
+  // portfolio. `machinePar` survives as content difficulty metadata — it is
+  // the anchor conviction scales around — and is no longer the machine's
+  // competing score.
   let machineActionCode: ActionCode = cp.machineDecision.actionCode;
   let machineReason: string | undefined;
   let opponentAgent = run.opponentAgent;
@@ -526,7 +829,7 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
     committed: true,
   };
 
-  const portfolio = simulatePortfolioAdvance(run.portfolio, action, run.currentCheckpoint, run.arenaId);
+  const portfolio = resolved.portfolio;
   const criticalDD = getArena(run.arenaId)?.criticalDrawdown ?? CRITICAL_DRAWDOWN;
   const crossedNow = portfolio.drawdown <= criticalDD;
   const n = run.currentCheckpoint;
@@ -657,10 +960,9 @@ export function advanceRunCheckpoint(run: RunState): RunState {
  * during the run, where the player can still act on it.
  *
  * Derived, never stored: every checkpoint's return for both sides is a pure
- * function of the authored `returnBias` and the stance taken, and both stances
- * are already on the decision record. So this reconstructs the series rather
- * than duplicating state that could drift from the engine, and stays inside the
- * determinism gate.
+ * function of the decision sequence, and both stances are already on the
+ * decision record. So this replays the series rather than duplicating state
+ * that could drift from the engine, and stays inside the determinism gate.
  *
  * Deliberately NOT annualised. Checkpoints are irregular slices of a historical
  * window, and scaling them by an invented periods-per-year would manufacture a
@@ -673,7 +975,12 @@ export interface RunRiskAdjusted {
   samples: number;
   playerReturn: number;
   machineReturn: number;
-  /** Per-checkpoint Sharpe, rf = 0. Null until the series can support one. */
+  /**
+   * Run-so-far Sharpe: the mean over the standard deviation of every
+   * checkpoint return resolved to this point, rf = 0. Not a per-checkpoint
+   * figure — there is no such thing, a single return has no dispersion — and
+   * null until the series can support one.
+   */
   playerSharpe: number | null;
   machineSharpe: number | null;
 }
@@ -706,15 +1013,37 @@ export function runRiskAdjusted(
   decisions: readonly ReturnSeriesInput[],
   arenaId: ArenaId = DEFAULT_ARENA_ID,
 ): RunRiskAdjusted {
+  // Replay both books rather than multiply an authored bias by a per-stance
+  // constant.
+  //
+  // The old reconstruction asked "what did the stance do to the checkpoint's
+  // return", which had one answer per stance regardless of what the book
+  // held. A return series now means what it says: the book each side was
+  // actually carrying, moved by the returns the checkpoint actually authored.
+  // A defensive rotation shows up here only if it rotated into names that
+  // held up, which is the lesson the arena is written to teach.
+  //
+  // Replay is deterministic and cheap — the same decisions always produce the
+  // same path — so this stays inside the determinism gate and no portfolio
+  // snapshot has to be stored or trusted.
   const playerReturns: number[] = [];
   const machineReturns: number[] = [];
+
+  let playerBook = createInitialPortfolio(arenaId);
+  let machineBook = createInitialPortfolio(arenaId);
 
   for (const d of decisions) {
     const cp = getCheckpoint(arenaId, d.checkpointSequence);
     if (!cp) continue;
-    const bias = cp.portfolioEffect.returnBias;
-    playerReturns.push(bias * actionReturnMultiplier(d.actionCode));
-    machineReturns.push(bias * actionReturnMultiplier(d.machineActionCode));
+
+    const nextPlayer = simulatePortfolioAdvance(playerBook, d.actionCode, d.checkpointSequence, arenaId);
+    const nextMachine = simulatePortfolioAdvance(machineBook, d.machineActionCode, d.checkpointSequence, arenaId);
+
+    playerReturns.push(nextPlayer.value / playerBook.value - 1);
+    machineReturns.push(nextMachine.value / machineBook.value - 1);
+
+    playerBook = nextPlayer;
+    machineBook = nextMachine;
   }
 
   const compound = (rs: number[]) => rs.reduce((acc, r) => acc * (1 + r), 1) - 1;

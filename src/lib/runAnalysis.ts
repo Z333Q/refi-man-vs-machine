@@ -13,7 +13,7 @@
 
 import type { BehavioralFlag } from './gameTypes';
 import type { RecordedDecision, RunRecord } from './runRecord';
-import { actionReturnMultiplier } from './runEngine';
+import { createInitialPortfolio, simulatePortfolioAdvance } from './runEngine';
 import { getCheckpoint } from './arenas';
 
 // ─── Per-checkpoint returns ───────────────────────────────────────────────────
@@ -30,18 +30,27 @@ export interface CheckpointOutcome {
 
 export function outcomes(record: RunRecord): CheckpointOutcome[] {
   const out: CheckpointOutcome[] = [];
+  // Replay both books. A checkpoint's return is what the book each side was
+  // holding did, not the authored bias scaled by a per-stance constant: the
+  // autopsy has to show the run that happened.
+  let playerBook = createInitialPortfolio(record.arenaId);
+  let machineBook = createInitialPortfolio(record.arenaId);
+
   for (const d of record.decisions) {
     const cp = getCheckpoint(record.arenaId, d.checkpointSequence);
     if (!cp) continue;
-    const bias = cp.portfolioEffect.returnBias;
+    const nextPlayer = simulatePortfolioAdvance(playerBook, d.actionCode, d.checkpointSequence, record.arenaId);
+    const nextMachine = simulatePortfolioAdvance(machineBook, d.machineActionCode, d.checkpointSequence, record.arenaId);
     out.push({
       sequence: d.checkpointSequence,
       decision: d,
       signalTitle: cp.signalTitle,
       crisisDay: cp.crisisDay,
-      playerReturn: bias * actionReturnMultiplier(d.actionCode),
-      machineReturn: bias * actionReturnMultiplier(d.machineActionCode),
+      playerReturn: nextPlayer.value / playerBook.value - 1,
+      machineReturn: nextMachine.value / machineBook.value - 1,
     });
+    playerBook = nextPlayer;
+    machineBook = nextMachine;
   }
   return out;
 }

@@ -195,14 +195,17 @@ const PRACTICE_STANCES: ActionBranch[] = [
     actionCode: 'RAISE_CASH',
     shortLabel: 'RAISE CASH',
     label: 'RAISE CASH: move capital out of equities and take on the re-entry decision',
-    turnoverCost: 0.04,
+    // Quoted to match what the engine charges a real book: turnover is the
+    // traded weight a stance implies, so moving ten points into cash costs
+    // ten, and a rotation costs both of its legs.
+    turnoverCost: 0.10,
     branchEffect: { flagsAdd: [], alphaImpact: {} },
   },
   {
     actionCode: 'ROTATE_DEFENSIVE',
     shortLabel: 'ROTATE DEFENSIVE',
     label: 'ROTATE DEFENSIVE: shift weight from cyclicals into defensives at equal exposure',
-    turnoverCost: 0.07,
+    turnoverCost: 0.10,
     branchEffect: { flagsAdd: [], alphaImpact: {} },
   },
 ];

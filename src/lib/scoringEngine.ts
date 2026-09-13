@@ -3,11 +3,6 @@ import type {
 } from './gameTypes';
 import { CONVICTION_MIN, CONVICTION_MAX, CONVICTION_DEFAULT } from './decisionContract';
 
-// ─── Sigmoid utility ──────────────────────────────────────────────────────────
-function sigmoid(x: number): number {
-  return 1 / (1 + Math.exp(-x));
-}
-
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
@@ -20,6 +15,8 @@ function clamp(val: number, min: number, max: number): number {
  * ends up explaining a score the engine no longer computes.
  */
 export const SCORE_WEIGHTS = {
+  /** §29.1 risk-adjusted return. Not "excess": it is not measured against the
+   *  machine, and the machine's own figure is computed the same way. */
   raerScore: 0.25,
   drawdownScore: 0.20,
   downsideScore: 0.10,
@@ -31,11 +28,40 @@ export const SCORE_WEIGHTS = {
 
 // ─── Component scores ─────────────────────────────────────────────────────────
 
-function computeRAERScore(playerReturn: number, machineReturn: number): number {
-  const er = playerReturn - machineReturn;
-  const te = Math.abs(er) + 0.001;
-  const ir = er / te;
-  return Math.round(100 * sigmoid(ir * 2));
+/**
+ * Risk-adjusted return, normalised to 0-100 on a fixed symmetric scale.
+ *
+ * Owner ruling, 2026-09-12. Linear, 50 at a Sharpe of zero, 20 points per unit
+ * of Sharpe, saturating at ±2.5:
+ *
+ *      -2.5 → 0      0.0 → 50     +1.0 → 70
+ *      -1.0 → 30    +0.5 → 60     +2.5 → 100
+ *
+ * The scale is fixed and the same function scores both sides, so a player's
+ * component never depends on the machine's result. The term it replaces did:
+ * it divided the return difference by its own absolute value, which is the
+ * sign of that difference for any difference above a tenth of a basis point,
+ * and the difference itself was a constant bonus for matching the machine's
+ * stance. The largest-weighted quarter of the ReFi Score was a coin flip on
+ * agreement (2026-09-12 audit).
+ *
+ * Sample damping exists because two nearly identical early returns produce an
+ * enormous Sharpe from almost no evidence, and 25% of the score should not
+ * turn on that. Confidence ramps from 25% at two observations to full weight
+ * at five — TACO's five rounds are the shortest major arena, so even it
+ * reaches full strength by its own conclusion.
+ *
+ * Explicitly NOT calibrated against the documented ReFi benchmark Sharpes
+ * (2.91, 4.38, 4.56). Those are annualised OOS statistics from a different
+ * measurement context; this is an unannualised ratio over irregular checkpoint
+ * returns, and relating the two would manufacture exactly the benchmark
+ * comparison §26 exists to prevent.
+ */
+export function normalizeSharpe(sharpe: number | null, samples: number): number {
+  if (sharpe === null || !Number.isFinite(sharpe)) return 50;
+  const raw = clamp(50 + 20 * sharpe, 0, 100);
+  const reliability = clamp((samples - 1) / 4, 0, 1);
+  return Math.round(50 + (raw - 50) * reliability);
 }
 
 // Default risk budget a run is scored against when content authors no machine
@@ -62,13 +88,100 @@ function computeDrawdownScore(
   return clamp(100 * (1 - consumed), 0, 100);
 }
 
-function computeDownsideScore(playerCapture: number): number {
-  if (playerCapture <= 0.50) return 100;
-  if (playerCapture <= 0.75) return 85;
-  if (playerCapture <= 1.00) return 70;
-  if (playerCapture <= 1.25) return 45;
-  if (playerCapture <= 1.50) return 25;
-  return 10;
+/**
+ * Downside capture: how much of a falling market the book actually took.
+ *
+ * Measured from the side's own realised checkpoint return against the
+ * checkpoint's market move. It used to be computed from the market return
+ * alone — `machineReturn / (machineReturn - 0.001)`, which is approximately 1
+ * for any market return and had no term for what the player did. A tenth of
+ * the score was a checkpoint constant (2026-09-12 review).
+ *
+ * The reference is the market, not the opponent, so both sides are measured
+ * against the same external thing and neither score is defined by the other's.
+ *
+ * On a rising checkpoint there is no downside to capture and the component is
+ * neutral. That is the metric's meaning, not a gap: the arena scores
+ * participation in a rally through return and risk, which is where it belongs.
+ */
+export const NO_DOWNSIDE_SCORE = 70;
+
+export function computeDownsideScore(playerReturn: number, marketReturn: number): number {
+  if (marketReturn >= 0) return NO_DOWNSIDE_SCORE;
+
+  // Both are negative in the ordinary case, so the ratio is positive and below
+  // one when the book fell less than the market. A book that rose while the
+  // market fell gives a negative ratio, which is the best possible capture.
+  const capture = playerReturn / marketReturn;
+
+  // Interpolated between the authored anchors rather than stepped through
+  // them. As a six-step ladder the whole realistic range of stances on a
+  // crash checkpoint — captures of 0.75 through 0.91 — landed in one bucket
+  // and scored identically, which is the same defect this component was
+  // reported for: a tenth of the score that barely moves with the decision.
+  // The anchors are unchanged, so the calibration is the same where it was
+  // ever stated; what changed is that the values between them now count.
+  return clamp(interpolate(capture, CAPTURE_ANCHORS), 0, 100);
+}
+
+/** Capture ratio to score. Lower capture is better: less of the fall was taken. */
+const CAPTURE_ANCHORS: readonly [number, number][] = [
+  [0.50, 100],
+  [0.75, 85],
+  [1.00, 70],
+  [1.25, 45],
+  [1.50, 25],
+  [2.00, 10],
+];
+
+/** Piecewise-linear through the anchors, flat beyond either end. */
+function interpolate(x: number, anchors: readonly [number, number][]): number {
+  const [firstX, firstY] = anchors[0];
+  if (x <= firstX) return firstY;
+  for (let i = 1; i < anchors.length; i++) {
+    const [x0, y0] = anchors[i - 1];
+    const [x1, y1] = anchors[i];
+    if (x <= x1) return y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+  }
+  return anchors[anchors.length - 1][1];
+}
+
+/**
+ * Recovery efficiency: how much of the hole the book has climbed back out of.
+ *
+ * §29.1 gives this a tenth of the ReFi Score and the engine returned a constant
+ * 65 for every player, every machine, every stance and every checkpoint: a
+ * second dead component beside the downside capture one (2026-09-12 review).
+ *
+ * Measured from run state, never from hindsight. The trough is the worst
+ * drawdown the book has reached so far, which is a fact about the past; the
+ * current drawdown is where it stands now. Progress is how far it has come
+ * back between them.
+ *
+ *   no meaningful hole yet           neutral 65
+ *   at a new low                     20, and it cannot score better by falling
+ *   halfway back to the peak         roughly 60
+ *   fully recovered to the peak      100
+ *
+ * A book that has never fallen more than a whisker has nothing to recover and
+ * is neither credited nor penalised: scoring it 100 would pay every player for
+ * the first checkpoint of every run.
+ */
+export const RECOVERY_NEUTRAL = 65;
+export const RECOVERY_MEANINGFUL_DRAWDOWN = 0.02;
+
+export function computeRecoveryScore(currentDD: number, troughDD: number): number {
+  const trough = Math.min(0, troughDD, currentDD);
+  if (Math.abs(trough) < RECOVERY_MEANINGFUL_DRAWDOWN) return RECOVERY_NEUTRAL;
+
+  // 0 at the trough, 1 back at the high-water mark.
+  const progress = clamp((trough - currentDD) / trough, 0, 1);
+
+  // At the trough (progress 0) the book is at its worst: 20, well below
+  // neutral, and a new low cannot score above it because the trough moves with
+  // the book. Full recovery is 100. Neutral sits where it always did, so a
+  // half-recovered book reads as slightly better than "nothing to say".
+  return Math.round(20 + progress * 80);
 }
 
 function computeRegimeAdaptScore(
@@ -93,10 +206,20 @@ function computeRegimeAdaptScore(
   return clamp(score, 0, 100);
 }
 
+/**
+ * Turnover discipline, measured against the budget the arena actually granted.
+ *
+ * The thresholds used to be absolute: 0.20 and 0.30 of the book, regardless of
+ * arena. A 22-checkpoint arena grants 0.6286, so every player crossed both
+ * lines somewhere mid-run whatever they did, and a five-round arena grants
+ * 0.1429 and could never cross either. The penalty measured arena length, not
+ * discipline. Now it measures the fraction of the player's own budget spent.
+ */
 function computeTurnoverScore(
   action: ActionCode,
   flags: BehavioralFlag[],
-  turnoverUsed: number
+  turnoverUsed: number,
+  turnoverBudget: number,
 ): number {
   let score = 75;
   if (action === 'HOLD') score = 90;
@@ -106,8 +229,9 @@ function computeTurnoverScore(
     if (penaltyFlags.includes(f)) score -= 10;
   });
 
-  if (turnoverUsed > 0.30) score -= 15;
-  if (turnoverUsed > 0.20) score -= 8;
+  const spent = turnoverBudget > 0 ? turnoverUsed / turnoverBudget : 0;
+  if (spent > 0.75) score -= 15;
+  else if (spent > 0.50) score -= 8;
 
   return clamp(score, 0, 100);
 }
@@ -194,7 +318,26 @@ export function scoreCheckpoint(params: {
   flags: BehavioralFlag[];
   confidence: number;
   turnoverUsed: number;
+  /** The run's total turnover allowance, so discipline is measured against it. */
+  turnoverBudget: number;
+  /**
+   * This checkpoint's realised portfolio return for the side being scored,
+   * from the resolved transition. Downside capture is measured from it.
+   */
+  checkpointReturn: number;
   portfolioDD: number;
+  /**
+   * Run-so-far Sharpe for the side being scored, including this checkpoint,
+   * and how many checkpoint returns it was computed from. Null before the
+   * series can support one, which normalises to the neutral 50.
+   */
+  sharpe: number | null;
+  sharpeSamples: number;
+  /**
+   * The worst drawdown this side's book has reached so far, including this
+   * checkpoint. Recovery is measured from it toward the high-water mark.
+   */
+  troughDD: number;
   // Authored machine drawdown for this checkpoint, where content supplies one.
   // Absent it, drawdown is scored against the arena risk budget instead of a
   // fabricated machine number.
@@ -202,22 +345,21 @@ export function scoreCheckpoint(params: {
   riskBudgetDD?: number;
 }): CheckpointScore {
   const {
-    action, checkpoint, flags, confidence, turnoverUsed, portfolioDD, machineDD,
+    action, checkpoint, flags, confidence, turnoverUsed, turnoverBudget,
+    checkpointReturn, portfolioDD, troughDD, machineDD, sharpe, sharpeSamples,
     riskBudgetDD = DEFAULT_RISK_BUDGET_DRAWDOWN,
   } = params;
 
-  const { portfolioEffect } = checkpoint;
-  const actionBias = action === checkpoint.machineDecision.actionCode ? 0.95 : -0.15;
-  const returnBias = portfolioEffect.returnBias + actionBias * 0.02;
-  const machineReturn = portfolioEffect.returnBias;
-  const playerCapture = returnBias < 0 ? Math.abs(returnBias / (machineReturn - 0.001)) : 1.0;
+  // The checkpoint's market move: the broad return the arena authored for this
+  // moment in history, before any stance. Both sides are measured against it.
+  const marketReturn = checkpoint.portfolioEffect.returnBias;
 
-  const raerScore = computeRAERScore(returnBias, machineReturn);
+  const raerScore = normalizeSharpe(sharpe, sharpeSamples);
   const drawdownScore = computeDrawdownScore(portfolioDD, machineDD, riskBudgetDD);
-  const downsideScore = computeDownsideScore(playerCapture);
-  const recoveryScore = 65;
+  const downsideScore = computeDownsideScore(checkpointReturn, marketReturn);
+  const recoveryScore = computeRecoveryScore(portfolioDD, troughDD);
   const regimeAdaptScore = computeRegimeAdaptScore(action, checkpoint, flags);
-  const turnoverScore = computeTurnoverScore(action, flags, turnoverUsed);
+  const turnoverScore = computeTurnoverScore(action, flags, turnoverUsed, turnoverBudget);
   const consistencyScore = computeConsistencyScore(action, flags, confidence);
   const positionSizingScore = computePositionSizingScore(action, flags, confidence);
 

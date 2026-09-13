@@ -73,7 +73,7 @@ const SECTIONS = [
   {
     title: 'SCORING',
     items: [
-      'RAER: Risk-adjusted excess return vs machine.',
+      'RAER: Risk-adjusted return. Your run\u2019s Sharpe on a fixed scale: 0 scores 50, +1 scores 70, +2 scores 90. The machine is scored the same way.',
       'DRAWDOWN CONTROL: How well you limited portfolio drawdown.',
       'DOWNSIDE CAPTURE: Did you avoid the worst of the market move?',
       'REGIME ADAPTATION: Did you recognize and react to regime shifts?',

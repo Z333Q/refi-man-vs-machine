@@ -2195,7 +2195,7 @@ Raw return alone does not determine progression.
 
 ```text
 ReFi Score =
-0.25 × Risk-Adjusted Excess Return
+0.25 × Risk-Adjusted Return
 + 0.20 × Drawdown Control
 + 0.10 × Downside Capture
 + 0.10 × Recovery Efficiency
@@ -2205,6 +2205,35 @@ ReFi Score =
 ```
 
 All components normalize to 0–100.
+
+> **Amendment, 2026-09-12 (owner ruling).** The first term was **Risk-Adjusted
+> Excess Return**, measured against the machine. It is now **Risk-Adjusted
+> Return**, measured against a fixed scale, and the machine's own figure is
+> computed by the identical function from its own run. Neither side's score is
+> defined using the other's.
+>
+> The scale is linear and symmetric on the run-so-far Sharpe: 50 at zero, 20
+> points per unit of Sharpe, saturating at ±2.5.
+>
+> | Run-so-far Sharpe | -2.5 | -2.0 | -1.0 | -0.5 | 0.0 | +0.5 | +1.0 | +2.0 | +2.5 |
+> |---|---|---|---|---|---|---|---|---|---|
+> | Score | 0 | 10 | 30 | 40 | 50 | 60 | 70 | 90 | 100 |
+>
+> Confidence is damped by sample size, because two nearly identical early
+> returns produce an extreme Sharpe from almost no evidence and this term is a
+> quarter of the score: 25% weight at two observations, 50% at three, 75% at
+> four, full weight from five. TACO's five rounds are the shortest major arena,
+> so even it reaches full strength by its conclusion.
+>
+> This is a **run-so-far** figure, not a per-checkpoint one: a single return has
+> no dispersion, and the engine returns null until the series can support a
+> ratio, which normalises to the neutral 50.
+>
+> The scale is deliberately **not** calibrated against the documented ReFi
+> benchmark Sharpes of 2.91, 4.38 or 4.56. Those are annualised, versioned OOS
+> statistics from a different measurement context; the game figure is an
+> unannualised ratio over irregular checkpoint returns, and relating the two
+> would manufacture exactly the benchmark relationship §26 exists to prevent.
 
 ## 29.2 Pass condition
 
