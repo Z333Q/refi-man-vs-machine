@@ -8,7 +8,7 @@ import {
   createInitialRun, createInitialPortfolio, commitPendingDecision, advanceRunCheckpoint,
   turnoverBudgetFor,
   turnoverCostFor, isTurnoverExhausted, canAffordAction, affordableActions, isHoldOnly,
-  TURNOVER_BUDGET_START, STARTING_CAPITAL, DEFAULT_TURNOVER_COST,
+  TURNOVER_BUDGET_START, STARTING_CAPITAL,
 } from './runEngine';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -117,8 +117,9 @@ test('turnover accounting is the exact sum of the authored costs paid', () => {
   let expected = 0;
   for (const step of SEQUENCE) {
     if (run.phase === 'COMPLETE') break;
-    const cp = getCheckpoint('covid_black_swan', run.currentCheckpoint);
-    expected += turnoverCostFor(step.action, cp);
+    // Turnover is derived from the transition the stance implies, so the
+    // expected total is read off the book the run is actually holding.
+    expected += turnoverCostFor(run.portfolio, step.action);
     run = { ...run, pendingAction: step.action, pendingConfidence: step.confidence };
     const outcome = commitPendingDecision(run);
     assert.ok(outcome);
@@ -198,13 +199,27 @@ test('an exhausted budget leaves the checkpoint HOLD-only', () => {
   assert.equal(isHoldOnly(createInitialRun()), false);
 });
 
-test('default cost table covers every action code', () => {
+test('every stance is priced from the book, and HOLD is free', () => {
+  // Replaces a test on the old fallback fee table, which no longer exists:
+  // turnover is the traded weight a stance implies, so the price is a question
+  // about a portfolio and cannot be answered by a lookup.
   const codes: ActionCode[] = [
     'HOLD', 'REDUCE', 'ROTATE_DEFENSIVE', 'ROTATE_RISK',
     'RAISE_CASH', 'ADD_RISK', 'STAGED_BUY', 'STAGED_SELL',
   ];
-  for (const c of codes) assert.equal(typeof DEFAULT_TURNOVER_COST[c], 'number');
-  assert.equal(DEFAULT_TURNOVER_COST.HOLD, 0);
+  const book = createInitialPortfolio('covid_black_swan');
+  for (const c of codes) {
+    const cost = turnoverCostFor(book, c);
+    assert.equal(typeof cost, 'number', c);
+    assert.ok(Number.isFinite(cost) && cost >= 0, `${c} priced at ${cost}`);
+  }
+  assert.equal(turnoverCostFor(book, 'HOLD'), 0, 'doing nothing trades nothing');
+
+  // A round trip is two legs; a move into cash is one.
+  assert.ok(
+    turnoverCostFor(book, 'ROTATE_DEFENSIVE') > turnoverCostFor(book, 'REDUCE'),
+    'a rotation must cost more than a trim',
+  );
 });
 
 // ─── Drawdown against a ratcheting high-water mark ────────────────────────────

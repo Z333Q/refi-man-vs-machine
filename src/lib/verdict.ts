@@ -70,6 +70,8 @@ const COMPONENTS: {
     code: 'RAER', weight: 0.25, read: s => s.raerScore,
     win: 'your risk adjusted return carried the checkpoint',
     loss: 'your risk adjusted return trailed par',
+    // Not "excess": the term is the run's own Sharpe on a fixed scale, not a
+    // margin over the machine (2026-09-12 owner ruling).
   },
   {
     code: 'DRAWDOWN', weight: 0.20, read: s => s.drawdownScore,

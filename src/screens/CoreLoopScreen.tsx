@@ -10,7 +10,8 @@ import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
   canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
-  STARTING_CAPITAL, actionReturnMultiplier, runRiskAdjusted, type DecisionCommand,
+  portfolioBeforeCheckpoint, simulatePortfolioAdvance,
+  STARTING_CAPITAL, runRiskAdjusted, type DecisionCommand,
 } from '../lib/runEngine';
 import {
   thesisLabel, thesisOptionsFor, stanceTitle,
@@ -896,13 +897,21 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
   const opponentReasoning: string[] =
     lastDecision?.machineReason ? [lastDecision.machineReason] : cp.machineDecision.reasoning.slice(0, 3);
 
-  // Endpoints for the race, derived from the same multiplier the engine
-  // applied, so the curve cannot finish where the score disagrees.
-  const racePlayerReturn = lastDecision
-    ? cp.portfolioEffect.returnBias * actionReturnMultiplier(lastDecision.actionCode)
-    : 0;
-  const raceMachineReturn =
-    cp.portfolioEffect.returnBias * actionReturnMultiplier(cp.machineDecision.actionCode);
+  // Endpoints for the race, replayed through the same engine the commit used,
+  // so the curve cannot finish where the score disagrees.
+  //
+  // These were the checkpoint's authored bias times a per-stance multiplier,
+  // which stopped being the return the moment a stance moved real weight: the
+  // curve would have drawn an outcome the portfolio never had.
+  //
+  // Not memoised: this sits after the screen's early returns, where a hook
+  // cannot go, and the replay is a few dozen multiplications over at most 22
+  // checkpoints.
+  const raceBook = portfolioBeforeCheckpoint(run, cp.sequence);
+  const raceStep = (a: ActionCode) =>
+    simulatePortfolioAdvance(raceBook, a, cp.sequence, run.arenaId).value / raceBook.value - 1;
+  const racePlayerReturn = lastDecision ? raceStep(lastDecision.actionCode) : 0;
+  const raceMachineReturn = raceStep(lastDecision?.machineActionCode ?? cp.machineDecision.actionCode);
 
   // The branch that was actually committed, for the post-commit thesis prompt.
   const selectedCommittedBranch = lastDecision
@@ -1558,7 +1567,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                       {branches.map((branch, i) => {
                         const affordable = canAffordAction(run, branch.actionCode, cp);
                         const selected = stance === branch.actionCode;
-                        const cost = turnoverCostFor(branch.actionCode, cp);
+                        const cost = turnoverCostFor(portfolio, branch.actionCode);
                         return (
                           <PullToCommit
                             key={branch.actionCode}
@@ -1679,7 +1688,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                           CONVICTION {conviction}
                         </div>
                         <div className="text-phosphor-dim text-xs">
-                          TURNOVER COST {stance ? (turnoverCostFor(stance, cp) * 100).toFixed(0) : 0}%. THIS CANNOT BE UNDONE. THE MARKET WILL RESOLVE.
+                          TURNOVER COST {stance ? (turnoverCostFor(portfolio, stance) * 100).toFixed(1) : 0}%. THIS CANNOT BE UNDONE. THE MARKET WILL RESOLVE.
                         </div>
                       </div>
                     )}

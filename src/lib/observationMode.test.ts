@@ -87,6 +87,9 @@ test('scoring reads par straight from the checkpoint', () => {
       flags: [],
       confidence: 0.7,
       turnoverUsed: 0,
+      turnoverBudget: 0.40,
+      sharpe: null,
+      sharpeSamples: 0,
       portfolioDD: 0,
     });
     assert.equal(score.machineScore, cp.machinePar, `CP${cp.sequence}`);
@@ -103,6 +106,9 @@ test('changing a checkpoint par changes only that checkpoint', () => {
     flags: [],
     confidence: 0.7,
     turnoverUsed: 0,
+    turnoverBudget: 0.40,
+    sharpe: null,
+    sharpeSamples: 0,
     portfolioDD: 0,
   });
   assert.equal(raised.machineScore, 95);
@@ -116,7 +122,8 @@ test('with no authored machine drawdown, drawdown scores against the risk budget
   assert.ok(cp);
   const at = (dd: number) => scoreCheckpoint({
     action: 'HOLD', checkpoint: cp, flags: [], confidence: 0.7,
-    turnoverUsed: 0, portfolioDD: dd, riskBudgetDD: CRITICAL_DRAWDOWN,
+    turnoverUsed: 0, turnoverBudget: 0.40, sharpe: null, sharpeSamples: 0,
+    portfolioDD: dd, riskBudgetDD: CRITICAL_DRAWDOWN,
   }).drawdownScore;
 
   assert.equal(at(0), 100);            // flat consumes none of the budget
@@ -130,7 +137,8 @@ test('an authored machine drawdown is used when content supplies one', () => {
   assert.ok(cp);
   const versus = (playerDD: number, machineDD: number) => scoreCheckpoint({
     action: 'HOLD', checkpoint: cp, flags: [], confidence: 0.7,
-    turnoverUsed: 0, portfolioDD: playerDD, machineDD,
+    turnoverUsed: 0, turnoverBudget: 0.40, sharpe: null, sharpeSamples: 0,
+    portfolioDD: playerDD, machineDD,
   }).drawdownScore;
 
   // Drawdowns are negative, so the shallower one is the larger number.

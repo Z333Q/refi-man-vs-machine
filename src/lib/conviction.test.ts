@@ -14,16 +14,28 @@ import type { ActionCode } from './gameTypes';
 
 const checkpoint = COVID_CHECKPOINTS[1];
 
-function scoreAt(action: ActionCode, conviction: number): number {
+/**
+ * `sharpe` is the run-so-far risk-adjusted return of the side being scored.
+ * It is what decides whether a checkpoint lands above or below par now that
+ * the largest score component measures the run rather than agreement with the
+ * machine, so a test about the downside has to describe a run that is behind.
+ */
+function scoreAt(action: ActionCode, conviction: number, sharpe: number | null = null): number {
   return scoreCheckpoint({
     action,
     checkpoint,
     flags: [],
     confidence: conviction / 100,
     turnoverUsed: 0.05,
+    turnoverBudget: 0.40,
+    sharpe,
+    sharpeSamples: sharpe === null ? 0 : 8,
     portfolioDD: -0.04,
   }).totalScore;
 }
+
+/** A run whose risk-adjusted return is genuinely poor. */
+const LOSING_SHARPE = -1.5;
 
 /** Binary floating point does not land on 0.2 exactly; the engine is fine. */
 function near(actual: number, expected: number, label: string): void {
@@ -92,12 +104,12 @@ test('wrong at maximum conviction costs roughly double', () => {
   // double. That was false when it was written. It is a claim the engine now
   // has to honour, so it is asserted rather than trusted.
   const losing = (['REDUCE', 'RAISE_CASH', 'ROTATE_DEFENSIVE'] as ActionCode[])
-    .find((a) => scoreAt(a, CONVICTION_DEFAULT) < checkpoint.machinePar);
+    .find((a) => scoreAt(a, CONVICTION_DEFAULT, LOSING_SHARPE) < checkpoint.machinePar);
   assert.ok(losing, 'fixture has no under-par stance to test the downside with');
 
   const par = checkpoint.machinePar;
-  const atDefault = par - scoreAt(losing, CONVICTION_DEFAULT);
-  const atMax = par - scoreAt(losing, CONVICTION_MAX);
+  const atDefault = par - scoreAt(losing, CONVICTION_DEFAULT, LOSING_SHARPE);
+  const atMax = par - scoreAt(losing, CONVICTION_MAX, LOSING_SHARPE);
 
   // Whole-point rounding, and the 0-100 clamp, keep this from being exact.
   assert.ok(atMax >= atDefault * 1.8, `loss at 95 was ${atMax} against ${atDefault} at 70`);

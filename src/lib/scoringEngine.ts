@@ -3,11 +3,6 @@ import type {
 } from './gameTypes';
 import { CONVICTION_MIN, CONVICTION_MAX, CONVICTION_DEFAULT } from './decisionContract';
 
-// ─── Sigmoid utility ──────────────────────────────────────────────────────────
-function sigmoid(x: number): number {
-  return 1 / (1 + Math.exp(-x));
-}
-
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
@@ -20,6 +15,8 @@ function clamp(val: number, min: number, max: number): number {
  * ends up explaining a score the engine no longer computes.
  */
 export const SCORE_WEIGHTS = {
+  /** §29.1 risk-adjusted return. Not "excess": it is not measured against the
+   *  machine, and the machine's own figure is computed the same way. */
   raerScore: 0.25,
   drawdownScore: 0.20,
   downsideScore: 0.10,
@@ -31,11 +28,40 @@ export const SCORE_WEIGHTS = {
 
 // ─── Component scores ─────────────────────────────────────────────────────────
 
-function computeRAERScore(playerReturn: number, machineReturn: number): number {
-  const er = playerReturn - machineReturn;
-  const te = Math.abs(er) + 0.001;
-  const ir = er / te;
-  return Math.round(100 * sigmoid(ir * 2));
+/**
+ * Risk-adjusted return, normalised to 0-100 on a fixed symmetric scale.
+ *
+ * Owner ruling, 2026-09-12. Linear, 50 at a Sharpe of zero, 20 points per unit
+ * of Sharpe, saturating at ±2.5:
+ *
+ *      -2.5 → 0      0.0 → 50     +1.0 → 70
+ *      -1.0 → 30    +0.5 → 60     +2.5 → 100
+ *
+ * The scale is fixed and the same function scores both sides, so a player's
+ * component never depends on the machine's result. The term it replaces did:
+ * it divided the return difference by its own absolute value, which is the
+ * sign of that difference for any difference above a tenth of a basis point,
+ * and the difference itself was a constant bonus for matching the machine's
+ * stance. The largest-weighted quarter of the ReFi Score was a coin flip on
+ * agreement (2026-09-12 audit).
+ *
+ * Sample damping exists because two nearly identical early returns produce an
+ * enormous Sharpe from almost no evidence, and 25% of the score should not
+ * turn on that. Confidence ramps from 25% at two observations to full weight
+ * at five — TACO's five rounds are the shortest major arena, so even it
+ * reaches full strength by its own conclusion.
+ *
+ * Explicitly NOT calibrated against the documented ReFi benchmark Sharpes
+ * (2.91, 4.38, 4.56). Those are annualised OOS statistics from a different
+ * measurement context; this is an unannualised ratio over irregular checkpoint
+ * returns, and relating the two would manufacture exactly the benchmark
+ * comparison §26 exists to prevent.
+ */
+export function normalizeSharpe(sharpe: number | null, samples: number): number {
+  if (sharpe === null || !Number.isFinite(sharpe)) return 50;
+  const raw = clamp(50 + 20 * sharpe, 0, 100);
+  const reliability = clamp((samples - 1) / 4, 0, 1);
+  return Math.round(50 + (raw - 50) * reliability);
 }
 
 // Default risk budget a run is scored against when content authors no machine
@@ -93,10 +119,20 @@ function computeRegimeAdaptScore(
   return clamp(score, 0, 100);
 }
 
+/**
+ * Turnover discipline, measured against the budget the arena actually granted.
+ *
+ * The thresholds used to be absolute: 0.20 and 0.30 of the book, regardless of
+ * arena. A 22-checkpoint arena grants 0.6286, so every player crossed both
+ * lines somewhere mid-run whatever they did, and a five-round arena grants
+ * 0.1429 and could never cross either. The penalty measured arena length, not
+ * discipline. Now it measures the fraction of the player's own budget spent.
+ */
 function computeTurnoverScore(
   action: ActionCode,
   flags: BehavioralFlag[],
-  turnoverUsed: number
+  turnoverUsed: number,
+  turnoverBudget: number,
 ): number {
   let score = 75;
   if (action === 'HOLD') score = 90;
@@ -106,8 +142,9 @@ function computeTurnoverScore(
     if (penaltyFlags.includes(f)) score -= 10;
   });
 
-  if (turnoverUsed > 0.30) score -= 15;
-  if (turnoverUsed > 0.20) score -= 8;
+  const spent = turnoverBudget > 0 ? turnoverUsed / turnoverBudget : 0;
+  if (spent > 0.75) score -= 15;
+  else if (spent > 0.50) score -= 8;
 
   return clamp(score, 0, 100);
 }
@@ -194,7 +231,16 @@ export function scoreCheckpoint(params: {
   flags: BehavioralFlag[];
   confidence: number;
   turnoverUsed: number;
+  /** The run's total turnover allowance, so discipline is measured against it. */
+  turnoverBudget: number;
   portfolioDD: number;
+  /**
+   * Run-so-far Sharpe for the side being scored, including this checkpoint,
+   * and how many checkpoint returns it was computed from. Null before the
+   * series can support one, which normalises to the neutral 50.
+   */
+  sharpe: number | null;
+  sharpeSamples: number;
   // Authored machine drawdown for this checkpoint, where content supplies one.
   // Absent it, drawdown is scored against the arena risk budget instead of a
   // fabricated machine number.
@@ -202,22 +248,25 @@ export function scoreCheckpoint(params: {
   riskBudgetDD?: number;
 }): CheckpointScore {
   const {
-    action, checkpoint, flags, confidence, turnoverUsed, portfolioDD, machineDD,
+    action, checkpoint, flags, confidence, turnoverUsed, turnoverBudget,
+    portfolioDD, machineDD, sharpe, sharpeSamples,
     riskBudgetDD = DEFAULT_RISK_BUDGET_DRAWDOWN,
   } = params;
 
   const { portfolioEffect } = checkpoint;
-  const actionBias = action === checkpoint.machineDecision.actionCode ? 0.95 : -0.15;
-  const returnBias = portfolioEffect.returnBias + actionBias * 0.02;
+  // Downside capture still compares this checkpoint's move against the
+  // machine's, which is what capture means. It is a tenth of the score and it
+  // is a genuine comparison, unlike the agreement bonus that used to drive the
+  // quarter above it.
   const machineReturn = portfolioEffect.returnBias;
-  const playerCapture = returnBias < 0 ? Math.abs(returnBias / (machineReturn - 0.001)) : 1.0;
+  const playerCapture = machineReturn < 0 ? Math.abs(machineReturn / (machineReturn - 0.001)) : 1.0;
 
-  const raerScore = computeRAERScore(returnBias, machineReturn);
+  const raerScore = normalizeSharpe(sharpe, sharpeSamples);
   const drawdownScore = computeDrawdownScore(portfolioDD, machineDD, riskBudgetDD);
   const downsideScore = computeDownsideScore(playerCapture);
   const recoveryScore = 65;
   const regimeAdaptScore = computeRegimeAdaptScore(action, checkpoint, flags);
-  const turnoverScore = computeTurnoverScore(action, flags, turnoverUsed);
+  const turnoverScore = computeTurnoverScore(action, flags, turnoverUsed, turnoverBudget);
   const consistencyScore = computeConsistencyScore(action, flags, confidence);
   const positionSizingScore = computePositionSizingScore(action, flags, confidence);
 
