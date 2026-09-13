@@ -6,7 +6,7 @@ import { allArenas } from './arenas';
 import type { ActionCode, RunState } from './gameTypes';
 import {
   createInitialRun, commitDecisionCommand, advanceRunCheckpoint, attachThesis,
-  affordableActions, resolveRunResult, observationModeReason,
+  committableActions, resolveRunResult, observationModeReason,
 } from './runEngine';
 import { projectRun, replayRun, replayMatchesRecord } from './runRecord';
 import { outcomes, headline, scoreAttribution, flagTallies } from './runAnalysis';
@@ -30,8 +30,8 @@ function chooseAction(
   disposition: Disposition,
   authored: ActionCode[],
 ): ActionCode {
-  const affordable = affordableActions(run).filter(a => authored.includes(a));
-  const pool = affordable.length > 0 ? affordable : (['HOLD'] as ActionCode[]);
+  const committable = committableActions(run).filter(a => authored.includes(a));
+  const pool = committable.length > 0 ? committable : (['HOLD'] as ActionCode[]);
   switch (disposition) {
     case 'ALWAYS_HOLD': return 'HOLD';
     case 'ALWAYS_FIRST': return pool[0];
@@ -81,15 +81,14 @@ for (const arena of allArenas()) {
     });
   }
 
-  test(`${arena.id} never runs out of affordable stances`, () => {
-    // The budget scales with arena length, so no checkpoint should be reachable
-    // with nothing but HOLD available unless the player spent the budget
-    // themselves. Walked with the cheapest-first disposition.
+  test(`${arena.id} never locks a player out, and every overspend is on the meter`, () => {
+    // The allowance is scored, not enforced (2026-09-13). A player who acts at
+    // every checkpoint may run past it; what must hold is that no commit was
+    // refused for it and that the meter carries exactly what was paid.
     const { run } = playThrough(arena.id, 'ALWAYS_FIRST');
-    assert.ok(
-      run.portfolio.turnoverUsed <= run.turnoverBudget + 1e-9,
-      `${arena.id} overspent its budget`,
-    );
+    assert.equal(run.decisions.length, arena.checkpoints.length, `${arena.id}: a stance was refused`);
+    const paid = run.decisions.reduce((sum, d) => sum + d.turnoverCost, 0);
+    assert.ok(Math.abs(paid - run.portfolio.turnoverUsed) < 1e-6, `${arena.id}: meter ${run.portfolio.turnoverUsed} vs paid ${paid}`);
   });
 
   test(`${arena.id} produces a record that replays to itself`, () => {

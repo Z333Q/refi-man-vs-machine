@@ -19,7 +19,7 @@ import type {
 } from './gameTypes';
 import { getCheckpoint } from './arenas';
 import {
-  advanceRunCheckpoint, attachThesis, canAffordAction, commitDecisionCommand,
+  advanceRunCheckpoint, attachThesis, canCommitAction, commitDecisionCommand,
   createInitialRun, runRiskAdjusted,
 } from './runEngine';
 import { decideCheckpoint, type PolicyReason } from './machinePolicy';
@@ -36,7 +36,7 @@ export interface StressTestStep {
   preferred: ActionCode;
   reason: PolicyReason;
   /** Why the committed stance differs from the preferred one, if it does. */
-  substitution: 'NONE' | 'TURNOVER_EXHAUSTED' | 'STANCE_UNAVAILABLE';
+  substitution: 'NONE' | 'STANCE_NO_OP' | 'STANCE_UNAVAILABLE';
   conviction: number;
   score: number;
   par: number;
@@ -87,7 +87,7 @@ const REASON_THESIS: Record<PolicyReason, Parameters<typeof attachThesis>[1]> = 
   VOLATILITY_RISING: 'VOLATILITY_CONTROL',
   THESIS_INTACT: 'THESIS_UNCHANGED',
   OFF_CYCLE: 'THESIS_UNCHANGED',
-  TURNOVER_EXHAUSTED: 'LIQUIDITY_PRESERVATION',
+  STANCE_NO_OP: 'THESIS_UNCHANGED',
   STANCE_UNAVAILABLE: 'THESIS_UNCHANGED',
 };
 
@@ -116,7 +116,7 @@ export function runStressTest(
       config,
       cp,
       run.portfolio,
-      action => canAffordAction(run, action, cp),
+      action => canCommitAction(run, action, cp),
     );
 
     const outcome = commitDecisionCommand(run, {

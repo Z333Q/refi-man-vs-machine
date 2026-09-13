@@ -430,9 +430,17 @@ test('every card that names a holding or sector executes that trade', () => {
   assert.deepEqual(missing, [], 'cards naming a holding with no authored trade');
 });
 
-// ─── 6. Fair Match: the machine pays the same budget ──────────────────────────
+// ─── 6. Fair Match: the machine pays on the same meter ────────────────────────
 
-test('the authored machine stays inside the arena turnover budget, every arena', () => {
+test('the authored machine stays within one stance of the arena allowance, every arena', () => {
+  // The allowance is scored on both sides and enforced on neither. Until
+  // 2026-09-13 the shadow was forced to HOLD once its book could not pay, and
+  // this law passed because the fallback hid the overspend: banking_stress
+  // CP4 authors 0.1698 of turnover against a 0.158 allowance. The machine now
+  // takes its authored call and pays for it in score, exactly like the human.
+  // The law that remains: authored content may not run away from the
+  // allowance by more than one full-size stance.
+  const ONE_STANCE = 0.10;
   for (const arena of allArenas()) {
     let r = createInitialRun(9, arena.id);
     const budget = r.turnoverBudget;
@@ -442,8 +450,8 @@ test('the authored machine stays inside the arena turnover budget, every arena',
       r = out.run;
       const spent = r.opponentAgent!.portfolio.turnoverUsed;
       assert.ok(
-        spent <= budget + 1e-9,
-        `${arena.id} CP${r.decisions.length}: machine spent ${spent} of a ${budget} budget`,
+        spent <= budget + ONE_STANCE + 1e-9,
+        `${arena.id} CP${r.decisions.length}: machine spent ${spent} of a ${budget} allowance`,
       );
       if (r.currentCheckpoint >= r.totalCheckpoints) break;
       r = advanceRunCheckpoint(r);

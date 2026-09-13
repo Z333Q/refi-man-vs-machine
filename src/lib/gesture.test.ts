@@ -17,7 +17,7 @@ import {
   CONVICTION_MIN, CONVICTION_MAX, CONVICTION_DEFAULT, clampConviction, convictionToConfidence,
 } from './decisionContract';
 import {
-  createInitialRun, commitPendingDecision, commitDecisionCommand, canAffordAction,
+  createInitialRun, commitPendingDecision, commitDecisionCommand, canCommitAction, stanceTransition,
   type DecisionCommand,
 } from './runEngine';
 
@@ -582,29 +582,39 @@ test('an unauthored stance is rejected and records no decision', () => {
   assert.equal(JSON.stringify(run), before);
 });
 
-test('an authored but unaffordable stance is rejected and records no decision', () => {
+test('a stance that would move nothing is rejected and records no decision', () => {
+  // The turnover allowance no longer locks anything (2026-09-13). The one
+  // refusal the commit boundary still makes is a stance that would trade
+  // nothing on this book, so that is what every door must be shown rejecting.
   const run = createInitialRun();
   const cp = getCheckpoint('covid_black_swan', run.currentCheckpoint);
   assert.ok(cp);
-  const priced = cp.availableActions.find(a => a.actionCode !== 'HOLD');
-  assert.ok(priced, 'this checkpoint must author a stance that costs turnover');
+  assert.ok(cp.availableActions.some(a => a.actionCode === 'RAISE_CASH'), 'CP1 must offer RAISE_CASH');
 
-  // Drain the budget so the authored stance is no longer payable.
-  const broke: RunState = {
-    ...run,
-    portfolio: { ...run.portfolio, turnoverUsed: run.turnoverBudget },
-  };
-  assert.equal(canAffordAction(broke, priced.actionCode, cp), false);
+  // Cash already at its ceiling: RAISE_CASH raises nothing. Built through the
+  // engine so positions and cash agree.
+  let book = run.portfolio;
+  for (let i = 0; i < 6; i++) {
+    const t = stanceTransition(book, 'RAISE_CASH');
+    book = { ...book, positions: t.positions, cashWeight: t.cashWeight };
+  }
+  const ceiling: RunState = { ...run, portfolio: book };
+  assert.equal(canCommitAction(ceiling, 'RAISE_CASH', cp), false);
 
-  const before = JSON.stringify(broke);
-  assert.equal(commitDecisionCommand(broke, { action: priced.actionCode, conviction: 70 }), null);
-  assert.equal(broke.decisions.length, 0);
-  assert.equal(JSON.stringify(broke), before);
+  const before = JSON.stringify(ceiling);
+  assert.equal(commitDecisionCommand(ceiling, { action: 'RAISE_CASH', conviction: 70 }), null);
+  assert.equal(ceiling.decisions.length, 0);
+  assert.equal(JSON.stringify(ceiling), before);
 
-  // HOLD is free, so it stays committable on an exhausted budget.
-  const held = commitDecisionCommand(broke, { action: 'HOLD', conviction: 70 });
-  assert.ok(held, 'HOLD must remain affordable');
+  // HOLD is always committable, whatever the book looks like.
+  const held = commitDecisionCommand(ceiling, { action: 'HOLD', conviction: 70 });
+  assert.ok(held, 'HOLD must remain committable');
   assert.equal(held.run.decisions[0].actionCode, 'HOLD');
+
+  // And a spent allowance locks nothing: the priced stance still commits.
+  const spent: RunState = { ...run, portfolio: { ...run.portfolio, turnoverUsed: run.turnoverBudget } };
+  const priced = cp.availableActions.find(a => a.actionCode !== 'HOLD')!;
+  assert.ok(commitDecisionCommand(spent, { action: priced.actionCode, conviction: 70 }), 'spent allowance must not lock a stance');
 });
 
 // ─── Clearance decides before the gesture owns the pointer ────────────────────
