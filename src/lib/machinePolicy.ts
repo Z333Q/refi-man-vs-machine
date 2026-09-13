@@ -34,7 +34,7 @@ export type PolicyReason =
   | 'VOLATILITY_RISING'
   | 'THESIS_INTACT'
   | 'OFF_CYCLE'
-  | 'TURNOVER_EXHAUSTED'
+  | 'STANCE_NO_OP'
   | 'STANCE_UNAVAILABLE';
 
 export const REASON_TEXT: Record<PolicyReason, string> = {
@@ -47,7 +47,7 @@ export const REASON_TEXT: Record<PolicyReason, string> = {
   VOLATILITY_RISING: 'Volatility rising. Risk-aware layers reduce before they are forced to.',
   THESIS_INTACT: 'Nothing your machine watches has changed. Holding is a decision.',
   OFF_CYCLE: 'Off-cycle for your rebalance schedule. The machine waits rather than acts early.',
-  TURNOVER_EXHAUSTED: 'Turnover budget spent. Only holding remains affordable.',
+  STANCE_NO_OP: 'The stance it wanted would have traded nothing on its book.',
   STANCE_UNAVAILABLE: 'The preferred stance is not on offer at this checkpoint.',
 };
 
@@ -65,10 +65,10 @@ export interface PolicyDecision {
    * layer the player paid for became invisible.
    */
   reason: PolicyReason;
-  /** The stance the policy wanted before availability and budget were applied. */
+  /** The stance the policy wanted before availability was applied. */
   preferred: ActionCode;
   /** Why the committed stance differs from the preferred one, if it does. */
-  substitution: 'NONE' | 'TURNOVER_EXHAUSTED' | 'STANCE_UNAVAILABLE';
+  substitution: 'NONE' | 'STANCE_NO_OP' | 'STANCE_UNAVAILABLE';
 }
 
 // ─── Signal layer ─────────────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ export function decideCheckpoint(
   config: MachineConfig,
   cp: CheckpointData,
   portfolio: PortfolioState,
-  canAfford: (action: ActionCode) => boolean,
+  canCommit: (action: ActionCode) => boolean,
 ): PolicyDecision {
   const override = guardrailOverride(config, cp, portfolio);
   const cadenceOpen = actsThisCheckpoint(config, cp.sequence);
@@ -258,7 +258,7 @@ export function decideCheckpoint(
   const preferred = wanted.action;
   const authored = new Set(cp.availableActions.map((a: ActionBranch) => a.actionCode));
 
-  if (authored.has(wanted.action) && canAfford(wanted.action)) {
+  if (authored.has(wanted.action) && canCommit(wanted.action)) {
     return {
       action: wanted.action,
       conviction: convictionFor(config, wanted.reason),
@@ -269,7 +269,7 @@ export function decideCheckpoint(
   }
 
   const substitution = authored.has(wanted.action)
-    ? 'TURNOVER_EXHAUSTED' as const
+    ? 'STANCE_NO_OP' as const
     : 'STANCE_UNAVAILABLE' as const;
 
   // Degrade in the direction the machine was already heading, so a blocked
@@ -282,7 +282,7 @@ export function decideCheckpoint(
             : ['HOLD'];
 
   for (const candidate of fallbacks) {
-    if (authored.has(candidate) && canAfford(candidate)) {
+    if (authored.has(candidate) && canCommit(candidate)) {
       return {
         action: candidate,
         conviction: convictionFor(config, wanted.reason),

@@ -9,7 +9,7 @@ import type { ActionBranch, ActionCode, ArenaId, ModuleCode, ThesisCode } from '
 import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
-  canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
+  canCommitAction, stanceUnavailableReason, exceedsAllowance, turnoverCostFor, observationModeReason, resolveRunResult,
   portfolioBeforeCheckpoint, simulatePortfolioAdvance, allocationEffectFor,
   STARTING_CAPITAL, runRiskAdjusted, type DecisionCommand,
 } from '../lib/runEngine';
@@ -519,7 +519,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
    */
   const openFocusedControls = useCallback((branch: ActionBranch) => {
     if (!run) return;
-    if (!canAffordAction(run, branch.actionCode, currentCheckpointData)) return;
+    if (!canCommitAction(run, branch.actionCode, currentCheckpointData)) return;
     selectStance(branch);
     setActivePanel('DECIDE');
     // An actual focus move, not just a state change: the fallback has to leave
@@ -625,7 +625,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
       const n = Number(e.key);
       if (Number.isInteger(n) && n >= 1 && n <= branches.length) {
         const branch = branches[n - 1];
-        if (canAffordAction(run, branch.actionCode, currentCheckpointData)) selectStance(branch);
+        if (canCommitAction(run, branch.actionCode, currentCheckpointData)) selectStance(branch);
         return;
       }
 
@@ -870,8 +870,11 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
 
   const turnoverBudget = run.turnoverBudget;
   const turnoverSpentPct = turnoverBudget > 0 ? portfolio.turnoverUsed / turnoverBudget : 1;
-  const turnoverExhausted = isHoldOnly(run, cp);
-  // Budget state is caution at most. Red is the critical drawdown breach only.
+  // Past the allowance nothing is locked; the discipline score pays. The
+  // notice says so, because a spent meter used to grey the stances out with
+  // no explanation and read as a bug (2026-09-13).
+  const overAllowance = portfolio.turnoverUsed > turnoverBudget + 1e-9;
+  // Allowance state is caution at most. Red is the critical drawdown breach only.
   const turnoverColor = turnoverSpentPct > 0.60 ? 'text-alert-amber' : 'text-phosphor';
   const turnoverBarColor = turnoverSpentPct > 0.60 ? 'bg-alert-amber' : 'bg-phosphor';
   // Drawdown: red once the run has actually breached the arena's limit
@@ -1115,7 +1118,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
         <div
           className="mt-1 h-1 bg-phosphor/10"
           role="meter"
-          aria-label="TURNOVER BUDGET SPENT"
+          aria-label="TURNOVER ALLOWANCE SPENT"
           aria-valuenow={Math.round(turnoverSpentPct * 100)}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -1125,11 +1128,11 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
             style={{ width: `${Math.min(100, turnoverSpentPct * 100)}%` }}
           />
         </div>
-        {turnoverExhausted && (
-          <div className="text-alert-amber text-xs tracking-widest mt-1">
-            TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
-          </div>
-        )}
+        <div className="text-phosphor-dim/60 tracking-widest mt-1" style={{ fontSize: '10px' }}>
+          {overAllowance
+            ? 'ALLOWANCE SPENT. EVERY STANCE STAYS OPEN. EACH ONE NOW COSTS DISCIPLINE SCORE.'
+            : 'SHARE OF THE BOOK TRADED THIS RUN. PAST THE ALLOWANCE, SCORE PAYS. NOTHING LOCKS.'}
+        </div>
       </div>
 
       {/* min-h-0: a flex item will not shrink below its content without it,
@@ -1200,7 +1203,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
               <div
                 className="mt-1 h-1.5 bg-phosphor/10"
                 role="meter"
-                aria-label="TURNOVER BUDGET SPENT"
+                aria-label="TURNOVER ALLOWANCE SPENT"
                 aria-valuenow={Math.round(turnoverSpentPct * 100)}
                 aria-valuemin={0}
                 aria-valuemax={100}
@@ -1210,11 +1213,11 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                   style={{ width: `${Math.min(100, turnoverSpentPct * 100)}%` }}
                 />
               </div>
-              {turnoverExhausted && (
-                <div className="text-alert-amber text-xs tracking-widest mt-1">
-                  TURNOVER BUDGET EXHAUSTED. HOLD ONLY.
-                </div>
-              )}
+              <div className="text-phosphor-dim/60 tracking-widest mt-1" style={{ fontSize: '10px' }}>
+                {overAllowance
+                  ? 'ALLOWANCE SPENT. EVERY STANCE STAYS OPEN. EACH ONE NOW COSTS DISCIPLINE SCORE.'
+                  : 'SHARE OF THE BOOK TRADED THIS RUN. PAST THE ALLOWANCE, SCORE PAYS. NOTHING LOCKS.'}
+              </div>
             </div>
           </div>
         </div>
@@ -1399,7 +1402,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                         {decisionPhase && branches.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             {branches.map(branch => {
-                              const affordable = canAffordAction(run, branch.actionCode, currentCheckpointData);
+                              const affordable = canCommitAction(run, branch.actionCode, currentCheckpointData);
                               const active = previewStance === branch.actionCode;
                               return (
                                 <button
@@ -1565,7 +1568,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                     </div>
                     <div className="space-y-2 mb-6" ref={measureDecisionRegion}>
                       {branches.map((branch, i) => {
-                        const affordable = canAffordAction(run, branch.actionCode, cp);
+                        const unavailableReason = stanceUnavailableReason(portfolio, branch.actionCode, cp);
                         const selected = stance === branch.actionCode;
                         const cost = turnoverCostFor(portfolio, branch.actionCode, cp);
                         return (
@@ -1573,7 +1576,9 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                             key={branch.actionCode}
                             branch={branch}
                             index={i}
-                            affordable={affordable}
+                            affordable={unavailableReason === null}
+                            unavailableReason={unavailableReason}
+                            overAllowance={exceedsAllowance(run, branch.actionCode, cp)}
                             turnoverCost={cost}
                             checkpointSequence={run.currentCheckpoint}
                             selected={selected}

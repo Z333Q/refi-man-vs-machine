@@ -229,8 +229,12 @@ function computeTurnoverScore(
     if (penaltyFlags.includes(f)) score -= 10;
   });
 
+  // The allowance is scored, not enforced (runEngine, stance availability).
+  // Past it, every further stance is still open to the player and this is
+  // where it is paid for.
   const spent = turnoverBudget > 0 ? turnoverUsed / turnoverBudget : 0;
-  if (spent > 0.75) score -= 15;
+  if (spent > 1.00) score -= 30;
+  else if (spent > 0.75) score -= 15;
   else if (spent > 0.50) score -= 8;
 
   return clamp(score, 0, 100);

@@ -234,11 +234,10 @@ export async function playCheckpoint(page: Page): Promise<boolean> {
   // reaches the window listener only by accident of bubbling, so it proves
   // nothing about what a player can do.
   //
-  // Trying each slot in turn matters. The turnover budget is a hard constraint,
-  // so by the last checkpoints of an arena the expensive stances are genuinely
-  // priced out and their cards correctly refuse selection. A helper that always
-  // pressed 1 would stall on a correctly-behaving screen and report it as a
-  // hang, which is exactly what it did.
+  // Trying each slot in turn matters. A stance that would move nothing on the
+  // book (cash already at its ceiling, say) is refused by its card, so a
+  // helper that always pressed 1 could stall on a correctly-behaving screen
+  // and report it as a hang, which is exactly what it once did.
   // Move focus to the page before pressing a stance key. Bounded: an
   // unbounded click retries against whatever is covering the body, and a
   // blocking visual event landing here turned the whole run into a hang rather

@@ -165,7 +165,7 @@ test('an unaffordable stance degrades rather than being committed', () => {
   // Only HOLD is affordable.
   const d = decideCheckpoint(cfg(), cp, portfolio, action => action === 'HOLD');
   assert.equal(d.action, 'HOLD');
-  assert.ok(['TURNOVER_EXHAUSTED', 'STANCE_UNAVAILABLE', 'THESIS_INTACT'].includes(d.reason));
+  assert.ok(['STANCE_NO_OP', 'STANCE_UNAVAILABLE', 'THESIS_INTACT'].includes(d.reason));
 });
 
 test('a blocked de-risk never degrades into adding risk', () => {

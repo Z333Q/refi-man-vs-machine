@@ -1068,7 +1068,7 @@ function StressTestPanel({ config, installedModules }: { config: MachineConfig; 
             </div>
             <div className="text-phosphor-dim text-xs mt-0.5 leading-snug pl-10">
               {REASON_TEXT[s.reason]}
-              {s.substitution === 'TURNOVER_EXHAUSTED' && ' Budget would not cover the stance it wanted.'}
+              {s.substitution === 'STANCE_NO_OP' && ' That stance would have moved nothing on its book.'}
               {s.substitution === 'STANCE_UNAVAILABLE' && ` This checkpoint offered no ${s.preferred.replace(/_/g, ' ')}.`}
             </div>
           </div>
@@ -1080,7 +1080,7 @@ function StressTestPanel({ config, installedModules }: { config: MachineConfig; 
         ONLY THE RULES YOU SET, APPLIED TO HISTORICAL CONTENT. THIS IS NOT A
         REFI RF/RL BENCHMARK RESULT AND MUST NOT BE READ AS ONE.
         <br />
-        SAME TURNOVER BUDGET, SAME RISK LIMITS AND SAME SCORING AS YOUR OWN RUN.
+        SAME TURNOVER ALLOWANCE, SAME RISK LIMITS AND SAME SCORING AS YOUR OWN RUN.
       </div>
       </>)}
     </div>

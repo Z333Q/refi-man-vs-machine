@@ -27,7 +27,12 @@ import { emitEvent } from '../../lib/events';
 interface Props {
   branch: ActionBranch;
   index: number;
+  /** Committable on this book. False only when the stance would move nothing. */
   affordable: boolean;
+  /** Why the stance is not committable, shown on the card. Null when it is. */
+  unavailableReason?: string | null;
+  /** Taking this stance carries the run past its turnover allowance. Never disables. */
+  overAllowance?: boolean;
   turnoverCost: number;
   checkpointSequence: number;
   selected: boolean;
@@ -49,7 +54,8 @@ function toSample(e: { pointerId: number; clientX: number; clientY: number; time
 }
 
 export default function PullToCommit({
-  branch, index, affordable, turnoverCost, checkpointSequence, selected,
+  branch, index, affordable, unavailableReason = null, overAllowance = false,
+  turnoverCost, checkpointSequence, selected,
   reducedMotion, muted, deviceClass, regionBounds,
   onCommit, onOpenFocusedControls, previousConviction,
 }: Props) {
@@ -320,7 +326,7 @@ export default function PullToCommit({
               {stanceTitle(branch)}
             </span>
           </div>
-          <span className={`text-xs tabular-nums ${affordable ? 'text-phosphor-dim' : 'text-alert-amber'}`}>
+          <span className={`text-xs tabular-nums ${affordable && !overAllowance ? 'text-phosphor-dim' : 'text-alert-amber'}`}>
             {turnoverCost === 0 ? 'FREE' : `${(turnoverCost * 100).toFixed(0)}% TURNOVER`}
           </span>
         </div>
@@ -350,7 +356,12 @@ export default function PullToCommit({
 
         {!affordable && (
           <div className="text-alert-amber text-xs tracking-widest mt-1 pl-7">
-            NOT ENOUGH TURNOVER BUDGET REMAINING.
+            {unavailableReason ?? 'THIS STANCE WOULD CHANGE NOTHING ON YOUR BOOK.'}
+          </div>
+        )}
+        {affordable && overAllowance && (
+          <div className="text-alert-amber text-xs tracking-widest mt-1 pl-7">
+            PAST YOUR ALLOWANCE. STILL YOURS TO TAKE. DISCIPLINE SCORE PAYS FOR IT.
           </div>
         )}
         {clearanceWarning && (

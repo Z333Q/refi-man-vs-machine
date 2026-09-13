@@ -7,7 +7,8 @@ import './arenaIndex';
 import {
   createInitialRun, createInitialPortfolio, commitPendingDecision, advanceRunCheckpoint,
   turnoverBudgetFor,
-  turnoverCostFor, isTurnoverExhausted, canAffordAction, affordableActions, isHoldOnly,
+  turnoverCostFor, isTurnoverExhausted, canCommitAction, committableActions, exceedsAllowance,
+  stanceUnavailableReason, stanceTransition,
   TURNOVER_BUDGET_START, STARTING_CAPITAL,
 } from './runEngine';
 
@@ -39,7 +40,7 @@ function playScriptedRun(
   let run = createInitialRun();
   for (const step of sequence) {
     if (run.phase === 'COMPLETE') break;
-    const action = opts.enforceBudget && !canAffordAction(run, step.action) ? 'HOLD' : step.action;
+    const action = opts.enforceBudget && exceedsAllowance(run, step.action) ? 'HOLD' : step.action;
     run = {
       ...run,
       pendingAction: action,
@@ -143,39 +144,68 @@ test('HOLD is free and never advances the turnover meter', () => {
   assert.equal(isTurnoverExhausted(run), false);
 });
 
-test('an unaffordable stance is unavailable, not merely the one after it', () => {
-  // The budget is a hard constraint. A stance that does not fully fit in what
-  // is left cannot be taken at all.
+test('the allowance never locks a stance: past it, every offered stance stays committable', () => {
+  // Until 2026-09-13 the budget was a hard constraint and a defensive player
+  // reached CP14 of COVID with only HOLD on the card, unexplained. The
+  // allowance is now scored (computeTurnoverScore) and enforced nowhere.
   let run = createInitialRun();
-  // Spend down to exactly 0.03 remaining, derived from the run's own budget so
-  // the case holds whatever the arena's length makes that budget.
-  run = { ...run, portfolio: { ...run.portfolio, turnoverUsed: run.turnoverBudget - 0.03 } };
-  assert.equal(canAffordAction(run, 'HOLD'), true);            // free
-  assert.equal(canAffordAction(run, 'RAISE_CASH'), false);     // 0.04 > 0.03
-  assert.equal(canAffordAction(run, 'REDUCE'), false);         // 0.05 > 0.03
-  assert.equal(canAffordAction(run, 'ROTATE_DEFENSIVE'), false); // 0.07 > 0.03
-  assert.equal(canAffordAction(run, 'STAGED_BUY'), true);      // 0.03 fits exactly
-});
-
-test('expensive stances fall away before cheap ones as the budget drains', () => {
-  const affordableAt = (used: number) => {
-    const run = { ...createInitialRun(), portfolio: { ...createInitialPortfolio(), turnoverUsed: used } };
-    const codes: ActionCode[] = ['RAISE_CASH', 'REDUCE', 'ADD_RISK', 'ROTATE_DEFENSIVE'];
-    return codes.filter(c => canAffordAction(run, c)).length;
-  };
-  // Monotonic: spending more never re-opens a stance. Expressed as fractions
-  // of the run's own budget rather than as absolute spend, so the property
-  // survives an arena of any length (the budget scales with checkpoint count).
-  const budget = createInitialRun().turnoverBudget;
-  const counts = [0, 0.825, 0.875, 0.9, 0.925, 1].map(f => affordableAt(budget * f));
-  for (let i = 1; i < counts.length; i++) {
-    assert.ok(counts[i] <= counts[i - 1], `budget spend re-opened a stance: ${counts}`);
+  run = { ...run, portfolio: { ...run.portfolio, turnoverUsed: run.turnoverBudget } };
+  assert.equal(isTurnoverExhausted(run), true);
+  const cp = getCheckpoint('covid_black_swan', run.currentCheckpoint);
+  assert.ok(cp);
+  const offered = cp.availableActions.map(a => a.actionCode);
+  assert.deepEqual(committableActions(run), offered);
+  for (const a of offered) {
+    assert.equal(canCommitAction(run, a), true, `${a} was locked by a spent allowance`);
+    assert.equal(exceedsAllowance(run, a), a !== 'HOLD', `${a} allowance flag`);
   }
-  assert.equal(counts[0], 4);
-  assert.equal(counts[counts.length - 1], 0);
+  // And a commit past the allowance really lands, and is really paid for.
+  const priced = offered.find(a => a !== 'HOLD')!;
+  const out = commitPendingDecision({ ...run, pendingAction: priced, pendingConfidence: 0.6 });
+  assert.ok(out, 'a stance past the allowance must still commit');
+  assert.ok(out.run.portfolio.turnoverUsed > run.turnoverBudget, 'the overspend is recorded on the meter');
 });
 
-test('a run that only takes affordable stances never exceeds its budget', () => {
+test('overspending the allowance is paid for in the turnover score, in tiers', () => {
+  // Scored, not enforced: the component that carries the cost must actually
+  // step down as the meter passes 50%, 75% and 100% of the allowance.
+  const at = (spentFraction: number) => {
+    let run = createInitialRun();
+    run = { ...run, portfolio: { ...run.portfolio, turnoverUsed: run.turnoverBudget * spentFraction } };
+    const out = commitPendingDecision({ ...run, pendingAction: 'HOLD', pendingConfidence: 0.6 });
+    assert.ok(out);
+    return out.score.turnoverScore;
+  };
+  const [none, half, most, over] = [0, 0.6, 0.8, 1.2].map(at);
+  assert.ok(none > half && half > most && most > over, `tiers did not step down: ${[none, half, most, over]}`);
+});
+
+test('a stance that would move nothing is refused, with the reason stated', () => {
+  // The one legitimate refusal. RAISE_CASH with cash already at the ceiling is
+  // a priced card that changes nothing, and a card that changes nothing lies.
+  // A book at the cash ceiling, built the engine's own way rather than by
+  // poking cashWeight (which leaves positions summing to the old equity share
+  // and makes the next reallocation trade the difference).
+  let book = createInitialPortfolio('covid_black_swan');
+  for (let i = 0; i < 6; i++) {
+    const t = stanceTransition(book, 'RAISE_CASH');
+    book = { ...book, positions: t.positions, cashWeight: t.cashWeight };
+  }
+  assert.equal(book.cashWeight, 0.60);
+  let run = createInitialRun();
+  run = { ...run, portfolio: book };
+  const cp = getCheckpoint('covid_black_swan', run.currentCheckpoint);
+  assert.ok(cp && cp.availableActions.some(a => a.actionCode === 'RAISE_CASH'));
+  assert.equal(turnoverCostFor(run.portfolio, 'RAISE_CASH', cp), 0);
+  assert.match(stanceUnavailableReason(run.portfolio, 'RAISE_CASH', cp) ?? '', /CEILING/);
+  assert.equal(canCommitAction(run, 'RAISE_CASH', cp), false);
+  assert.equal(commitPendingDecision({ ...run, pendingAction: 'RAISE_CASH', pendingConfidence: 0.6 }), null);
+  // HOLD is always committable, and so is a stance that moves the book.
+  assert.equal(stanceUnavailableReason(run.portfolio, 'HOLD', cp), null);
+  assert.equal(canCommitAction(run, 'HOLD', cp), true);
+});
+
+test('a scripted run that respects the allowance never exceeds it', () => {
   const spendEverything = SEQUENCE.map(s => ({
     ...s,
     action: (s.action === 'HOLD' ? 'REDUCE' : s.action) as ActionCode,
@@ -188,18 +218,40 @@ test('a run that only takes affordable stances never exceeds its budget', () => 
   // The paid costs are exactly the recorded per-decision costs.
   const paid = run.decisions.reduce((sum, d) => sum + d.turnoverCost, 0);
   assert.ok(Math.abs(paid - run.portfolio.turnoverUsed) < 1e-9);
-  // And the run really did press against the ceiling rather than idling.
   assert.ok(run.portfolio.turnoverUsed > 0.30, 'scripted run did not spend enough to test the ceiling');
 });
 
-test('an exhausted budget leaves the checkpoint HOLD-only', () => {
-  let run = createInitialRun();
-  run = { ...run, portfolio: { ...run.portfolio, turnoverUsed: run.turnoverBudget } };
-  assert.equal(isTurnoverExhausted(run), true);
-  assert.equal(isHoldOnly(run), true);
-  assert.deepEqual(affordableActions(run), ['HOLD']);
-  // CP1 offers HOLD, REDUCE, RAISE_CASH and ROTATE_DEFENSIVE with a full budget.
-  assert.equal(isHoldOnly(createInitialRun()), false);
+test('regression: no player style is ever left with HOLD as the only stance', () => {
+  // The 2026-09-13 report: RECOVERY ROTATION (CP14) and the checkpoint before
+  // it offered nothing but HOLD to a defensive-active player. Three styles,
+  // every checkpoint, every arena: at least one stance besides HOLD must be
+  // committable whenever the content offers one.
+  const styles: Array<[string, (offered: ActionCode[], seq: number) => ActionCode]> = [
+    ['alternating', (o, seq) => (seq % 2 === 0 ? o.find(a => a !== 'HOLD') ?? 'HOLD' : 'HOLD')],
+    ['always acting', o => o.find(a => a !== 'HOLD') ?? 'HOLD'],
+    ['always defensive', o => o.find(a => a === 'RAISE_CASH' || a === 'ROTATE_DEFENSIVE') ?? o.find(a => a !== 'HOLD') ?? 'HOLD'],
+  ];
+  for (const arenaId of ['covid_black_swan', 'recovery_trap', 'inflation_shift', 'banking_stress'] as const) {
+    for (const [name, pick] of styles) {
+      let run = createInitialRun(7, arenaId);
+      for (let guard = 0; guard < 40 && run.phase !== 'COMPLETE'; guard++) {
+        const cp = getCheckpoint(arenaId, run.currentCheckpoint);
+        if (!cp) break;
+        const offered = cp.availableActions.map(a => a.actionCode);
+        const open = committableActions(run, cp);
+        if (offered.some(a => a !== 'HOLD')) {
+          assert.ok(
+            open.some(a => a !== 'HOLD'),
+            `${arenaId} ${name}: CP${run.currentCheckpoint} was HOLD-only (used ${run.portfolio.turnoverUsed})`,
+          );
+        }
+        const action = pick(open, run.currentCheckpoint);
+        const out = commitPendingDecision({ ...run, pendingAction: action, pendingConfidence: 0.6 });
+        assert.ok(out, `${arenaId} ${name}: commit refused at CP${run.currentCheckpoint}`);
+        run = advanceRunCheckpoint(out.run);
+      }
+    }
+  }
 });
 
 test('every stance is priced from the book, and HOLD is free', () => {

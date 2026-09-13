@@ -258,33 +258,62 @@ export function isTurnoverExhausted(run: RunState): boolean {
   return run.portfolio.turnoverUsed >= run.turnoverBudget;
 }
 
+// ─── Stance availability ──────────────────────────────────────────────────────
+//
+// The turnover allowance is scored, never enforced. Until 2026-09-13 it was a
+// hard constraint: a stance the remaining budget could not cover was greyed
+// out, and a player who acted defensively at every checkpoint reached CP14 of
+// COVID with nothing but HOLD on the card and no explanation. That read as a
+// bug, and it removed the decision from the half of the arena that teaches
+// re-entry. CLAUDE.md puts "limited action budget" under Iron Mode (§7.4);
+// standard play scores turnover discipline (§29.1) and leaves every stance
+// open. You can lose a run on drawdown. You are never locked out of it.
+//
+// The one thing that does make a stance unavailable is that it would trade
+// nothing: RAISE_CASH with cash already at its ceiling, ADD_RISK at the
+// floor. Offering a priced stance that changes nothing is the other way a
+// card lies to the player, so those are refused with the reason stated.
+
 /**
- * Whether a stance still fits inside the remaining budget. HOLD is free and
- * therefore always available.
- *
- * The budget is a hard constraint, not a threshold that blocks the action
- * after the one that overruns it: a stance the player cannot fully pay for is
- * unavailable. Expensive stances fall away before cheap ones as the meter
- * drains, so earlier decisions visibly narrow later ones.
+ * Why a stance cannot be committed at this checkpoint, or null when it can.
+ * HOLD is always committable. The only refusal is a stance that would move
+ * no weight on this book.
  */
-export function canAffordAction(run: RunState, action: ActionCode, checkpoint?: CheckpointData): boolean {
-  if (action === 'HOLD') return true;
-  const cp = checkpoint ?? getCheckpoint(run.arenaId, run.currentCheckpoint);
-  // Cents-scale epsilon so accumulated float error cannot bar an action that
-  // exactly fits the remaining budget.
-  return run.portfolio.turnoverUsed + turnoverCostFor(run.portfolio, action, cp) <= run.turnoverBudget + 1e-9;
+export function stanceUnavailableReason(
+  portfolio: PortfolioState,
+  action: ActionCode,
+  checkpoint?: CheckpointData,
+): string | null {
+  if (action === 'HOLD') return null;
+  if (turnoverCostFor(portfolio, action, checkpoint) > 1e-9) return null;
+  const delta = stanceCashDelta(action);
+  if (delta > 0) return `CASH IS ALREADY AT ITS ${Math.round(CASH_WEIGHT_MAX * 100)}% CEILING. NOTHING TO RAISE.`;
+  if (delta < 0) return `CASH IS ALREADY AT ITS ${Math.round(CASH_WEIGHT_MIN * 100)}% FLOOR. NOTHING TO DEPLOY.`;
+  return 'THIS STANCE WOULD CHANGE NOTHING ON YOUR BOOK.';
 }
 
-/** The stances this checkpoint offers that the remaining budget still covers. */
-export function affordableActions(run: RunState, checkpoint?: CheckpointData): ActionCode[] {
+/** Whether a stance can be committed at this checkpoint. Never a budget test. */
+export function canCommitAction(run: RunState, action: ActionCode, checkpoint?: CheckpointData): boolean {
+  const cp = checkpoint ?? getCheckpoint(run.arenaId, run.currentCheckpoint);
+  return stanceUnavailableReason(run.portfolio, action, cp) === null;
+}
+
+/** The stances this checkpoint offers that would actually move the book. */
+export function committableActions(run: RunState, checkpoint?: CheckpointData): ActionCode[] {
   const cp = checkpoint ?? getCheckpoint(run.arenaId, run.currentCheckpoint);
   const offered = cp?.availableActions.map(a => a.actionCode) ?? [];
-  return offered.filter(a => canAffordAction(run, a, cp));
+  return offered.filter(a => canCommitAction(run, a, cp));
 }
 
-/** True when nothing but HOLD is left affordable at this checkpoint. */
-export function isHoldOnly(run: RunState, checkpoint?: CheckpointData): boolean {
-  return affordableActions(run, checkpoint).every(a => a === 'HOLD');
+/**
+ * Whether taking this stance would carry the run past its turnover allowance.
+ * Informational: the card says so and the discipline score pays for it. It
+ * never disables anything.
+ */
+export function exceedsAllowance(run: RunState, action: ActionCode, checkpoint?: CheckpointData): boolean {
+  if (action === 'HOLD') return false;
+  const cp = checkpoint ?? getCheckpoint(run.arenaId, run.currentCheckpoint);
+  return run.portfolio.turnoverUsed + turnoverCostFor(run.portfolio, action, cp) > run.turnoverBudget + 1e-9;
 }
 
 // ─── Portfolio advance ────────────────────────────────────────────────────────
@@ -605,9 +634,9 @@ export interface CommitOutcome {
 // Both are pure functions of their policy, the checkpoint and their own book.
 
 /** The passive index's stated reason. It is the same every checkpoint, on purpose. */
-/** Why an opponent held when its own budget could not pay for its call. */
-export const TURNOVER_EXHAUSTED_REASON =
-  'Turnover budget exhausted. The policy call is unaffordable on this book, so the machine holds.';
+/** Why an opponent held when its call would have moved nothing on its book. */
+export const STANCE_NO_OP_REASON =
+  'The policy call would have traded nothing on this book, so the machine holds.';
 
 export const PASSIVE_HOLD_REASON =
   'Buy and hold. The index takes no decisions; it holds full exposure through every regime.';
@@ -618,10 +647,13 @@ export interface ShadowDecision {
   reason: string;
 }
 
-export function shadowCanAfford(run: RunState, agent: ShadowAgent, action: ActionCode, cp: CheckpointData): boolean {
-  if (action === 'HOLD') return true;
-  // The shadow pays for its own book, not the player's.
-  return agent.portfolio.turnoverUsed + turnoverCostFor(agent.portfolio, action, cp) <= run.turnoverBudget + 1e-9;
+/**
+ * Whether the shadow can commit a stance on its own book. The same rule as the
+ * player's (Fair Match, §26.5): the allowance is scored on both sides and
+ * enforced on neither; only a stance that would trade nothing is refused.
+ */
+export function shadowCanCommit(agent: ShadowAgent, action: ActionCode, cp: CheckpointData): boolean {
+  return stanceUnavailableReason(agent.portfolio, action, cp) === null;
 }
 
 /** What a policy does at this checkpoint, given the agent's own book. */
@@ -629,7 +661,6 @@ export function decideShadow(
   policy: OpponentPolicy,
   cp: CheckpointData,
   agent: ShadowAgent,
-  run: RunState,
 ): ShadowDecision | null {
   switch (policy.kind) {
     case 'AUTHORED': {
@@ -637,15 +668,13 @@ export function decideShadow(
       // it earns a real score. Still authored, still no hindsight: the arena
       // decided this stance when it was written, not from the outcome.
       //
-      // And it pays for it. Fair Match (§26.5) means the same constraints, and
-      // an opponent allowed to spend turnover the human is barred from
-      // spending is not playing the same game: the authored path used to skip
-      // the affordability check entirely (2026-09-12 review). Valid shipped
-      // content never reaches the fallback — the content test asserts every
-      // authored path stays inside its arena's budget — but malformed content
-      // degrades to HOLD rather than violating the constraint.
+      // And it pays for it: the same turnover meter and the same discipline
+      // score as the human (Fair Match, §26.5). The content test asserts every
+      // authored path stays inside its arena's allowance. The fallback here is
+      // for an authored stance that would move nothing on the book it has
+      // actually ended up with; it degrades to HOLD and says why.
       const authored = cp.machineDecision.actionCode;
-      if (shadowCanAfford(run, agent, authored, cp)) {
+      if (shadowCanCommit(agent, authored, cp)) {
         return {
           action: authored,
           conviction: CONVICTION_DEFAULT,
@@ -655,13 +684,13 @@ export function decideShadow(
       return {
         action: 'HOLD',
         conviction: CONVICTION_DEFAULT,
-        reason: TURNOVER_EXHAUSTED_REASON,
+        reason: STANCE_NO_OP_REASON,
       };
     }
     case 'HOLD':
       return { action: 'HOLD', conviction: CONVICTION_DEFAULT, reason: PASSIVE_HOLD_REASON };
     case 'CONFIG': {
-      const d = decideCheckpoint(policy.config, cp, agent.portfolio, a => shadowCanAfford(run, agent, a, cp));
+      const d = decideCheckpoint(policy.config, cp, agent.portfolio, a => shadowCanCommit(agent, a, cp));
       return { action: d.action, conviction: d.conviction, reason: REASON_TEXT[d.reason] };
     }
   }
@@ -729,9 +758,9 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
   const branch = cp.availableActions.find(a => a.actionCode === action);
   if (!branch) return null;
 
-  // The turnover budget is a hard constraint. A stance the run cannot pay for
-  // is not committable, whichever door proposed it.
-  if (!canAffordAction(run, action, cp)) return null;
+  // A stance that would move nothing is not committable, whichever door
+  // proposed it. The turnover allowance is not checked here: it is scored.
+  if (!canCommitAction(run, action, cp)) return null;
 
   const flags: BehavioralFlag[] = [...branch.branchEffect.flagsAdd];
   const dimUpdates = branch.branchEffect.alphaImpact;
@@ -787,7 +816,7 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
   let machineReason: string | undefined;
   let opponentAgent = run.opponentAgent;
   let checkpointScore = score;
-  const opponentDecision = opponentAgent ? decideShadow(run.opponentPolicy, cp, opponentAgent, run) : null;
+  const opponentDecision = opponentAgent ? decideShadow(run.opponentPolicy, cp, opponentAgent) : null;
   if (opponentAgent && opponentDecision) {
     const stepped = stepShadow(run, opponentAgent, opponentDecision, cp);
     opponentAgent = stepped.agent;
@@ -804,7 +833,7 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
   let deployedAgent = run.deployedAgent;
   let deployedFields: Pick<RunDecision, 'deployedActionCode' | 'deployedReason' | 'deployedConviction'> = {};
   if (run.deployed && deployedAgent) {
-    const d = decideShadow({ kind: 'CONFIG', config: run.deployed.config }, cp, deployedAgent, run);
+    const d = decideShadow({ kind: 'CONFIG', config: run.deployed.config }, cp, deployedAgent);
     if (d) {
       const stepped = stepShadow(run, deployedAgent, d, cp);
       deployedAgent = stepped.agent;

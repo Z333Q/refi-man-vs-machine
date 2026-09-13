@@ -82,7 +82,7 @@ test('the turnover meter exposes its state to assistive tech', async ({ page }) 
   await gotoScreen(page, 'CORE LOOP');
   await dismissOverlays(page);
 
-  const meter = page.getByRole('meter', { name: /TURNOVER BUDGET SPENT/ });
+  const meter = page.getByRole('meter', { name: /TURNOVER ALLOWANCE SPENT/ });
   await expect(meter).toHaveCount(1);
   await expect(meter).toHaveAttribute('aria-valuenow', /\d+/);
 });
