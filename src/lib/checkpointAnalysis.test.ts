@@ -23,6 +23,7 @@ function sampleScore(confidence: number) {
     sharpe: null,
     sharpeSamples: 0,
     portfolioDD: -0.03,
+    troughDD: -0.03,
   });
 }
 

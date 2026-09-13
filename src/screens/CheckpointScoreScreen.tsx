@@ -59,6 +59,7 @@ export default function CheckpointScoreScreen({ onContinue, onViewAutopsy, resul
         sharpe: 0.4,
         sharpeSamples: 8,
         portfolioDD: -0.086,
+        troughDD: -0.086,
       }),
     };
   }, []);

@@ -92,6 +92,7 @@ test('scoring reads par straight from the checkpoint', () => {
       sharpe: null,
       sharpeSamples: 0,
       portfolioDD: 0,
+      troughDD: 0,
     });
     assert.equal(score.machineScore, cp.machinePar, `CP${cp.sequence}`);
     assert.equal(score.delta, score.totalScore - cp.machinePar, `CP${cp.sequence} delta`);
@@ -112,6 +113,7 @@ test('changing a checkpoint par changes only that checkpoint', () => {
     sharpe: null,
     sharpeSamples: 0,
     portfolioDD: 0,
+    troughDD: 0,
   });
   assert.equal(raised.machineScore, 95);
   assert.equal(getCheckpoint('covid_black_swan', 3)?.machinePar, PAR_CURVE[2], 'content was mutated');
@@ -125,7 +127,7 @@ test('with no authored machine drawdown, drawdown scores against the risk budget
   const at = (dd: number) => scoreCheckpoint({
     action: 'HOLD', checkpoint: cp, flags: [], confidence: 0.7,
     turnoverUsed: 0, turnoverBudget: 0.40, sharpe: null, sharpeSamples: 0, checkpointReturn: -0.02,
-    portfolioDD: dd, riskBudgetDD: CRITICAL_DRAWDOWN,
+    portfolioDD: dd, troughDD: dd, riskBudgetDD: CRITICAL_DRAWDOWN,
   }).drawdownScore;
 
   assert.equal(at(0), 100);            // flat consumes none of the budget
@@ -140,7 +142,7 @@ test('an authored machine drawdown is used when content supplies one', () => {
   const versus = (playerDD: number, machineDD: number) => scoreCheckpoint({
     action: 'HOLD', checkpoint: cp, flags: [], confidence: 0.7,
     turnoverUsed: 0, turnoverBudget: 0.40, sharpe: null, sharpeSamples: 0, checkpointReturn: -0.02,
-    portfolioDD: playerDD, machineDD,
+    portfolioDD: playerDD, troughDD: playerDD, machineDD,
   }).drawdownScore;
 
   // Drawdowns are negative, so the shallower one is the larger number.

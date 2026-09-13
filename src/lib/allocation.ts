@@ -13,7 +13,7 @@
 // Block Field's stance preview, which renders from these same functions so the
 // preview and the commit cannot disagree.
 
-import type { ActionCode, PortfolioPosition } from './gameTypes';
+import type { ActionCode, AllocationEffect, PortfolioPosition } from './gameTypes';
 
 // ─── Sector character ─────────────────────────────────────────────────────────
 
@@ -123,11 +123,69 @@ export interface Reallocation {
  * distribute the equity budget `1 - nextCash` across the positions in the shape
  * the stance asks for.
  */
+/**
+ * Execute an authored transition: the trade the stance card actually promised.
+ *
+ * Each move is a weight of the whole book. A symbol move lands on that holding;
+ * a sector move is spread across the sector in proportion to existing weights,
+ * so cutting a cluster keeps the shape of the cluster. Nothing is sold that is
+ * not held, and no weight goes below zero.
+ *
+ * Cash takes the residual, and is free to end up outside the 5..60 band: a
+ * transition the content authored is a decision, not a drift, and clamping it
+ * here would execute a different trade than the one on the card. The band
+ * constrains what the generic stances may *move*, which is where it belongs.
+ */
+function applyAuthoredEffect(
+  positions: readonly PortfolioPosition[],
+  cashWeight: number,
+  effect: AllocationEffect,
+): Reallocation {
+  const next = positions.map(p => ({ ...p }));
+  const bySymbol = new Map(next.map(p => [p.symbol, p]));
+  let cashDelta = 0;
+
+  for (const move of effect.moves) {
+    if (move.symbol) {
+      const pos = bySymbol.get(move.symbol);
+      if (!pos) continue; // a holding this book does not carry
+      const applied = Math.max(move.delta, -pos.weight);
+      pos.weight = round4(pos.weight + applied);
+      cashDelta -= applied;
+      continue;
+    }
+    if (!move.sector) continue;
+    const inSector = next.filter(p => p.sector.trim().toUpperCase() === move.sector!.trim().toUpperCase());
+    const held = inSector.reduce((a, p) => a + p.weight, 0);
+    if (held <= 0) continue;
+    // Sells are capped at what the sector holds; buys are spread the same way.
+    const applied = Math.max(move.delta, -held);
+    for (const pos of inSector) {
+      const share = pos.weight / held;
+      pos.weight = round4(Math.max(0, pos.weight + applied * share));
+    }
+    cashDelta -= applied;
+  }
+
+  return {
+    positions: next,
+    cashWeight: round4(Math.max(0, cashWeight + cashDelta)),
+    turnover: turnoverOf(positions, next),
+  };
+}
+
 export function reallocate(
   positions: readonly PortfolioPosition[],
   nextCash: number,
   action: ActionCode,
+  effect?: AllocationEffect,
 ): Reallocation {
+  // An authored transition wins over the generic reading of the code. The
+  // card is the promise; the code is only the behavioural category it falls
+  // under for scoring and for the Alpha Profile.
+  if (effect && effect.moves.length > 0) {
+    return applyAuthoredEffect(positions, 1 - positions.reduce((a, p) => a + p.weight, 0), effect);
+  }
   const equityBudget = Math.max(0, 1 - nextCash);
   const invested = positions.reduce((a, p) => a + p.weight, 0);
 

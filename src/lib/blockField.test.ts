@@ -7,10 +7,10 @@ import {
   type BlockInput,
 } from './blockField';
 import {
-  createInitialPortfolio, simulatePortfolioAdvance, stanceAllocation, nextCashWeight,
+  createInitialPortfolio, simulatePortfolioAdvance, stanceAllocation, nextCashWeight, allocationEffectFor,
   stanceCashDelta, CASH_WEIGHT_MIN, CASH_WEIGHT_MAX,
 } from './runEngine';
-import { allArenas } from '../lib/arenas';
+import { allArenas, getCheckpoint } from '../lib/arenas';
 import '../lib/arenaIndex';
 import { reducer, type GameState } from '../context/gameReducer';
 import { createDefaultProfile, checkModuleUnlocks, TERMINAL_MODULES } from './progressionEngine';
@@ -82,12 +82,13 @@ test('preview cash equals committed cash for every stance, in every arena', () =
   for (const arena of allArenas()) {
     const p = createInitialPortfolio(arena.id);
     for (const action of ALL_ACTIONS) {
-      const preview = previewStanceBlocks(p.positions, p.cashWeight, action);
+      const cp = getCheckpoint(arena.id, 1)!;
+      const preview = previewStanceBlocks(p.positions, p.cashWeight, action, allocationEffectFor(action, cp));
       // Against the stance's own allocation, not the resolved book: weights
       // drift with the market now, so the committed portfolio is the stance
       // plus a checkpoint of returns. The preview promises the first of those
       // and must equal it exactly.
-      const committed = stanceAllocation(p, action);
+      const committed = stanceAllocation(p, action, cp);
       const previewCash = preview.find(b => b.isCash)!.weight;
       assert.ok(
         Math.abs(previewCash - committed.cashWeight) < EPS,

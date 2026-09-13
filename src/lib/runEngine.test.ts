@@ -117,9 +117,12 @@ test('turnover accounting is the exact sum of the authored costs paid', () => {
   let expected = 0;
   for (const step of SEQUENCE) {
     if (run.phase === 'COMPLETE') break;
-    // Turnover is derived from the transition the stance implies, so the
-    // expected total is read off the book the run is actually holding.
-    expected += turnoverCostFor(run.portfolio, step.action);
+    // Turnover is derived from the transition the stance implies on the book
+    // the run is actually holding — and which transition that is depends on the
+    // checkpoint, because a card that names a holding executes that trade
+    // rather than the generic reading of its code.
+    const priced = getCheckpoint('covid_black_swan', run.currentCheckpoint);
+    expected += turnoverCostFor(run.portfolio, step.action, priced);
     run = { ...run, pendingAction: step.action, pendingConfidence: step.confidence };
     const outcome = commitPendingDecision(run);
     assert.ok(outcome);

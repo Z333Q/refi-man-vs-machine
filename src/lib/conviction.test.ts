@@ -39,6 +39,7 @@ function scoreAt(action: ActionCode, conviction: number, sharpe: number | null =
     sharpe,
     sharpeSamples: sharpe === null ? 0 : 8,
     portfolioDD: -0.04,
+    troughDD: -0.04,
   }).totalScore;
 }
 

@@ -71,6 +71,7 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.026, volatilityDelta: 0.04, correlationLevel: 0.69,
       positionReturns: bySector({ AUTOS: -0.0525, SEMICONDUCTORS: -0.0455, RETAIL: -0.0245, INDUSTRIALS: -0.0205, FINANCIALS: -0.0025, HEALTHCARE: 0.0055, UTILITIES: 0.0115 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'REDUCE',
@@ -85,6 +86,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { sector: 'AUTOS', delta: -0.03 },
+          { sector: 'SEMICONDUCTORS', delta: -0.03 },
+        ] },
         label: 'REDUCE: trim measured input-cost exposure',
         shortLabel: 'TRIM EXPOSED',
         turnoverCost: 0.05,
@@ -121,6 +126,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
+        allocationEffect: { moves: [
+          { sector: 'AUTOS', delta: 0.025 },
+          { sector: 'SEMICONDUCTORS', delta: 0.025 },
+        ] },
         label: 'ADD: buy the panic in the exposed names',
         shortLabel: 'BUY PANIC',
         turnoverCost: 0.06,
@@ -159,6 +168,7 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.019, volatilityDelta: -0.02, correlationLevel: 0.62,
       positionReturns: bySector({ AUTOS: 0.0397, SEMICONDUCTORS: 0.0337, RETAIL: 0.0157, INDUSTRIALS: 0.0137, FINANCIALS: 0.0017, HEALTHCARE: -0.0043, UTILITIES: -0.0083 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'STAGED_BUY',
@@ -173,6 +183,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'STAGED_BUY',
+        allocationEffect: { moves: [
+          { sector: 'AUTOS', delta: 0.015 },
+          { sector: 'SEMICONDUCTORS', delta: 0.015 },
+        ] },
         label: 'STAGED: restore part of the position',
         shortLabel: 'PARTIAL',
         turnoverCost: 0.03,
@@ -209,6 +223,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { sector: 'AUTOS', delta: -0.025 },
+          { sector: 'SEMICONDUCTORS', delta: -0.025 },
+        ] },
         label: 'REDUCE further: the delay is a trap',
         shortLabel: 'CUT MORE',
         turnoverCost: 0.05,
@@ -247,6 +265,7 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.011, volatilityDelta: 0.01, correlationLevel: 0.72,
       positionReturns: bySector({ AUTOS: -0.0224, SEMICONDUCTORS: -0.0184, RETAIL: -0.0104, INDUSTRIALS: -0.0084, FINANCIALS: -0.0024, HEALTHCARE: 0.0016, UTILITIES: 0.0056 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -285,6 +304,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { sector: 'AUTOS', delta: -0.03 },
+          { sector: 'SEMICONDUCTORS', delta: -0.03 },
+        ] },
         label: 'REDUCE: crowded trades unwind badly',
         shortLabel: 'FADE CROWD',
         turnoverCost: 0.05,
@@ -297,6 +320,12 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_RISK',
+        allocationEffect: { moves: [
+          { symbol: 'JNJ', delta: -0.03 },
+          { symbol: 'NEE', delta: -0.03 },
+          { sector: 'AUTOS', delta: 0.03 },
+          { sector: 'SEMICONDUCTORS', delta: 0.03 },
+        ] },
         label: 'ROTATE: into the names that reverse hardest',
         shortLabel: 'ROTATE',
         turnoverCost: 0.07,
@@ -335,6 +364,7 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.032, volatilityDelta: 0.04, correlationLevel: 0.81,
       positionReturns: bySector({ AUTOS: -0.0661, SEMICONDUCTORS: -0.0561, RETAIL: -0.0301, INDUSTRIALS: -0.0261, FINANCIALS: -0.0021, HEALTHCARE: 0.0079, UTILITIES: 0.0159 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'REDUCE',
@@ -349,6 +379,11 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { sector: 'AUTOS', delta: -0.04 },
+          { sector: 'SEMICONDUCTORS', delta: -0.04 },
+          { sector: 'RETAIL', delta: -0.02 },
+        ] },
         label: 'REDUCE: the exposure is now real',
         shortLabel: 'TRIM',
         turnoverCost: 0.05,
@@ -373,6 +408,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
+        allocationEffect: { moves: [
+          { sector: 'AUTOS', delta: 0.03 },
+          { sector: 'SEMICONDUCTORS', delta: 0.03 },
+        ] },
         label: 'ADD: even better prices now',
         shortLabel: 'DOUBLE DOWN',
         turnoverCost: 0.06,
@@ -423,6 +462,7 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.009, volatilityDelta: 0.02, correlationLevel: 0.7,
       positionReturns: bySector({ AUTOS: -0.0204, SEMICONDUCTORS: -0.0164, RETAIL: -0.0084, INDUSTRIALS: -0.0064, FINANCIALS: -0.0004, HEALTHCARE: 0.0036, UTILITIES: 0.0076 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -461,6 +501,12 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
+        allocationEffect: { moves: [
+          { symbol: 'JNJ', delta: -0.02 },
+          { symbol: 'NEE', delta: -0.02 },
+          { sector: 'AUTOS', delta: 0.02 },
+          { sector: 'SEMICONDUCTORS', delta: 0.02 },
+        ] },
         label: 'MODIFY: invert the rule, fade the crowd',
         shortLabel: 'INVERT',
         turnoverCost: 0.06,

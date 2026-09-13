@@ -10,7 +10,7 @@ import { getQualityColor } from '../lib/scoringEngine';
 import { deriveVerdict, verdictStamp } from '../lib/verdict';
 import {
   canAffordAction, isHoldOnly, turnoverCostFor, observationModeReason, resolveRunResult,
-  portfolioBeforeCheckpoint, simulatePortfolioAdvance,
+  portfolioBeforeCheckpoint, simulatePortfolioAdvance, allocationEffectFor,
   STARTING_CAPITAL, runRiskAdjusted, type DecisionCommand,
 } from '../lib/runEngine';
 import {
@@ -1388,7 +1388,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                         <BlockField
                           blocks={
                             previewStance
-                              ? previewStanceBlocks(portfolio.positions, portfolio.cashWeight, previewStance)
+                              ? previewStanceBlocks(portfolio.positions, portfolio.cashWeight, previewStance, allocationEffectFor(previewStance, cp))
                               : blocksFromPortfolio(portfolio.positions, portfolio.cashWeight)
                           }
                           previous={previewStance ? blocksFromPortfolio(portfolio.positions, portfolio.cashWeight) : null}
@@ -1567,7 +1567,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                       {branches.map((branch, i) => {
                         const affordable = canAffordAction(run, branch.actionCode, cp);
                         const selected = stance === branch.actionCode;
-                        const cost = turnoverCostFor(portfolio, branch.actionCode);
+                        const cost = turnoverCostFor(portfolio, branch.actionCode, cp);
                         return (
                           <PullToCommit
                             key={branch.actionCode}
@@ -1688,7 +1688,7 @@ export default function CoreLoopScreen({ arenaId = 'covid_black_swan', machineId
                           CONVICTION {conviction}
                         </div>
                         <div className="text-phosphor-dim text-xs">
-                          TURNOVER COST {stance ? (turnoverCostFor(portfolio, stance) * 100).toFixed(1) : 0}%. THIS CANNOT BE UNDONE. THE MARKET WILL RESOLVE.
+                          TURNOVER COST {stance ? (turnoverCostFor(portfolio, stance, cp) * 100).toFixed(1) : 0}%. THIS CANNOT BE UNDONE. THE MARKET WILL RESOLVE.
                         </div>
                       </div>
                     )}

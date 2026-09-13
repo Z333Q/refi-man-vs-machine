@@ -63,6 +63,7 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.014, volatilityDelta: 0.02, correlationLevel: 0.71,
       positionReturns: bySector({ FINANCIALS: -0.0274, TECHNOLOGY: 0.0006, HEALTHCARE: 0.0046 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'REDUCE',
@@ -77,6 +78,9 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { sector: 'FINANCIALS', delta: -0.06 },
+        ] },
         label: 'REDUCE: trim the bank cluster on concentration',
         shortLabel: 'TRIM CLUSTER',
         turnoverCost: 0.05,
@@ -101,6 +105,9 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
+        allocationEffect: { moves: [
+          { sector: 'FINANCIALS', delta: 0.05 },
+        ] },
         label: 'ADD: banks are cheap and well capitalised',
         shortLabel: 'ADD BANKS',
         turnoverCost: 0.06,
@@ -113,6 +120,10 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { sector: 'FINANCIALS', delta: -0.06 },
+          { symbol: 'JNJ', delta: 0.06 },
+        ] },
         label: 'ROTATE: banks into staples and healthcare',
         shortLabel: 'ROTATE OUT',
         turnoverCost: 0.07,
@@ -151,6 +162,7 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.042, volatilityDelta: 0.05, correlationLevel: 0.94,
       positionReturns: bySector({ FINANCIALS: -0.0837, TECHNOLOGY: 0.0033, HEALTHCARE: 0.0153 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'REDUCE',
@@ -239,6 +251,7 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.008, volatilityDelta: -0.01, correlationLevel: 0.89,
       positionReturns: bySector({ FINANCIALS: -0.0237, TECHNOLOGY: 0.0103, HEALTHCARE: 0.0083 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -265,6 +278,9 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
+        allocationEffect: { moves: [
+          { sector: 'FINANCIALS', delta: 0.05 },
+        ] },
         label: 'ADD: the backstop makes banks safe',
         shortLabel: 'BUY BACKSTOP',
         turnoverCost: 0.06,
@@ -277,6 +293,9 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { sector: 'FINANCIALS', delta: -0.1 },
+        ] },
         label: 'REDUCE: cut the remaining banks entirely',
         shortLabel: 'EXIT BANKS',
         turnoverCost: 0.05,
@@ -289,6 +308,10 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { sector: 'FINANCIALS', delta: -0.06 },
+          { symbol: 'JNJ', delta: 0.06 },
+        ] },
         label: 'ROTATE: remaining banks into utilities',
         shortLabel: 'ROTATE',
         turnoverCost: 0.07,
@@ -327,6 +350,7 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.012, volatilityDelta: -0.01, correlationLevel: 0.66,
       positionReturns: bySector({ FINANCIALS: 0.0048, TECHNOLOGY: 0.0228, HEALTHCARE: 0.0088 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'REDUCE',
@@ -341,6 +365,9 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { sector: 'TECHNOLOGY', delta: -0.06 },
+        ] },
         label: 'REDUCE: apply the cluster rule to tech too',
         shortLabel: 'TRIM TECH',
         turnoverCost: 0.05,

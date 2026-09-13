@@ -1,6 +1,6 @@
 import { reallocate, sectorExposureOf } from './allocation';
 import type {
-  ActionCode, ArenaId, BehavioralFlag, CheckpointData, CheckpointScore,
+  ActionCode, AllocationEffect, ArenaId, BehavioralFlag, CheckpointData, CheckpointScore,
   DeployedMachine, DimensionCode, OpponentPolicy, PortfolioState, RunDecision,
   RunState, ShadowAgent, ThesisCode,
 } from './gameTypes';
@@ -50,10 +50,14 @@ export const CRITICAL_DRAWDOWN = -0.20;
  *
  * The old figure was 0.40 over 14 checkpoints, calibrated against a table of
  * authored per-stance fees averaging 5.00% for a non-HOLD stance. Turnover is
- * now the traded weight a stance actually implies, and those average 6.43% on
- * the opening books across all five arenas (REDUCE 5, ROTATE 10, RAISE_CASH
- * 10, ADD_RISK 5, STAGED 2.5) — 1.286 times the fees the budget was sized
- * against.
+ * now the traded weight a stance actually implies, measured across every
+ * offered stance at every checkpoint of all five arenas: a mean of 6.92%, or
+ * 1.382 times the fees the budget was sized against.
+ *
+ * That mean rose once the stance cards began executing the trades they
+ * describe. "ROTATE: sell travel, add JNJ/PG" moves more weight than the
+ * generic reading of ROTATE_DEFENSIVE did, because it is a larger trade, and
+ * the meter should say so.
  *
  * So the allowance is scaled by exactly that ratio and nothing else. A run
  * affords the same number of stances it always did; what changed is that the
@@ -61,7 +65,7 @@ export const CRITICAL_DRAWDOWN = -0.20;
  * costs twice a one-legged move rather than 1.4 times it.
  */
 const LEGACY_ALLOWANCE_PER_CHECKPOINT = 0.40 / 14;
-const DERIVED_COST_RATIO = 1.286;
+const DERIVED_COST_RATIO = 1.382;
 export const TURNOVER_PER_CHECKPOINT =
   Math.round(LEGACY_ALLOWANCE_PER_CHECKPOINT * DERIVED_COST_RATIO * 100000) / 100000;
 
@@ -123,6 +127,7 @@ function legacyCovidPortfolio(): PortfolioState {
     ],
     peakValue: STARTING_CAPITAL,
     drawdown: 0,
+    troughDrawdown: 0,
     volatility: 0.16,
     sectorExposure: {
       TECHNOLOGY: 0.20, FINANCIALS: 0.10, AIRLINES: 0.08,
@@ -211,10 +216,38 @@ export function createInitialRun(
  * Book-dependent, so it takes the portfolio: the same stance costs a
  * concentrated book more than a balanced one, which is the lesson.
  */
-export function turnoverCostFor(portfolio: PortfolioState, action: ActionCode): number {
-  if (action === 'HOLD') return 0;
+/**
+ * The transition a stance means at a checkpoint: the authored one where the
+ * card promises a specific trade, the generic reading of the code otherwise.
+ *
+ * Every consumer goes through here — the commit, the shadow, the turnover
+ * meter, the Block Field preview and the replay — so the price quoted, the
+ * picture previewed and the trade executed cannot disagree.
+ */
+export function allocationEffectFor(
+  action: ActionCode,
+  checkpoint?: CheckpointData,
+): AllocationEffect | undefined {
+  return checkpoint?.availableActions.find(a => a.actionCode === action)?.allocationEffect;
+}
+
+export function stanceTransition(
+  portfolio: PortfolioState,
+  action: ActionCode,
+  checkpoint?: CheckpointData,
+) {
+  const effect = allocationEffectFor(action, checkpoint);
   const nextCash = nextCashWeight(portfolio.cashWeight, action);
-  return reallocate(portfolio.positions, nextCash, action).turnover;
+  return reallocate(portfolio.positions, nextCash, action, effect);
+}
+
+export function turnoverCostFor(
+  portfolio: PortfolioState,
+  action: ActionCode,
+  checkpoint?: CheckpointData,
+): number {
+  if (action === 'HOLD') return 0;
+  return stanceTransition(portfolio, action, checkpoint).turnover;
 }
 
 export function turnoverRemaining(run: RunState): number {
@@ -234,11 +267,12 @@ export function isTurnoverExhausted(run: RunState): boolean {
  * unavailable. Expensive stances fall away before cheap ones as the meter
  * drains, so earlier decisions visibly narrow later ones.
  */
-export function canAffordAction(run: RunState, action: ActionCode, _checkpoint?: CheckpointData): boolean {
+export function canAffordAction(run: RunState, action: ActionCode, checkpoint?: CheckpointData): boolean {
   if (action === 'HOLD') return true;
+  const cp = checkpoint ?? getCheckpoint(run.arenaId, run.currentCheckpoint);
   // Cents-scale epsilon so accumulated float error cannot bar an action that
   // exactly fits the remaining budget.
-  return run.portfolio.turnoverUsed + turnoverCostFor(run.portfolio, action) <= run.turnoverBudget + 1e-9;
+  return run.portfolio.turnoverUsed + turnoverCostFor(run.portfolio, action, cp) <= run.turnoverBudget + 1e-9;
 }
 
 /** The stances this checkpoint offers that the remaining budget still covers. */
@@ -254,23 +288,6 @@ export function isHoldOnly(run: RunState, checkpoint?: CheckpointData): boolean 
 }
 
 // ─── Portfolio advance ────────────────────────────────────────────────────────
-
-/**
- * How much of the checkpoint's authored return a stance actually takes.
- *
- * Exported because the resolution race draws the same outcome it applies. If
- * the renderer carried its own copy of this table the two would drift, and the
- * curve would finish somewhere the score disagreed with. One table, both uses.
- */
-export function actionReturnMultiplier(action: ActionCode): number {
-  return (
-    action === 'REDUCE' ? 0.6 :
-    action === 'RAISE_CASH' ? 0.3 :
-    action === 'ADD_RISK' ? 1.4 :
-    action === 'ROTATE_DEFENSIVE' ? 0.7 :
-    1.0
-  );
-}
 
 // ─── Cash authority ───────────────────────────────────────────────────────────
 //
@@ -304,17 +321,34 @@ export function stanceCashDelta(action: ActionCode): number {
 }
 
 /**
- * The cash weight a stance produces, clamped to the engine's bounds.
+ * The cash weight a stance produces.
  *
- * A stance that moves no cash returns the book's own weight untouched. The
- * clamp governs what a stance may *do*, not where the market may leave the
- * book: now that weights drift with returns, cash can pass 60% on its own in a
- * deep enough selloff, and re-clamping it would make HOLD sell something.
+ * The bounds limit the *movement*, never the book. Weights drift with returns,
+ * so a deep enough selloff carries cash past 60% on its own, and a portfolio
+ * that drifted outside the band is a fact rather than an error.
+ *
+ * Clamping the absolute result inverted the stances at the boundary: from 70%
+ * cash, RAISE_CASH returned 60% — a command named "raise cash" that bought
+ * equities (2026-09-12 review). So the rule is directional. Outside the band,
+ * a stance that would push further out does nothing, and a stance that moves
+ * back toward the band moves by its full delta even if it does not get inside.
  */
 export function nextCashWeight(currentCash: number, action: ActionCode): number {
   const delta = stanceCashDelta(action);
   if (delta === 0) return currentCash;
-  return Math.max(CASH_WEIGHT_MIN, Math.min(CASH_WEIGHT_MAX, currentCash + delta));
+
+  if (delta > 0) {
+    // Raising cash. Already at or above the ceiling: refuse rather than sell.
+    if (currentCash >= CASH_WEIGHT_MAX) return currentCash;
+    return Math.min(CASH_WEIGHT_MAX, currentCash + delta);
+  }
+
+  // Deploying cash. Already at or below the floor: refuse rather than buy.
+  if (currentCash <= CASH_WEIGHT_MIN) return currentCash;
+  // From above the ceiling, deploy the full delta: moving toward the band is
+  // always allowed, even when one step does not reach it.
+  if (currentCash + delta > CASH_WEIGHT_MAX) return round4(currentCash + delta);
+  return Math.max(CASH_WEIGHT_MIN, currentCash + delta);
 }
 
 /** A checkpoint resolved once: the book it produced and the return it earned. */
@@ -345,10 +379,10 @@ export function resolveTransition(
 
   const { returnBias, volatilityDelta, correlationLevel, positionReturns } = cp.portfolioEffect;
 
-  // 1. The stance executes. Weights move, cash moves, and the trades are
-  //    priced from the transition itself.
-  const nextCash = nextCashWeight(portfolio.cashWeight, action);
-  const moved = reallocate(portfolio.positions, nextCash, action);
+  // 1. The stance executes: the trade the card promised where it promised one,
+  //    the generic reading of the code otherwise. The trades are priced from
+  //    the transition itself.
+  const moved = stanceTransition(portfolio, action, cp);
 
   // 2. Then the market moves the book the stance left behind.
   //
@@ -378,6 +412,9 @@ export function resolveTransition(
   const newValue = portfolio.value * (1 + portfolioReturn);
   const peakValue = Math.max(portfolio.peakValue, newValue);
   const newDrawdown = Math.min(0, (newValue - peakValue) / peakValue);
+  // Ratchets down only: the hole the book has been in is a fact about the run,
+  // and recovery is measured from it.
+  const troughDrawdown = Math.min(portfolio.troughDrawdown ?? 0, newDrawdown);
   const newVolatility = Math.max(0.08, portfolio.volatility + volatilityDelta);
 
   const drifted = grown.map(({ pos, value }) => ({
@@ -394,6 +431,7 @@ export function resolveTransition(
       value: newValue,
       peakValue,
       drawdown: newDrawdown,
+      troughDrawdown,
       volatility: newVolatility,
       cashWeight: round4(total > 0 ? moved.cashWeight / total : moved.cashWeight),
       turnoverUsed: round4(portfolio.turnoverUsed + moved.turnover),
@@ -413,9 +451,12 @@ export function resolveTransition(
  * The resolved book is that plus a checkpoint of market drift, so the two are
  * no longer the same object and the preview must be checked against this one.
  */
-export function stanceAllocation(portfolio: PortfolioState, action: ActionCode): PortfolioState {
-  const nextCash = nextCashWeight(portfolio.cashWeight, action);
-  const moved = reallocate(portfolio.positions, nextCash, action);
+export function stanceAllocation(
+  portfolio: PortfolioState,
+  action: ActionCode,
+  checkpoint?: CheckpointData,
+): PortfolioState {
+  const moved = stanceTransition(portfolio, action, checkpoint);
   return {
     ...portfolio,
     cashWeight: moved.cashWeight,
@@ -564,6 +605,10 @@ export interface CommitOutcome {
 // Both are pure functions of their policy, the checkpoint and their own book.
 
 /** The passive index's stated reason. It is the same every checkpoint, on purpose. */
+/** Why an opponent held when its own budget could not pay for its call. */
+export const TURNOVER_EXHAUSTED_REASON =
+  'Turnover budget exhausted. The policy call is unaffordable on this book, so the machine holds.';
+
 export const PASSIVE_HOLD_REASON =
   'Buy and hold. The index takes no decisions; it holds full exposure through every regime.';
 
@@ -573,10 +618,10 @@ export interface ShadowDecision {
   reason: string;
 }
 
-function shadowCanAfford(run: RunState, agent: ShadowAgent, action: ActionCode, _cp: CheckpointData): boolean {
+export function shadowCanAfford(run: RunState, agent: ShadowAgent, action: ActionCode, cp: CheckpointData): boolean {
   if (action === 'HOLD') return true;
   // The shadow pays for its own book, not the player's.
-  return agent.portfolio.turnoverUsed + turnoverCostFor(agent.portfolio, action) <= run.turnoverBudget + 1e-9;
+  return agent.portfolio.turnoverUsed + turnoverCostFor(agent.portfolio, action, cp) <= run.turnoverBudget + 1e-9;
 }
 
 /** What a policy does at this checkpoint, given the agent's own book. */
@@ -587,15 +632,32 @@ export function decideShadow(
   run: RunState,
 ): ShadowDecision | null {
   switch (policy.kind) {
-    case 'AUTHORED':
+    case 'AUTHORED': {
       // The content's own point-in-time call, stepped through a real book so
       // it earns a real score. Still authored, still no hindsight: the arena
       // decided this stance when it was written, not from the outcome.
+      //
+      // And it pays for it. Fair Match (§26.5) means the same constraints, and
+      // an opponent allowed to spend turnover the human is barred from
+      // spending is not playing the same game: the authored path used to skip
+      // the affordability check entirely (2026-09-12 review). Valid shipped
+      // content never reaches the fallback — the content test asserts every
+      // authored path stays inside its arena's budget — but malformed content
+      // degrades to HOLD rather than violating the constraint.
+      const authored = cp.machineDecision.actionCode;
+      if (shadowCanAfford(run, agent, authored, cp)) {
+        return {
+          action: authored,
+          conviction: CONVICTION_DEFAULT,
+          reason: cp.machineDecision.policyReason,
+        };
+      }
       return {
-        action: cp.machineDecision.actionCode,
+        action: 'HOLD',
         conviction: CONVICTION_DEFAULT,
-        reason: cp.machineDecision.policyReason,
+        reason: TURNOVER_EXHAUSTED_REASON,
       };
+    }
     case 'HOLD':
       return { action: 'HOLD', conviction: CONVICTION_DEFAULT, reason: PASSIVE_HOLD_REASON };
     case 'CONFIG': {
@@ -634,6 +696,7 @@ export function stepShadow(
     sharpeSamples: shadowRisk.samples,
     checkpointReturn: resolved.checkpointReturn,
     portfolioDD: resolved.portfolio.drawdown,
+    troughDD: resolved.portfolio.troughDrawdown,
     machineDD: cp.portfolioEffect.machineDrawdown,
     riskBudgetDD: getArena(run.arenaId)?.criticalDrawdown ?? CRITICAL_DRAWDOWN,
   });
@@ -707,6 +770,7 @@ export function commitPendingDecision(run: RunState): CommitOutcome | null {
     sharpeSamples: playerRisk.samples,
     checkpointReturn: resolved.checkpointReturn,
     portfolioDD: resolved.portfolio.drawdown,
+    troughDD: resolved.portfolio.troughDrawdown,
     // No fabricated machine drawdown. Where content authors one it is used;
     // otherwise drawdown scores against the arena risk budget.
     machineDD: cp.portfolioEffect.machineDrawdown,

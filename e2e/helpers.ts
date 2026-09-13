@@ -239,7 +239,12 @@ export async function playCheckpoint(page: Page): Promise<boolean> {
   // priced out and their cards correctly refuse selection. A helper that always
   // pressed 1 would stall on a correctly-behaving screen and report it as a
   // hang, which is exactly what it did.
-  await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+  // Move focus to the page before pressing a stance key. Bounded: an
+  // unbounded click retries against whatever is covering the body, and a
+  // blocking visual event landing here turned the whole run into a hang rather
+  // than a failure — the drawdown warning raised by the previous checkpoint's
+  // resolved portfolio does exactly that (2026-09-12).
+  await page.locator('body').click({ position: { x: 5, y: 5 }, timeout: 2_000 }).catch(() => {});
 
   let selected = false;
   for (const key of ['1', '2', '3', '4']) {
@@ -259,29 +264,61 @@ export async function playCheckpoint(page: Page): Promise<boolean> {
     if (await holdCard.count() > 0) await holdCard.click({ timeout: 3_000 }).catch(() => {});
   }
 
+  /**
+   * Click a control that an overlay may be covering.
+   *
+   * Playwright refuses to click an element another element intercepts, and an
+   * unbounded click retries against that forever. Every blocking visual event
+   * in this app draws a full-viewport scrim, so any of them landing between
+   * the sweep and the click turns the click into a hang rather than a failure
+   * — which is exactly what it did once real allocation started raising CASH
+   * RAISED and the drawdown warning mid-run (2026-09-12).
+   *
+   * So: sweep, try, sweep again. A player does the same thing.
+   */
+  const clickThrough = async (locator: ReturnType<typeof page.getByRole>, what: string) => {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await dismissOverlays(page);
+      const ok = await locator.click({ timeout: 3_000 }).then(() => true, () => false);
+      if (ok) return;
+    }
+    throw new Error(`${what} stayed unreachable behind an overlay after six sweeps`);
+  };
+
   const review = page.getByRole('button', { name: /REVIEW & COMMIT/ });
   await review.waitFor({ state: 'visible', timeout: 10_000 });
-  // Selecting a stance can raise the risk tip, which covers this button.
-  await dismissOverlays(page);
-  await review.click();
-
-  await dismissOverlays(page);
+  await clickThrough(review, 'REVIEW & COMMIT');
 
   const commit = page.getByRole('button', { name: /^COMMIT/ });
   await commit.waitFor({ state: 'visible', timeout: 10_000 });
-  await dismissOverlays(page);
-  await commit.click();
+  await clickThrough(commit, 'COMMIT');
 
   // The thesis prompt: answer it rather than let it time out, so the record
   // carries a stated thesis.
   const thesis = page.getByRole('button', { name: /^\[1\]/ });
   await thesis.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
-  if (await thesis.count() > 0) await thesis.first().click().catch(() => {});
+  // Bounded, and swept first: the drawdown warning is raised by the same
+  // resolved portfolio that opens this prompt, so it can be covering the
+  // answer at the moment the helper reaches for it.
+  if (await thesis.count() > 0) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await dismissOverlays(page);
+      const ok = await thesis.first().click({ timeout: 2_000 }).then(() => true, () => false);
+      if (ok) break;
+    }
+  }
 
   // Wait for the resolution to settle into either the next-signal control or
   // the end-of-run control.
+  // Sweep first. A blocking visual event (CASH RAISED, the drawdown warning)
+  // is raised by the resolved portfolio, so it lands during this wait; a player
+  // dismisses it and then looks for the button, and so does this.
   const next = page.getByRole('button', { name: /NEXT SIGNAL|VIEW RUN RESULTS/ });
-  await next.waitFor({ state: 'visible', timeout: 30_000 });
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await dismissOverlays(page);
+    const seen = await next.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true, () => false);
+    if (seen) break;
+  }
 
   if (await page.getByRole('button', { name: /VIEW RUN RESULTS/ }).count() > 0) {
     return false;
@@ -295,11 +332,6 @@ export async function playCheckpoint(page: Page): Promise<boolean> {
   // failure the DECIDE click above is bounded for. Now that returns are
   // computed from the book rather than a per-stance multiplier, drawdowns are
   // deeper and this fires in the middle of COVID rather than never.
-  const advance = page.getByRole('button', { name: /NEXT SIGNAL/ });
-  for (let attempt = 0; attempt < 6; attempt++) {
-    await dismissOverlays(page);
-    const clicked = await advance.click({ timeout: 3_000 }).then(() => true, () => false);
-    if (clicked) return true;
-  }
-  throw new Error('NEXT SIGNAL stayed unreachable after six sweeps');
+  await clickThrough(page.getByRole('button', { name: /NEXT SIGNAL/ }), 'NEXT SIGNAL');
+  return true;
 }

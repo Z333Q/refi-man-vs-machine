@@ -146,6 +146,44 @@ function interpolate(x: number, anchors: readonly [number, number][]): number {
   return anchors[anchors.length - 1][1];
 }
 
+/**
+ * Recovery efficiency: how much of the hole the book has climbed back out of.
+ *
+ * §29.1 gives this a tenth of the ReFi Score and the engine returned a constant
+ * 65 for every player, every machine, every stance and every checkpoint: a
+ * second dead component beside the downside capture one (2026-09-12 review).
+ *
+ * Measured from run state, never from hindsight. The trough is the worst
+ * drawdown the book has reached so far, which is a fact about the past; the
+ * current drawdown is where it stands now. Progress is how far it has come
+ * back between them.
+ *
+ *   no meaningful hole yet           neutral 65
+ *   at a new low                     20, and it cannot score better by falling
+ *   halfway back to the peak         roughly 60
+ *   fully recovered to the peak      100
+ *
+ * A book that has never fallen more than a whisker has nothing to recover and
+ * is neither credited nor penalised: scoring it 100 would pay every player for
+ * the first checkpoint of every run.
+ */
+export const RECOVERY_NEUTRAL = 65;
+export const RECOVERY_MEANINGFUL_DRAWDOWN = 0.02;
+
+export function computeRecoveryScore(currentDD: number, troughDD: number): number {
+  const trough = Math.min(0, troughDD, currentDD);
+  if (Math.abs(trough) < RECOVERY_MEANINGFUL_DRAWDOWN) return RECOVERY_NEUTRAL;
+
+  // 0 at the trough, 1 back at the high-water mark.
+  const progress = clamp((trough - currentDD) / trough, 0, 1);
+
+  // At the trough (progress 0) the book is at its worst: 20, well below
+  // neutral, and a new low cannot score above it because the trough moves with
+  // the book. Full recovery is 100. Neutral sits where it always did, so a
+  // half-recovered book reads as slightly better than "nothing to say".
+  return Math.round(20 + progress * 80);
+}
+
 function computeRegimeAdaptScore(
   action: ActionCode,
   checkpoint: CheckpointData,
@@ -295,6 +333,11 @@ export function scoreCheckpoint(params: {
    */
   sharpe: number | null;
   sharpeSamples: number;
+  /**
+   * The worst drawdown this side's book has reached so far, including this
+   * checkpoint. Recovery is measured from it toward the high-water mark.
+   */
+  troughDD: number;
   // Authored machine drawdown for this checkpoint, where content supplies one.
   // Absent it, drawdown is scored against the arena risk budget instead of a
   // fabricated machine number.
@@ -303,7 +346,7 @@ export function scoreCheckpoint(params: {
 }): CheckpointScore {
   const {
     action, checkpoint, flags, confidence, turnoverUsed, turnoverBudget,
-    checkpointReturn, portfolioDD, machineDD, sharpe, sharpeSamples,
+    checkpointReturn, portfolioDD, troughDD, machineDD, sharpe, sharpeSamples,
     riskBudgetDD = DEFAULT_RISK_BUDGET_DRAWDOWN,
   } = params;
 
@@ -314,7 +357,7 @@ export function scoreCheckpoint(params: {
   const raerScore = normalizeSharpe(sharpe, sharpeSamples);
   const drawdownScore = computeDrawdownScore(portfolioDD, machineDD, riskBudgetDD);
   const downsideScore = computeDownsideScore(checkpointReturn, marketReturn);
-  const recoveryScore = 65;
+  const recoveryScore = computeRecoveryScore(portfolioDD, troughDD);
   const regimeAdaptScore = computeRegimeAdaptScore(action, checkpoint, flags);
   const turnoverScore = computeTurnoverScore(action, flags, turnoverUsed, turnoverBudget);
   const consistencyScore = computeConsistencyScore(action, flags, confidence);

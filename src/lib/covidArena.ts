@@ -59,6 +59,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.002, volatilityDelta: 0.01, correlationLevel: 0.30,
       positionReturns: bySector({ TECHNOLOGY: 0.0044, FINANCIALS: 0.0034, AIRLINES: -0.0036, HOTELS: -0.0026, ENERGY: 0.0014, HEALTHCARE: 0.0034, 'CONSUMER STAPLES': 0.0024, INDUSTRIALS: 0.0024, 'CONSUMER DISCRETIONARY': 0.0034 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -86,6 +87,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { symbol: 'DAL', delta: -0.02 },
+          { symbol: 'MAR', delta: -0.02 },
+        ] },
         label: 'REDUCE DAL/MAR: travel exposure is obvious vulnerability',
         shortLabel: 'REDUCE TRAVEL',
         turnoverCost: 0.05,
@@ -110,6 +115,14 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { symbol: 'DAL', delta: -0.015 },
+          { symbol: 'MAR', delta: -0.015 },
+          { symbol: 'CAT', delta: -0.01 },
+          { symbol: 'XOM', delta: -0.01 },
+          { symbol: 'JNJ', delta: 0.025 },
+          { symbol: 'PG', delta: 0.025 },
+        ] },
         label: 'ROTATE: cyclicals to healthcare/staples',
         shortLabel: 'ROTATE DEFENSIVE',
         turnoverCost: 0.07,
@@ -152,6 +165,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.014, volatilityDelta: 0.02, correlationLevel: 0.38,
       positionReturns: bySector({ TECHNOLOGY: -0.004, FINANCIALS: -0.012, AIRLINES: -0.051, HOTELS: -0.041, ENERGY: -0.026, HEALTHCARE: 0.008, 'CONSUMER STAPLES': 0.006, INDUSTRIALS: -0.014, 'CONSUMER DISCRETIONARY': -0.006 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'REDUCE',
@@ -170,6 +184,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { symbol: 'DAL', delta: -0.04 },
+          { symbol: 'MAR', delta: -0.03 },
+        ] },
         label: 'REDUCE DAL/MAR: WHO emergency is the real trigger',
         shortLabel: 'REDUCE TRAVEL',
         turnoverCost: 0.05,
@@ -194,6 +212,12 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { symbol: 'DAL', delta: -0.035 },
+          { symbol: 'MAR', delta: -0.035 },
+          { symbol: 'JNJ', delta: 0.035 },
+          { symbol: 'PG', delta: 0.035 },
+        ] },
         label: 'ROTATE: sell travel, add JNJ/PG',
         shortLabel: 'ROTATE DEFENSIVE',
         turnoverCost: 0.07,
@@ -206,6 +230,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'RAISE_CASH',
+        allocationEffect: { moves: [
+          { symbol: 'DAL', delta: -0.04 },
+          { symbol: 'MAR', delta: -0.04 },
+        ] },
         label: 'RAISE CASH: convert travel exposure to dry powder',
         shortLabel: 'RAISE CASH',
         turnoverCost: 0.04,
@@ -248,6 +276,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.005, volatilityDelta: 0.00, correlationLevel: 0.32,
       positionReturns: bySector({ TECHNOLOGY: 0.0116, FINANCIALS: 0.0086, AIRLINES: -0.0114, HOTELS: -0.0094, ENERGY: 0.0026, HEALTHCARE: 0.0086, 'CONSUMER STAPLES': 0.0066, INDUSTRIALS: 0.0076, 'CONSUMER DISCRETIONARY': 0.0106 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -275,6 +304,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { symbol: 'AAPL', delta: -0.03 },
+        ] },
         label: 'REDUCE AAPL: supply chain risk visible',
         shortLabel: 'REDUCE AAPL',
         turnoverCost: 0.05,
@@ -341,6 +373,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.025, volatilityDelta: 0.04, correlationLevel: 0.58,
       positionReturns: bySector({ TECHNOLOGY: -0.015, FINANCIALS: -0.023, AIRLINES: -0.068, HOTELS: -0.058, ENERGY: -0.038, HEALTHCARE: 0.001, 'CONSUMER STAPLES': 0.003, INDUSTRIALS: -0.028, 'CONSUMER DISCRETIONARY': -0.013 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'REDUCE',
@@ -361,6 +394,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { sector: 'FINANCIALS', delta: -0.03 },
+          { sector: 'INDUSTRIALS', delta: -0.02 },
+          { sector: 'ENERGY', delta: -0.02 },
+        ] },
         label: 'REDUCE cyclicals/financials: regime has shifted',
         shortLabel: 'REDUCE CYCLICALS',
         turnoverCost: 0.05,
@@ -373,6 +411,14 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { symbol: 'DAL', delta: -0.02 },
+          { symbol: 'MAR', delta: -0.02 },
+          { symbol: 'CAT', delta: -0.015 },
+          { symbol: 'XOM', delta: -0.015 },
+          { symbol: 'JNJ', delta: 0.035 },
+          { symbol: 'PG', delta: 0.035 },
+        ] },
         label: 'ROTATE: sell cyclicals, add JNJ/PG',
         shortLabel: 'ROTATE DEFENSIVE',
         turnoverCost: 0.07,
@@ -439,6 +485,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.038, volatilityDelta: 0.06, correlationLevel: 0.78,
       positionReturns: bySector({ TECHNOLOGY: -0.03, FINANCIALS: -0.042, AIRLINES: -0.079, HOTELS: -0.069, ENERGY: -0.054, HEALTHCARE: -0.008, 'CONSUMER STAPLES': -0.004, INDUSTRIALS: -0.039, 'CONSUMER DISCRETIONARY': -0.026 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -533,6 +580,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.005, volatilityDelta: -0.01, correlationLevel: 0.65,
       positionReturns: bySector({ TECHNOLOGY: 0.0032, FINANCIALS: -0.0108, AIRLINES: -0.0188, HOTELS: -0.0168, ENERGY: -0.0138, HEALTHCARE: 0.0032, 'CONSUMER STAPLES': 0.0042, INDUSTRIALS: -0.0048, 'CONSUMER DISCRETIONARY': -0.0008 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -572,6 +620,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { symbol: 'JPM', delta: -0.04 },
+        ] },
         label: 'REDUCE JPM: rate cuts structurally hurt bank margins',
         shortLabel: 'REDUCE JPM',
         turnoverCost: 0.05,
@@ -584,6 +635,12 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { symbol: 'JPM', delta: -0.03 },
+          { symbol: 'CAT', delta: -0.02 },
+          { symbol: 'JNJ', delta: 0.025 },
+          { symbol: 'PG', delta: 0.025 },
+        ] },
         label: 'ROTATE into JNJ/PG: rate cut benefits defensives',
         shortLabel: 'ROTATE DEFENSIVE',
         turnoverCost: 0.07,
@@ -626,6 +683,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.062, volatilityDelta: 0.12, correlationLevel: 0.90,
       positionReturns: bySector({ TECHNOLOGY: -0.0507, FINANCIALS: -0.0677, AIRLINES: -0.1077, HOTELS: -0.0977, ENERGY: -0.0877, HEALTHCARE: -0.0247, 'CONSUMER STAPLES': -0.0187, INDUSTRIALS: -0.0627, 'CONSUMER DISCRETIONARY': -0.0547 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -720,6 +778,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.042, volatilityDelta: 0.08, correlationLevel: 0.87,
       positionReturns: bySector({ TECHNOLOGY: -0.018, FINANCIALS: -0.038, AIRLINES: -0.13, HOTELS: -0.11, ENERGY: -0.06, HEALTHCARE: -0.002, 'CONSUMER STAPLES': 0.005, INDUSTRIALS: -0.035, 'CONSUMER DISCRETIONARY': -0.025 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'REDUCE',
@@ -739,6 +798,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { symbol: 'DAL', delta: -0.04 },
+          { symbol: 'MAR', delta: -0.035 },
+        ] },
         label: 'REDUCE DAL/MAR: travel ban = zero revenue, not reduced revenue',
         shortLabel: 'REDUCE TRAVEL',
         turnoverCost: 0.05,
@@ -763,6 +826,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { symbol: 'DAL', delta: -0.035 },
+          { symbol: 'MAR', delta: -0.03 },
+          { symbol: 'JNJ', delta: 0.065 },
+        ] },
         label: 'ROTATE: sell travel, add healthcare',
         shortLabel: 'ROTATE TO JNJ',
         turnoverCost: 0.07,
@@ -817,6 +885,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.092, volatilityDelta: 0.20, correlationLevel: 0.95,
       positionReturns: bySector({ TECHNOLOGY: -0.0766, FINANCIALS: -0.1066, AIRLINES: -0.1416, HOTELS: -0.1316, ENERGY: -0.1216, HEALTHCARE: -0.0516, 'CONSUMER STAPLES': -0.0416, INDUSTRIALS: -0.0916, 'CONSUMER DISCRETIONARY': -0.0836 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -911,6 +980,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.015, volatilityDelta: -0.05, correlationLevel: 0.80,
       positionReturns: bySector({ TECHNOLOGY: -0.0034, FINANCIALS: -0.0034, AIRLINES: -0.0434, HOTELS: -0.0384, ENERGY: -0.0334, HEALTHCARE: -0.0034, 'CONSUMER STAPLES': -0.0004, INDUSTRIALS: -0.0184, 'CONSUMER DISCRETIONARY': -0.0104 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'STAGED_BUY',
@@ -1008,6 +1078,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.072, volatilityDelta: -0.08, correlationLevel: 0.75,
       positionReturns: bySector({ TECHNOLOGY: 0.0435, FINANCIALS: 0.0835, AIRLINES: 0.1385, HOTELS: 0.1285, ENERGY: 0.1085, HEALTHCARE: 0.0285, 'CONSUMER STAPLES': 0.0235, INDUSTRIALS: 0.0735, 'CONSUMER DISCRETIONARY': 0.0585 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -1102,6 +1173,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.032, volatilityDelta: -0.06, correlationLevel: 0.58,
       positionReturns: bySector({ TECHNOLOGY: 0.0528, FINANCIALS: 0.0208, AIRLINES: 0.0228, HOTELS: 0.0208, ENERGY: 0.0128, HEALTHCARE: 0.0308, 'CONSUMER STAPLES': 0.0248, INDUSTRIALS: 0.0278, 'CONSUMER DISCRETIONARY': 0.0478 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'ROTATE_RISK',
@@ -1122,6 +1194,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'ROTATE_RISK',
+        allocationEffect: { moves: [
+          { symbol: 'DAL', delta: -0.04 },
+          { symbol: 'MSFT', delta: 0.02 },
+          { symbol: 'JNJ', delta: 0.02 },
+        ] },
         label: 'ROTATE: MSFT/JNJ over DAL; structural over speculative',
         shortLabel: 'ROTATE QUALITY',
         turnoverCost: 0.07,
@@ -1134,6 +1211,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
+        allocationEffect: { moves: [
+          { symbol: 'DAL', delta: 0.025 },
+          { symbol: 'CAT', delta: 0.025 },
+        ] },
         label: 'ADD DAL/CAT: biggest bounces still ahead',
         shortLabel: 'ADD CYCLICALS',
         turnoverCost: 0.06,
@@ -1200,6 +1281,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.010, volatilityDelta: 0.01, correlationLevel: 0.55,
       positionReturns: bySector({ TECHNOLOGY: 0.0321, FINANCIALS: 0.0041, AIRLINES: -0.0079, HOTELS: -0.0059, ENERGY: -0.0019, HEALTHCARE: 0.0061, 'CONSUMER STAPLES': 0.0051, INDUSTRIALS: 0.0041, 'CONSUMER DISCRETIONARY': 0.0241 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'REDUCE',
@@ -1219,6 +1301,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     availableActions: [
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { sector: 'TECHNOLOGY', delta: -0.04 },
+        ] },
         label: 'TRIM tech: concentration rule, not a market call',
         shortLabel: 'TRIM TECH',
         turnoverCost: 0.05,
@@ -1243,6 +1328,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
+        allocationEffect: { moves: [
+          { symbol: 'MSFT', delta: 0.025 },
+          { symbol: 'AAPL', delta: 0.025 },
+        ] },
         label: 'ADD MSFT/AAPL: momentum plus quality',
         shortLabel: 'ADD TECH',
         turnoverCost: 0.06,
@@ -1255,6 +1344,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { sector: 'TECHNOLOGY', delta: -0.05 },
+          { symbol: 'JNJ', delta: 0.025 },
+          { symbol: 'PG', delta: 0.025 },
+        ] },
         label: 'ROTATE: tech profits into defensive equities',
         shortLabel: 'ROTATE OUT',
         turnoverCost: 0.07,
@@ -1297,6 +1391,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.018, volatilityDelta: -0.02, correlationLevel: 0.48,
       positionReturns: bySector({ TECHNOLOGY: 0.0424, FINANCIALS: 0.0084, AIRLINES: -0.0006, HOTELS: 0.0004, ENERGY: -0.0036, HEALTHCARE: 0.0184, 'CONSUMER STAPLES': 0.0144, INDUSTRIALS: 0.0144, 'CONSUMER DISCRETIONARY': 0.0364 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -1337,6 +1432,9 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'REDUCE',
+        allocationEffect: { moves: [
+          { sector: 'TECHNOLOGY', delta: -0.04 },
+        ] },
         label: 'REDUCE tech: take profits after a strong run',
         shortLabel: 'TAKE PROFITS',
         turnoverCost: 0.05,
@@ -1349,6 +1447,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
+        allocationEffect: { moves: [
+          { symbol: 'MSFT', delta: 0.03 },
+          { symbol: 'AAPL', delta: 0.02 },
+        ] },
         label: 'ADD quality growth: extend the winning thesis',
         shortLabel: 'ADD GROWTH',
         turnoverCost: 0.06,
@@ -1401,6 +1503,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.014, volatilityDelta: -0.01, correlationLevel: 0.52,
       positionReturns: bySector({ TECHNOLOGY: 0.0328, FINANCIALS: 0.0068, AIRLINES: 0.0048, HOTELS: 0.0028, ENERGY: -0.0032, HEALTHCARE: 0.0108, 'CONSUMER STAPLES': 0.0088, INDUSTRIALS: 0.0108, 'CONSUMER DISCRETIONARY': 0.0268 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'STAGED_BUY',
@@ -1491,6 +1594,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.012, volatilityDelta: 0.0, correlationLevel: 0.58,
       positionReturns: bySector({ TECHNOLOGY: 0.0482, FINANCIALS: -0.0048, AIRLINES: -0.0118, HOTELS: -0.0088, ENERGY: -0.0148, HEALTHCARE: 0.0092, 'CONSUMER STAPLES': 0.0072, INDUSTRIALS: 0.0032, 'CONSUMER DISCRETIONARY': 0.0332 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -1517,6 +1621,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
+        allocationEffect: { moves: [
+          { symbol: 'MSFT', delta: 0.03 },
+          { symbol: 'AAPL', delta: 0.02 },
+        ] },
         label: 'ADD megacap growth: it is what is working',
         shortLabel: 'CHASE',
         turnoverCost: 0.06,
@@ -1529,6 +1637,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { sector: 'TECHNOLOGY', delta: -0.04 },
+          { symbol: 'DAL', delta: 0.02 },
+          { symbol: 'MAR', delta: 0.02 },
+        ] },
         label: 'ROTATE into the laggards: mean reversion',
         shortLabel: 'ROTATE',
         turnoverCost: 0.07,
@@ -1580,6 +1693,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.030, volatilityDelta: 0.04, correlationLevel: 0.71,
       positionReturns: bySector({ TECHNOLOGY: -0.0883, FINANCIALS: -0.0073, AIRLINES: -0.0133, HOTELS: -0.0113, ENERGY: -0.0083, HEALTHCARE: -0.0013, 'CONSUMER STAPLES': 0.0007, INDUSTRIALS: -0.0133, 'CONSUMER DISCRETIONARY': -0.0483 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -1618,6 +1732,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ADD_RISK',
+        allocationEffect: { moves: [
+          { symbol: 'MSFT', delta: 0.025 },
+          { symbol: 'AAPL', delta: 0.025 },
+        ] },
         label: 'ADD: buy the dip in the leaders',
         shortLabel: 'BUY DIP',
         turnoverCost: 0.06,
@@ -1630,6 +1748,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { sector: 'TECHNOLOGY', delta: -0.05 },
+          { symbol: 'PG', delta: 0.05 },
+        ] },
         label: 'ROTATE: tech into staples',
         shortLabel: 'ROTATE',
         turnoverCost: 0.07,
@@ -1669,6 +1791,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: -0.022, volatilityDelta: 0.05, correlationLevel: 0.74,
       positionReturns: bySector({ TECHNOLOGY: -0.0094, FINANCIALS: -0.0274, AIRLINES: -0.0524, HOTELS: -0.0474, ENERGY: -0.0374, HEALTHCARE: -0.0014, 'CONSUMER STAPLES': 0.0006, INDUSTRIALS: -0.0224, 'CONSUMER DISCRETIONARY': -0.0174 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'RAISE_CASH',
@@ -1759,6 +1882,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.024, volatilityDelta: -0.02, correlationLevel: 0.44,
       positionReturns: bySector({ TECHNOLOGY: -0.0426, FINANCIALS: 0.0524, AIRLINES: 0.1174, HOTELS: 0.1024, ENERGY: 0.0724, HEALTHCARE: -0.0076, 'CONSUMER STAPLES': -0.0276, INDUSTRIALS: 0.0374, 'CONSUMER DISCRETIONARY': 0.0024 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -1849,6 +1973,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.008, volatilityDelta: -0.01, correlationLevel: 0.49,
       positionReturns: bySector({ TECHNOLOGY: 0.0092, FINANCIALS: 0.0092, AIRLINES: 0.0172, HOTELS: 0.0152, ENERGY: 0.0112, HEALTHCARE: -0.0008, 'CONSUMER STAPLES': -0.0028, INDUSTRIALS: 0.0072, 'CONSUMER DISCRETIONARY': 0.0032 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'REDUCE',
@@ -1899,6 +2024,11 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       },
       {
         actionCode: 'ROTATE_DEFENSIVE',
+        allocationEffect: { moves: [
+          { sector: 'TECHNOLOGY', delta: -0.04 },
+          { symbol: 'HD', delta: 0.02 },
+          { symbol: 'XOM', delta: 0.02 },
+        ] },
         label: 'ROTATE: the excess into underweights',
         shortLabel: 'ROTATE',
         turnoverCost: 0.07,
@@ -1938,6 +2068,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.011, volatilityDelta: -0.02, correlationLevel: 0.42,
       positionReturns: bySector({ TECHNOLOGY: 0.0067, FINANCIALS: 0.0147, AIRLINES: 0.0207, HOTELS: 0.0187, ENERGY: 0.0167, HEALTHCARE: 0.0047, 'CONSUMER STAPLES': 0.0027, INDUSTRIALS: 0.0127, 'CONSUMER DISCRETIONARY': 0.0067 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',
@@ -2027,6 +2158,7 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
     portfolioEffect: {
       returnBias: 0.006, volatilityDelta: -0.01, correlationLevel: 0.40,
       positionReturns: bySector({ TECHNOLOGY: 0.0036, FINANCIALS: 0.0056, AIRLINES: 0.0116, HOTELS: 0.0096, ENERGY: 0.0076, HEALTHCARE: 0.0046, 'CONSUMER STAPLES': 0.0046, INDUSTRIALS: 0.0056, 'CONSUMER DISCRETIONARY': 0.0046 }),
+      returnsSource: 'AUTHORED_GAME_SIMULATION',
     },
     machineDecision: {
       actionCode: 'HOLD',

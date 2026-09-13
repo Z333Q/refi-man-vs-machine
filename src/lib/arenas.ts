@@ -130,6 +130,7 @@ export function buildPortfolio(
     positions: positions.map(p => ({ ...p, pnl: 0 })),
     peakValue: opts.startingCapital,
     drawdown: 0,
+    troughDrawdown: 0,
     volatility: opts.volatility,
     sectorExposure,
     turnoverUsed: 0,

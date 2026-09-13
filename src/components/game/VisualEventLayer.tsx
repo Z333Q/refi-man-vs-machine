@@ -262,8 +262,17 @@ export const visualRegistry: Record<
   DRAWDOWN_WARNING:         { durationMs: 0,    blocking: true  },
   RISK_LIMIT_BREACH:        { durationMs: 0,    blocking: true  },
   SECTOR_ROTATION:          { durationMs: 1400, blocking: false },
-  CASH_RAISED:              { durationMs: 0,    blocking: true  },
-  CAPITAL_DEPLOYED:         { durationMs: 0,    blocking: true  },
+  // Informational, not decisions: the cash reservoir filling or draining is
+  // §39's picture of what the stance did, and it plays and passes like the
+  // other state animations. They were blocking modals, which mattered little
+  // while a stance barely moved cash and mattered a great deal once stances
+  // began executing real trades: crossing 30% cash then stopped the run dead
+  // in the middle of a resolution (2026-09-12).
+  //
+  // The genuine risk warnings below stay blocking. A drawdown warning is a
+  // thing the player must acknowledge; a cash bar is a thing they must see.
+  CASH_RAISED:              { durationMs: 1600, blocking: false },
+  CAPITAL_DEPLOYED:         { durationMs: 1600, blocking: false },
   MACHINE_ACTION_REVEAL:    { durationMs: 700,  blocking: true  },
   MACHINE_ADVANTAGE:        { durationMs: 1500, blocking: false },
   HUMAN_ADVANTAGE:          { durationMs: 1500, blocking: false },

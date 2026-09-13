@@ -140,6 +140,42 @@ export interface BranchEffect {
   machineComparison?: string;
 }
 
+/**
+ * One leg of a stance's portfolio transition, as a weight of the whole book.
+ *
+ * Either a named holding or a sector, never both. A sector move is spread
+ * across that sector's holdings in proportion to what they already weigh, so
+ * "cut the bank cluster" does not silently equalise six banks that were never
+ * equal.
+ */
+export interface AllocationMove {
+  symbol?: string;
+  sector?: string;
+  /** Signed weight change. Negative sells, positive buys. */
+  delta: number;
+}
+
+/**
+ * What a stance actually does to the book at this checkpoint.
+ *
+ * The stance card is a sentence and the ActionCode is a category; neither is a
+ * trade. COVID CP2 offers "REDUCE DAL/MAR: WHO emergency is the real trigger"
+ * and the engine, reading only the code REDUCE, trimmed all ten holdings pro
+ * rata — the card described one trade and the engine executed another
+ * (2026-09-12 review). Where a card names a holding, a sector or a cluster, the
+ * branch states the transition and the engine executes exactly that.
+ *
+ * Cash absorbs the residual: the moves need not net to zero, and what they do
+ * not spend or raise lands in cash.
+ *
+ * Absent, the stance falls back to the generic reading of its ActionCode: a
+ * pro-rata trim, a pro-rata deployment, or a broad defensive/cyclical tilt.
+ * That is the right behaviour for a card that says "REDUCE" and means it.
+ */
+export interface AllocationEffect {
+  moves: AllocationMove[];
+}
+
 export interface ActionBranch {
   actionCode: ActionCode;
   label: string;
@@ -160,6 +196,11 @@ export interface ActionBranch {
    * positive.
    */
   turnoverCost: number;
+  /**
+   * The portfolio transition this card promises, where it promises a specific
+   * one. See AllocationEffect. Absent means the generic ActionCode reading.
+   */
+  allocationEffect?: AllocationEffect;
   branchEffect: BranchEffect;
   // Kept optional at the outer level for content authored before
   // `machineComparison` moved into BranchEffect (see BranchEffect note).
@@ -168,10 +209,15 @@ export interface ActionBranch {
 
 export interface CheckpointData {
   sequence: number;
-  // The machine's score to beat at this checkpoint. Par is content, not engine
-  // logic, so the rules-machine export pipeline can later overwrite these rows
-  // without touching the scoring engine. It is published in the UI: difficulty
-  // is legible, never hidden.
+  /**
+   * This checkpoint's difficulty anchor. Content, not engine logic.
+   *
+   * It is no longer the machine's score: every opponent now plays its own book
+   * and is scored by the same seven components as the player (2026-09-12
+   * review). What par still does is set the point conviction scales the
+   * checkpoint around, so a harder checkpoint costs more to be wrong about.
+   * It is published in the UI, because difficulty is legible, never hidden.
+   */
   machinePar: number;
   phase: CheckpointPhase;
   crisisDay: string;
@@ -183,10 +229,37 @@ export interface CheckpointData {
     returnBias: number;        // Expected return contribution this checkpoint
     volatilityDelta: number;   // Volatility change
     correlationLevel: number;  // Cross-asset correlation 0-1
-    // Optional authored per-symbol returns for this checkpoint. Where absent,
-    // every position moves by the checkpoint return exactly. No noise term:
-    // run state must be reproducible from the decision sequence alone.
+    /**
+     * Per-symbol returns for this checkpoint. Where absent, every position
+     * moves by the checkpoint return exactly. No noise term: run state must be
+     * reproducible from the decision sequence alone.
+     *
+     * Read `returnsSource` before showing any of these to a player or
+     * describing them as anything.
+     */
     positionReturns?: Record<string, number>;
+    /**
+     * Where the per-symbol returns came from. Required whenever
+     * positionReturns is present.
+     *
+     * §0 rule 3 requires historical market data and player simulation to stay
+     * distinguishable, and §58 forbids merging result types into one unlabelled
+     * claim. The dispersion shipped in 2026-09 is authored to fit each
+     * checkpoint's narrative, not measured from prices: it carries four decimal
+     * places because it was recentred arithmetically on the checkpoint's stated
+     * market move, and precision is not provenance.
+     *
+     * AUTHORED_GAME_SIMULATION  designed gameplay dispersion. Not a historical
+     *                           observation, and must never be presented as
+     *                           one. The broad signal and date around it remain
+     *                           historical; the per-symbol numbers do not.
+     * HISTORICAL_PRICE_SERIES   sourced from actual historical prices, with a
+     *                           reference naming the source. Nothing ships
+     *                           under this yet.
+     */
+    returnsSource?: 'AUTHORED_GAME_SIMULATION' | 'HISTORICAL_PRICE_SERIES';
+    /** Where a HISTORICAL_PRICE_SERIES came from. Required for that source. */
+    returnsSourceRef?: string;
     // Optional authored machine drawdown at this checkpoint. Scoring uses it
     // when present and never fabricates one when it is absent.
     machineDrawdown?: number;
@@ -217,6 +290,15 @@ export interface PortfolioState {
   // recovered-then-fallen run reports the real decline, not decline-from-start.
   peakValue: number;
   drawdown: number;
+  /**
+   * The worst drawdown this book has reached. Ratchets down only.
+   *
+   * Stored rather than derived because recovery efficiency is measured from it
+   * and a run must replay to the same score: reconstructing the trough from a
+   * decision list would work, but every consumer would have to agree on how,
+   * and a stored monotone fact cannot disagree with itself.
+   */
+  troughDrawdown: number;
   volatility: number;
   sectorExposure: Record<string, number>;
   turnoverUsed: number;
@@ -262,6 +344,11 @@ export interface RunDecision {
  * (the ReFi Rules machine is authored content). HOLD is buy and hold: the
  * passive index takes no decisions. CONFIG runs a Machine Builder
  * configuration through the policy engine.
+ *
+ * All three carry a book. Every opponent pays turnover on its own portfolio,
+ * carries its own drawdown and earns its own risk-adjusted return through the
+ * same normalisation as the player: AUTHORED used to be the exception, scored
+ * by its content par with no portfolio at all.
  */
 export type OpponentPolicy =
   | { kind: 'AUTHORED' }
