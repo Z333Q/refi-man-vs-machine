@@ -17,6 +17,29 @@
 import type { CheckpointData } from './gameTypes';
 import { registerArena, buildPortfolio } from './arenas';
 
+import { sectorReturns } from './arenas';
+
+// The book this arena is played on, as a symbol-to-sector map. Authored here
+// so the checkpoint returns below and the starting portfolio at the foot of
+// the file cannot name different holdings.
+const BOOK: Record<string, string> = {
+  JPM: 'FINANCIALS',
+  BAC: 'FINANCIALS',
+  C: 'FINANCIALS',
+  WFC: 'FINANCIALS',
+  GS: 'FINANCIALS',
+  MS: 'FINANCIALS',
+  MSFT: 'TECHNOLOGY',
+  NVDA: 'TECHNOLOGY',
+  AAPL: 'TECHNOLOGY',
+  JNJ: 'HEALTHCARE',
+};
+
+// Contagion: six financial tickers are one economic risk, and the arena only teaches that if they move together and apart from everything else.
+/** Sector returns for one checkpoint, expanded onto this arena's book. */
+const bySector = (m: Record<string, number>) => sectorReturns(BOOK, m);
+
+
 export const BANKING_CHECKPOINTS: CheckpointData[] = [
   {
     sequence: 1,
@@ -37,7 +60,10 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
       { category: 'PORTFOLIO', text: 'Six bank tickers, one funding environment, one rate exposure' },
       { category: 'MACHINE', text: 'Machine measures the cluster, not the ticker count' },
     ],
-    portfolioEffect: { returnBias: -0.014, volatilityDelta: 0.02, correlationLevel: 0.71 },
+    portfolioEffect: {
+      returnBias: -0.014, volatilityDelta: 0.02, correlationLevel: 0.71,
+      positionReturns: bySector({ FINANCIALS: -0.0274, TECHNOLOGY: 0.0006, HEALTHCARE: 0.0046 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -122,7 +148,10 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
       { category: 'CORRELATION', text: 'Internal bank correlation moves from 0.71 to 0.94 in 48 hours' },
       { category: 'MACHINE', text: 'Machine treats correlation convergence as the primary contagion signal' },
     ],
-    portfolioEffect: { returnBias: -0.042, volatilityDelta: 0.05, correlationLevel: 0.94 },
+    portfolioEffect: {
+      returnBias: -0.042, volatilityDelta: 0.05, correlationLevel: 0.94,
+      positionReturns: bySector({ FINANCIALS: -0.0837, TECHNOLOGY: 0.0033, HEALTHCARE: 0.0153 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -207,7 +236,10 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
       { category: 'AMBIGUITY', text: 'Support arrives and the failures continue: both are true' },
       { category: 'MACHINE', text: 'Machine acts on funding conditions, not on the announcement' },
     ],
-    portfolioEffect: { returnBias: -0.008, volatilityDelta: -0.01, correlationLevel: 0.89 },
+    portfolioEffect: {
+      returnBias: -0.008, volatilityDelta: -0.01, correlationLevel: 0.89,
+      positionReturns: bySector({ FINANCIALS: -0.0237, TECHNOLOGY: 0.0103, HEALTHCARE: 0.0083 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -292,7 +324,10 @@ export const BANKING_CHECKPOINTS: CheckpointData[] = [
       { category: 'MEASURE', text: 'Nine holdings, two effective risk clusters' },
       { category: 'MACHINE', text: 'Machine applies the cluster rule to every cluster, not to the one that hurt' },
     ],
-    portfolioEffect: { returnBias: 0.012, volatilityDelta: -0.01, correlationLevel: 0.66 },
+    portfolioEffect: {
+      returnBias: 0.012, volatilityDelta: -0.01, correlationLevel: 0.66,
+      positionReturns: bySector({ FINANCIALS: 0.0048, TECHNOLOGY: 0.0228, HEALTHCARE: 0.0088 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [

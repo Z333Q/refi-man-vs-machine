@@ -26,6 +26,28 @@
 import type { CheckpointData } from './gameTypes';
 import { registerArena, buildPortfolio } from './arenas';
 
+import { sectorReturns } from './arenas';
+
+// The book this arena is played on, as a symbol-to-sector map. Authored here
+// so the checkpoint returns below and the starting portfolio at the foot of
+// the file cannot name different holdings.
+const BOOK: Record<string, string> = {
+  F: 'AUTOS',
+  GM: 'AUTOS',
+  NVDA: 'SEMICONDUCTORS',
+  AMAT: 'SEMICONDUCTORS',
+  WMT: 'RETAIL',
+  CAT: 'INDUSTRIALS',
+  JNJ: 'HEALTHCARE',
+  V: 'FINANCIALS',
+  NEE: 'UTILITIES',
+};
+
+// Tariff exposure is company-level, not market-level: autos and semiconductors carry the input cost, retail carries the margin, and the domestic utility carries none of it.
+/** Sector returns for one checkpoint, expanded onto this arena's book. */
+const bySector = (m: Record<string, number>) => sectorReturns(BOOK, m);
+
+
 export const TACO_CHECKPOINTS: CheckpointData[] = [
   {
     sequence: 1,
@@ -46,7 +68,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       { category: 'MARKET', text: 'Broad selling with little differentiation on actual exposure' },
       { category: 'MACHINE', text: 'Machine maps exposure company by company before sizing anything' },
     ],
-    portfolioEffect: { returnBias: -0.026, volatilityDelta: 0.04, correlationLevel: 0.69 },
+    portfolioEffect: {
+      returnBias: -0.026, volatilityDelta: 0.04, correlationLevel: 0.69,
+      positionReturns: bySector({ AUTOS: -0.0525, SEMICONDUCTORS: -0.0455, RETAIL: -0.0245, INDUSTRIALS: -0.0205, FINANCIALS: -0.0025, HEALTHCARE: 0.0055, UTILITIES: 0.0115 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -131,7 +156,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       { category: 'STATE', text: 'Delay is not withdrawal, and the policy remains on the table' },
       { category: 'MACHINE', text: 'Machine re-enters partially: the exposure fell, it did not disappear' },
     ],
-    portfolioEffect: { returnBias: 0.019, volatilityDelta: -0.02, correlationLevel: 0.62 },
+    portfolioEffect: {
+      returnBias: 0.019, volatilityDelta: -0.02, correlationLevel: 0.62,
+      positionReturns: bySector({ AUTOS: 0.0397, SEMICONDUCTORS: 0.0337, RETAIL: 0.0157, INDUSTRIALS: 0.0137, FINANCIALS: 0.0017, HEALTHCARE: -0.0043, UTILITIES: -0.0083 }),
+    },
     machineDecision: {
       actionCode: 'STAGED_BUY',
       reasoning: [
@@ -216,7 +244,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       { category: 'REFLEXIVITY', text: 'Everyone expecting the same reversal changes the payoff of expecting it' },
       { category: 'MACHINE', text: 'Machine sizes on current exposure, with no memory of the last round' },
     ],
-    portfolioEffect: { returnBias: -0.011, volatilityDelta: 0.01, correlationLevel: 0.72 },
+    portfolioEffect: {
+      returnBias: -0.011, volatilityDelta: 0.01, correlationLevel: 0.72,
+      positionReturns: bySector({ AUTOS: -0.0224, SEMICONDUCTORS: -0.0184, RETAIL: -0.0104, INDUSTRIALS: -0.0084, FINANCIALS: -0.0024, HEALTHCARE: 0.0016, UTILITIES: 0.0056 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -301,7 +332,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       { category: 'CROWDING', text: 'Consensus positioning unwinds into a falling market' },
       { category: 'MACHINE', text: 'Machine holds a small measured exposure and is not positioned on the pattern' },
     ],
-    portfolioEffect: { returnBias: -0.032, volatilityDelta: 0.04, correlationLevel: 0.81 },
+    portfolioEffect: {
+      returnBias: -0.032, volatilityDelta: 0.04, correlationLevel: 0.81,
+      positionReturns: bySector({ AUTOS: -0.0661, SEMICONDUCTORS: -0.0561, RETAIL: -0.0301, INDUSTRIALS: -0.0261, FINANCIALS: -0.0021, HEALTHCARE: 0.0079, UTILITIES: 0.0159 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -386,7 +420,10 @@ export const TACO_CHECKPOINTS: CheckpointData[] = [
       { category: 'RULE', text: 'A rule that everyone runs stops producing what it produced' },
       { category: 'MACHINE', text: 'Machine keeps the rule and reduces the size it is expressed at' },
     ],
-    portfolioEffect: { returnBias: -0.009, volatilityDelta: 0.02, correlationLevel: 0.7 },
+    portfolioEffect: {
+      returnBias: -0.009, volatilityDelta: 0.02, correlationLevel: 0.7,
+      positionReturns: bySector({ AUTOS: -0.0204, SEMICONDUCTORS: -0.0164, RETAIL: -0.0084, INDUSTRIALS: -0.0064, FINANCIALS: -0.0004, HEALTHCARE: 0.0036, UTILITIES: 0.0076 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [

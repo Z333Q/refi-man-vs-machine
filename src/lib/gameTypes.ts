@@ -148,9 +148,17 @@ export interface ActionBranch {
   // set is derived per action code. Authoring these per branch is a copy-pass
   // item (Addendum B section B3).
   thesisOptions?: ThesisCode[];
-  // Fixed, authored turnover price of taking this stance. The run's turnover
-  // budget is a finite, deterministic resource: no estimate, no noise term.
-  // HOLD is always 0.
+  /**
+   * What the author expected this stance to cost in turnover. Documentation,
+   * not a price.
+   *
+   * The engine charges the traded weight the stance actually implies against
+   * the book it is taken on (runEngine's turnoverCostFor), so the same stance
+   * costs a concentrated book more than a balanced one and this number cannot
+   * be that answer. It is kept because it records authorial intent and the
+   * content tests hold every arena to its shape: HOLD free, everything else
+   * positive.
+   */
   turnoverCost: number;
   branchEffect: BranchEffect;
   // Kept optional at the outer level for content authored before

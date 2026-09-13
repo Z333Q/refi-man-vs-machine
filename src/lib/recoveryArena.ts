@@ -14,6 +14,25 @@
 import type { CheckpointData } from './gameTypes';
 import { registerArena, buildPortfolio } from './arenas';
 
+import { sectorReturns } from './arenas';
+
+// The book this arena is played on, as a symbol-to-sector map. Authored here
+// so the checkpoint returns below and the starting portfolio at the foot of
+// the file cannot name different holdings.
+const BOOK: Record<string, string> = {
+  JNJ: 'HEALTHCARE',
+  PG: 'CONSUMER STAPLES',
+  KO: 'CONSUMER STAPLES',
+  MSFT: 'TECHNOLOGY',
+  VZ: 'TELECOM',
+  WMT: 'CONSUMER STAPLES',
+};
+
+// Defensive book: the lesson is that survival positioning lags a recovery, so technology leads and the staples/telecom core trails it.
+/** Sector returns for one checkpoint, expanded onto this arena's book. */
+const bySector = (m: Record<string, number>) => sectorReturns(BOOK, m);
+
+
 export const RECOVERY_CHECKPOINTS: CheckpointData[] = [
   {
     sequence: 1,
@@ -34,7 +53,10 @@ export const RECOVERY_CHECKPOINTS: CheckpointData[] = [
       { category: 'COST', text: 'Six months of a 22% advance earned on 55% of the book' },
       { category: 'MACHINE', text: 'Machine treats a defensive book past its regime as a live decision' },
     ],
-    portfolioEffect: { returnBias: 0.016, volatilityDelta: -0.01, correlationLevel: 0.46 },
+    portfolioEffect: {
+      returnBias: 0.016, volatilityDelta: -0.01, correlationLevel: 0.46,
+      positionReturns: bySector({ TECHNOLOGY: 0.0375, 'CONSUMER STAPLES': 0.0115, HEALTHCARE: 0.0135, TELECOM: 0.0075 }),
+    },
     machineDecision: {
       actionCode: 'STAGED_BUY',
       reasoning: [
@@ -119,7 +141,10 @@ export const RECOVERY_CHECKPOINTS: CheckpointData[] = [
       { category: 'BEHAVIOUR', text: 'A player who missed the advance reads every decline as vindication' },
       { category: 'MACHINE', text: 'Machine sized on evidence, so a 4% move triggers nothing' },
     ],
-    portfolioEffect: { returnBias: -0.012, volatilityDelta: 0.02, correlationLevel: 0.58 },
+    portfolioEffect: {
+      returnBias: -0.012, volatilityDelta: 0.02, correlationLevel: 0.58,
+      positionReturns: bySector({ TECHNOLOGY: -0.0295, 'CONSUMER STAPLES': -0.0075, HEALTHCARE: -0.0115, TELECOM: -0.0055 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -204,7 +229,10 @@ export const RECOVERY_CHECKPOINTS: CheckpointData[] = [
       { category: 'PORTFOLIO', text: 'A defensive book is not a value book: it lags both sides of this' },
       { category: 'MACHINE', text: 'Machine rebalances toward policy weights rather than picking the winner' },
     ],
-    portfolioEffect: { returnBias: 0.008, volatilityDelta: 0.02, correlationLevel: 0.51 },
+    portfolioEffect: {
+      returnBias: 0.008, volatilityDelta: 0.02, correlationLevel: 0.51,
+      positionReturns: bySector({ TECHNOLOGY: -0.0169, 'CONSUMER STAPLES': 0.0151, HEALTHCARE: 0.0131, TELECOM: 0.0091 }),
+    },
     machineDecision: {
       actionCode: 'ROTATE_RISK',
       reasoning: [
@@ -289,7 +317,10 @@ export const RECOVERY_CHECKPOINTS: CheckpointData[] = [
       { category: 'RISK', text: 'Drift is the position you did not choose and are still carrying' },
       { category: 'MACHINE', text: 'Machine rebalances on a drift threshold, on a schedule, without a view' },
     ],
-    portfolioEffect: { returnBias: 0.006, volatilityDelta: -0.01, correlationLevel: 0.44 },
+    portfolioEffect: {
+      returnBias: 0.006, volatilityDelta: -0.01, correlationLevel: 0.44,
+      positionReturns: bySector({ TECHNOLOGY: 0.0239, 'CONSUMER STAPLES': 0.0019, HEALTHCARE: 0.0039, TELECOM: -0.0001 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -374,7 +405,10 @@ export const RECOVERY_CHECKPOINTS: CheckpointData[] = [
       { category: 'POSITION', text: 'Fully invested for the first time since the crisis' },
       { category: 'MACHINE', text: 'Machine distinguishes a widening from a tight base from a genuine funding event' },
     ],
-    portfolioEffect: { returnBias: -0.018, volatilityDelta: 0.03, correlationLevel: 0.66 },
+    portfolioEffect: {
+      returnBias: -0.018, volatilityDelta: 0.03, correlationLevel: 0.66,
+      positionReturns: bySector({ TECHNOLOGY: -0.0375, 'CONSUMER STAPLES': -0.0135, HEALTHCARE: -0.0155, TELECOM: -0.0115 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -459,7 +493,10 @@ export const RECOVERY_CHECKPOINTS: CheckpointData[] = [
       { category: 'REGIME', text: 'The conditions that produced the recovery are being removed deliberately' },
       { category: 'MACHINE', text: 'Machine registers a regime change and reduces rate-sensitive exposure' },
     ],
-    portfolioEffect: { returnBias: -0.014, volatilityDelta: 0.03, correlationLevel: 0.62 },
+    portfolioEffect: {
+      returnBias: -0.014, volatilityDelta: 0.03, correlationLevel: 0.62,
+      positionReturns: bySector({ TECHNOLOGY: -0.0352, 'CONSUMER STAPLES': -0.0092, HEALTHCARE: -0.0112, TELECOM: -0.0072 }),
+    },
     machineDecision: {
       actionCode: 'ROTATE_DEFENSIVE',
       reasoning: [

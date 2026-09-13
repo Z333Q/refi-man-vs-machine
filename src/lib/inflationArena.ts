@@ -17,6 +17,27 @@
 import type { CheckpointData } from './gameTypes';
 import { registerArena, buildPortfolio } from './arenas';
 
+import { sectorReturns } from './arenas';
+
+// The book this arena is played on, as a symbol-to-sector map. Authored here
+// so the checkpoint returns below and the starting portfolio at the foot of
+// the file cannot name different holdings.
+const BOOK: Record<string, string> = {
+  NVDA: 'TECHNOLOGY',
+  MSFT: 'TECHNOLOGY',
+  CRM: 'TECHNOLOGY',
+  TSLA: 'CONSUMER DISCRETIONARY',
+  AMZN: 'CONSUMER DISCRETIONARY',
+  JNJ: 'HEALTHCARE',
+  XOM: 'ENERGY',
+  PG: 'CONSUMER STAPLES',
+};
+
+// Rate shock: long-duration growth carries the valuation compression, energy is the one sector inflation pays, and the defensives sit in between.
+/** Sector returns for one checkpoint, expanded onto this arena's book. */
+const bySector = (m: Record<string, number>) => sectorReturns(BOOK, m);
+
+
 export const INFLATION_CHECKPOINTS: CheckpointData[] = [
   {
     sequence: 1,
@@ -37,7 +58,10 @@ export const INFLATION_CHECKPOINTS: CheckpointData[] = [
       { category: 'DIVERGENCE', text: 'The dip-buying rule was learned in a zero-rate regime that is ending' },
       { category: 'MACHINE', text: 'Machine checks whether the conditions that made the rule work still hold' },
     ],
-    portfolioEffect: { returnBias: -0.021, volatilityDelta: 0.02, correlationLevel: 0.61 },
+    portfolioEffect: {
+      returnBias: -0.021, volatilityDelta: 0.02, correlationLevel: 0.61,
+      positionReturns: bySector({ TECHNOLOGY: -0.0343, 'CONSUMER DISCRETIONARY': -0.0283, ENERGY: 0.0217, HEALTHCARE: -0.0043, 'CONSUMER STAPLES': -0.0023 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -122,7 +146,10 @@ export const INFLATION_CHECKPOINTS: CheckpointData[] = [
       { category: 'MECHANISM', text: 'Same company, different discount rate, lower present value' },
       { category: 'MACHINE', text: 'Machine reduces by duration rather than by conviction in the business' },
     ],
-    portfolioEffect: { returnBias: -0.028, volatilityDelta: 0.03, correlationLevel: 0.68 },
+    portfolioEffect: {
+      returnBias: -0.028, volatilityDelta: 0.03, correlationLevel: 0.68,
+      positionReturns: bySector({ TECHNOLOGY: -0.0442, 'CONSUMER DISCRETIONARY': -0.0362, ENERGY: 0.0198, HEALTHCARE: -0.0062, 'CONSUMER STAPLES': -0.0042 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -207,7 +234,10 @@ export const INFLATION_CHECKPOINTS: CheckpointData[] = [
       { category: 'RULE', text: 'Buy-drawdown logic has produced five consecutive losses' },
       { category: 'MACHINE', text: 'Machine stopped applying the rule when the regime that produced it ended' },
     ],
-    portfolioEffect: { returnBias: -0.034, volatilityDelta: 0.03, correlationLevel: 0.74 },
+    portfolioEffect: {
+      returnBias: -0.034, volatilityDelta: 0.03, correlationLevel: 0.74,
+      positionReturns: bySector({ TECHNOLOGY: -0.0519, 'CONSUMER DISCRETIONARY': -0.0419, ENERGY: 0.0131, HEALTHCARE: -0.0089, 'CONSUMER STAPLES': -0.0069 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -292,7 +322,10 @@ export const INFLATION_CHECKPOINTS: CheckpointData[] = [
       { category: 'COST', text: 'Waiting for full confirmation has historically cost 15-20% of the recovery' },
       { category: 'MACHINE', text: 'Machine deploys a first tranche on the first genuine change in the driving variable' },
     ],
-    portfolioEffect: { returnBias: 0.026, volatilityDelta: -0.02, correlationLevel: 0.58 },
+    portfolioEffect: {
+      returnBias: 0.026, volatilityDelta: -0.02, correlationLevel: 0.58,
+      positionReturns: bySector({ TECHNOLOGY: 0.0412, 'CONSUMER DISCRETIONARY': 0.0332, ENERGY: -0.0168, HEALTHCARE: 0.0052, 'CONSUMER STAPLES': 0.0032 }),
+    },
     machineDecision: {
       actionCode: 'STAGED_BUY',
       reasoning: [
@@ -377,7 +410,10 @@ export const INFLATION_CHECKPOINTS: CheckpointData[] = [
       { category: 'RISK', text: 'That conclusion is a rule learned from one regime, exactly like the last one' },
       { category: 'MACHINE', text: 'Machine writes rules with conditions attached rather than conclusions' },
     ],
-    portfolioEffect: { returnBias: 0.004, volatilityDelta: -0.02, correlationLevel: 0.52 },
+    portfolioEffect: {
+      returnBias: 0.004, volatilityDelta: -0.02, correlationLevel: 0.52,
+      positionReturns: bySector({ TECHNOLOGY: 0.0065, 'CONSUMER DISCRETIONARY': 0.0025, ENERGY: 0.0005, HEALTHCARE: 0.0025, 'CONSUMER STAPLES': 0.0015 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [

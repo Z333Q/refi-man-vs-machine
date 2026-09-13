@@ -1,4 +1,17 @@
 import type { CheckpointData } from './gameTypes';
+import { sectorReturns } from './arenas';
+
+// The book this arena is played on, as a symbol-to-sector map. Authored here
+// so the checkpoint returns below and the starting portfolio at the foot of
+// the file cannot name different holdings.
+const BOOK: Record<string, string> = {
+  MSFT: 'TECHNOLOGY', AAPL: 'TECHNOLOGY', JPM: 'FINANCIALS', DAL: 'AIRLINES',
+  MAR: 'HOTELS', XOM: 'ENERGY', JNJ: 'HEALTHCARE', PG: 'CONSUMER STAPLES',
+  CAT: 'INDUSTRIALS', HD: 'CONSUMER DISCRETIONARY',
+};
+
+/** Sector returns for one checkpoint, expanded onto this arena's book. */
+const bySector = (m: Record<string, number>) => sectorReturns(BOOK, m);
 
 // ─── COVID Black Swan Arena ───────────────────────────────────────────────────
 // U.S. equities only. The player manages a 10-stock equity portfolio through
@@ -43,7 +56,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'CONSENSUS', text: 'Analysts citing SARS 2003 template: contained within 6-8 weeks' },
       { category: 'MARKETS', text: 'S&P 500 at all-time high. No tail risk priced.' },
     ],
-    portfolioEffect: { returnBias: 0.002, volatilityDelta: 0.01, correlationLevel: 0.30 },
+    portfolioEffect: {
+      returnBias: 0.002, volatilityDelta: 0.01, correlationLevel: 0.30,
+      positionReturns: bySector({ TECHNOLOGY: 0.0044, FINANCIALS: 0.0034, AIRLINES: -0.0036, HOTELS: -0.0026, ENERGY: 0.0014, HEALTHCARE: 0.0034, 'CONSUMER STAPLES': 0.0024, INDUSTRIALS: 0.0024, 'CONSUMER DISCRETIONARY': 0.0034 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -133,7 +149,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'HOTELS', text: 'Marriott: Asia-Pacific occupancy demand declining', relevantAssets: ['MAR'] },
       { category: 'MARKETS', text: 'Travel and leisure sector leading broad selloff today' },
     ],
-    portfolioEffect: { returnBias: -0.014, volatilityDelta: 0.02, correlationLevel: 0.38 },
+    portfolioEffect: {
+      returnBias: -0.014, volatilityDelta: 0.02, correlationLevel: 0.38,
+      positionReturns: bySector({ TECHNOLOGY: -0.004, FINANCIALS: -0.012, AIRLINES: -0.051, HOTELS: -0.041, ENERGY: -0.026, HEALTHCARE: 0.008, 'CONSUMER STAPLES': 0.006, INDUSTRIALS: -0.014, 'CONSUMER DISCRETIONARY': -0.006 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -226,7 +245,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'MARKETS', text: 'S&P 500 at all-time highs. Outbreak narrative: still contained.' },
       { category: 'DISCONNECT', text: 'Outbreak data accelerating. Market disagrees.' },
     ],
-    portfolioEffect: { returnBias: 0.005, volatilityDelta: 0.00, correlationLevel: 0.32 },
+    portfolioEffect: {
+      returnBias: 0.005, volatilityDelta: 0.00, correlationLevel: 0.32,
+      positionReturns: bySector({ TECHNOLOGY: 0.0116, FINANCIALS: 0.0086, AIRLINES: -0.0114, HOTELS: -0.0094, ENERGY: 0.0026, HEALTHCARE: 0.0086, 'CONSUMER STAPLES': 0.0066, INDUSTRIALS: 0.0076, 'CONSUMER DISCRETIONARY': 0.0106 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -316,7 +338,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'EQUITIES', text: 'Cyclicals and financials leading the selloff' },
       { category: 'VIX', text: 'VIX above 25 for first time since August 2019' },
     ],
-    portfolioEffect: { returnBias: -0.025, volatilityDelta: 0.04, correlationLevel: 0.58 },
+    portfolioEffect: {
+      returnBias: -0.025, volatilityDelta: 0.04, correlationLevel: 0.58,
+      positionReturns: bySector({ TECHNOLOGY: -0.015, FINANCIALS: -0.023, AIRLINES: -0.068, HOTELS: -0.058, ENERGY: -0.038, HEALTHCARE: 0.001, 'CONSUMER STAPLES': 0.003, INDUSTRIALS: -0.028, 'CONSUMER DISCRETIONARY': -0.013 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -411,7 +436,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'ESTIMATES', text: 'Q1 earnings estimates unchanged: fundamental re-rating incoming' },
       { category: 'BEHAVIOR', text: 'Retail panic selling beginning to appear in data' },
     ],
-    portfolioEffect: { returnBias: -0.038, volatilityDelta: 0.06, correlationLevel: 0.78 },
+    portfolioEffect: {
+      returnBias: -0.038, volatilityDelta: 0.06, correlationLevel: 0.78,
+      positionReturns: bySector({ TECHNOLOGY: -0.03, FINANCIALS: -0.042, AIRLINES: -0.079, HOTELS: -0.069, ENERGY: -0.054, HEALTHCARE: -0.008, 'CONSUMER STAPLES': -0.004, INDUSTRIALS: -0.039, 'CONSUMER DISCRETIONARY': -0.026 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -502,7 +530,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'BANKS', text: 'JPM underperforms: NIM compression from rate cut', relevantAssets: ['JPM'] },
       { category: 'ENERGY', text: 'XOM: demand destruction is not rate-sensitive', relevantAssets: ['XOM'] },
     ],
-    portfolioEffect: { returnBias: -0.005, volatilityDelta: -0.01, correlationLevel: 0.65 },
+    portfolioEffect: {
+      returnBias: -0.005, volatilityDelta: -0.01, correlationLevel: 0.65,
+      positionReturns: bySector({ TECHNOLOGY: 0.0032, FINANCIALS: -0.0108, AIRLINES: -0.0188, HOTELS: -0.0168, ENERGY: -0.0138, HEALTHCARE: 0.0032, 'CONSUMER STAPLES': 0.0042, INDUSTRIALS: -0.0048, 'CONSUMER DISCRETIONARY': -0.0008 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -592,7 +623,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'ENERGY', text: 'XOM -14.8% intraday: oil price war + demand destruction simultaneous', relevantAssets: ['XOM'] },
       { category: 'SPREADS', text: 'Bid-ask spreads 3-5x normal. Execution price unknown.' },
     ],
-    portfolioEffect: { returnBias: -0.062, volatilityDelta: 0.12, correlationLevel: 0.90 },
+    portfolioEffect: {
+      returnBias: -0.062, volatilityDelta: 0.12, correlationLevel: 0.90,
+      positionReturns: bySector({ TECHNOLOGY: -0.0507, FINANCIALS: -0.0677, AIRLINES: -0.1077, HOTELS: -0.0977, ENERGY: -0.0877, HEALTHCARE: -0.0247, 'CONSUMER STAPLES': -0.0187, INDUSTRIALS: -0.0627, 'CONSUMER DISCRETIONARY': -0.0547 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -683,7 +717,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'LEGAL', text: 'Pandemic declaration activates force majeure clauses: contract risk across sectors' },
       { category: 'ECONOMY', text: 'NBA, NCAA, NHL suspending: economic disruption now broad-based' },
     ],
-    portfolioEffect: { returnBias: -0.042, volatilityDelta: 0.08, correlationLevel: 0.87 },
+    portfolioEffect: {
+      returnBias: -0.042, volatilityDelta: 0.08, correlationLevel: 0.87,
+      positionReturns: bySector({ TECHNOLOGY: -0.018, FINANCIALS: -0.038, AIRLINES: -0.13, HOTELS: -0.11, ENERGY: -0.06, HEALTHCARE: -0.002, 'CONSUMER STAPLES': 0.005, INDUSTRIALS: -0.035, 'CONSUMER DISCRETIONARY': -0.025 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -777,7 +814,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'CORRELATION', text: 'All equities at 0.95 correlation: diversification has failed today' },
       { category: 'LIQUIDITY', text: 'Bid-ask spreads 5-10x normal. Some names effectively unquoteable.' },
     ],
-    portfolioEffect: { returnBias: -0.092, volatilityDelta: 0.20, correlationLevel: 0.95 },
+    portfolioEffect: {
+      returnBias: -0.092, volatilityDelta: 0.20, correlationLevel: 0.95,
+      positionReturns: bySector({ TECHNOLOGY: -0.0766, FINANCIALS: -0.1066, AIRLINES: -0.1416, HOTELS: -0.1316, ENERGY: -0.1216, HEALTHCARE: -0.0516, 'CONSUMER STAPLES': -0.0416, INDUSTRIALS: -0.0916, 'CONSUMER DISCRETIONARY': -0.0836 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -868,7 +908,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'DEFENSIVES', text: 'JNJ and PG beginning to show relative stability', relevantAssets: ['JNJ', 'PG'] },
       { category: 'SIGNAL', text: 'Policy floor being constructed. Market still falling on fiscal uncertainty.' },
     ],
-    portfolioEffect: { returnBias: -0.015, volatilityDelta: -0.05, correlationLevel: 0.80 },
+    portfolioEffect: {
+      returnBias: -0.015, volatilityDelta: -0.05, correlationLevel: 0.80,
+      positionReturns: bySector({ TECHNOLOGY: -0.0034, FINANCIALS: -0.0034, AIRLINES: -0.0434, HOTELS: -0.0384, ENERGY: -0.0334, HEALTHCARE: -0.0034, 'CONSUMER STAPLES': -0.0004, INDUSTRIALS: -0.0184, 'CONSUMER DISCRETIONARY': -0.0104 }),
+    },
     machineDecision: {
       actionCode: 'STAGED_BUY',
       reasoning: [
@@ -962,7 +1005,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'JOBS', text: '3.28M jobless claims: worst in U.S. history by 5x' },
       { category: 'SIGNAL', text: 'Market pricing the outcome, not the present. Classic bottoming.' },
     ],
-    portfolioEffect: { returnBias: 0.072, volatilityDelta: -0.08, correlationLevel: 0.75 },
+    portfolioEffect: {
+      returnBias: 0.072, volatilityDelta: -0.08, correlationLevel: 0.75,
+      positionReturns: bySector({ TECHNOLOGY: 0.0435, FINANCIALS: 0.0835, AIRLINES: 0.1385, HOTELS: 0.1285, ENERGY: 0.1085, HEALTHCARE: 0.0285, 'CONSUMER STAPLES': 0.0235, INDUSTRIALS: 0.0735, 'CONSUMER DISCRETIONARY': 0.0585 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -1053,7 +1099,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'DIGITAL', text: 'MSFT Azure cloud revenue +27% YoY: digital acceleration is structural', relevantAssets: ['MSFT'] },
       { category: 'EARNINGS', text: 'Q1 earnings season begins: broad guidance withdrawals' },
     ],
-    portfolioEffect: { returnBias: 0.032, volatilityDelta: -0.06, correlationLevel: 0.58 },
+    portfolioEffect: {
+      returnBias: 0.032, volatilityDelta: -0.06, correlationLevel: 0.58,
+      positionReturns: bySector({ TECHNOLOGY: 0.0528, FINANCIALS: 0.0208, AIRLINES: 0.0228, HOTELS: 0.0208, ENERGY: 0.0128, HEALTHCARE: 0.0308, 'CONSUMER STAPLES': 0.0248, INDUSTRIALS: 0.0278, 'CONSUMER DISCRETIONARY': 0.0478 }),
+    },
     machineDecision: {
       actionCode: 'ROTATE_RISK',
       reasoning: [
@@ -1148,7 +1197,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'RISK', text: 'At 22% tech concentration: any single regulatory or earnings miss has doubled impact' },
       { category: 'MACHINE', text: 'Machine kept tech below 20%: sacrificed return for concentration control' },
     ],
-    portfolioEffect: { returnBias: 0.010, volatilityDelta: 0.01, correlationLevel: 0.55 },
+    portfolioEffect: {
+      returnBias: 0.010, volatilityDelta: 0.01, correlationLevel: 0.55,
+      positionReturns: bySector({ TECHNOLOGY: 0.0321, FINANCIALS: 0.0041, AIRLINES: -0.0079, HOTELS: -0.0059, ENERGY: -0.0019, HEALTHCARE: 0.0061, 'CONSUMER STAPLES': 0.0051, INDUSTRIALS: 0.0041, 'CONSUMER DISCRETIONARY': 0.0241 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -1242,7 +1294,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'STRUCTURAL', text: 'MSFT Azure +27% YoY. Remote work demand structural.', relevantAssets: ['MSFT'] },
       { category: 'ROTATION', text: 'Value investors beginning to enter energy and financial names' },
     ],
-    portfolioEffect: { returnBias: 0.018, volatilityDelta: -0.02, correlationLevel: 0.48 },
+    portfolioEffect: {
+      returnBias: 0.018, volatilityDelta: -0.02, correlationLevel: 0.48,
+      positionReturns: bySector({ TECHNOLOGY: 0.0424, FINANCIALS: 0.0084, AIRLINES: -0.0006, HOTELS: 0.0004, ENERGY: -0.0036, HEALTHCARE: 0.0184, 'CONSUMER STAPLES': 0.0144, INDUSTRIALS: 0.0144, 'CONSUMER DISCRETIONARY': 0.0364 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -1343,7 +1398,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'BREADTH', text: 'Advance-decline improving for a fifth consecutive week' },
       { category: 'MACHINE', text: 'Machine deploys on breadth confirmation, not on a headline' },
     ],
-    portfolioEffect: { returnBias: 0.014, volatilityDelta: -0.01, correlationLevel: 0.52 },
+    portfolioEffect: {
+      returnBias: 0.014, volatilityDelta: -0.01, correlationLevel: 0.52,
+      positionReturns: bySector({ TECHNOLOGY: 0.0328, FINANCIALS: 0.0068, AIRLINES: 0.0048, HOTELS: 0.0028, ENERGY: -0.0032, HEALTHCARE: 0.0108, 'CONSUMER STAPLES': 0.0088, INDUSTRIALS: 0.0108, 'CONSUMER DISCRETIONARY': 0.0268 }),
+    },
     machineDecision: {
       actionCode: 'STAGED_BUY',
       reasoning: [
@@ -1430,7 +1488,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'RISK', text: 'Owning the index now means owning a concentrated growth position' },
       { category: 'MACHINE', text: 'Machine measures its own portfolio, not the index headline' },
     ],
-    portfolioEffect: { returnBias: 0.012, volatilityDelta: 0.0, correlationLevel: 0.58 },
+    portfolioEffect: {
+      returnBias: 0.012, volatilityDelta: 0.0, correlationLevel: 0.58,
+      positionReturns: bySector({ TECHNOLOGY: 0.0482, FINANCIALS: -0.0048, AIRLINES: -0.0118, HOTELS: -0.0088, ENERGY: -0.0148, HEALTHCARE: 0.0092, 'CONSUMER STAPLES': 0.0072, INDUSTRIALS: 0.0032, 'CONSUMER DISCRETIONARY': 0.0332 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -1516,7 +1577,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'RISK', text: 'Concentrated portfolios take the full move; diversified ones take part of it' },
       { category: 'MACHINE', text: 'Machine distinguishes a positioning unwind from a regime change' },
     ],
-    portfolioEffect: { returnBias: -0.030, volatilityDelta: 0.04, correlationLevel: 0.71 },
+    portfolioEffect: {
+      returnBias: -0.030, volatilityDelta: 0.04, correlationLevel: 0.71,
+      positionReturns: bySector({ TECHNOLOGY: -0.0883, FINANCIALS: -0.0073, AIRLINES: -0.0133, HOTELS: -0.0113, ENERGY: -0.0083, HEALTHCARE: -0.0013, 'CONSUMER STAPLES': 0.0007, INDUSTRIALS: -0.0133, 'CONSUMER DISCRETIONARY': -0.0483 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -1602,7 +1666,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'CREDIT', text: 'Spreads stable: liquidity conditions bear no resemblance to March' },
       { category: 'MACHINE', text: 'Machine has no rule for elections and does not invent one' },
     ],
-    portfolioEffect: { returnBias: -0.022, volatilityDelta: 0.05, correlationLevel: 0.74 },
+    portfolioEffect: {
+      returnBias: -0.022, volatilityDelta: 0.05, correlationLevel: 0.74,
+      positionReturns: bySector({ TECHNOLOGY: -0.0094, FINANCIALS: -0.0274, AIRLINES: -0.0524, HOTELS: -0.0474, ENERGY: -0.0374, HEALTHCARE: -0.0014, 'CONSUMER STAPLES': 0.0006, INDUSTRIALS: -0.0224, 'CONSUMER DISCRETIONARY': -0.0174 }),
+    },
     machineDecision: {
       actionCode: 'RAISE_CASH',
       reasoning: [
@@ -1689,7 +1756,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'INDEX', text: 'Index barely moves: the entire event is rotation beneath the surface' },
       { category: 'MACHINE', text: 'Machine held both sides and needed no forecast of the date' },
     ],
-    portfolioEffect: { returnBias: 0.024, volatilityDelta: -0.02, correlationLevel: 0.44 },
+    portfolioEffect: {
+      returnBias: 0.024, volatilityDelta: -0.02, correlationLevel: 0.44,
+      positionReturns: bySector({ TECHNOLOGY: -0.0426, FINANCIALS: 0.0524, AIRLINES: 0.1174, HOTELS: 0.1024, ENERGY: 0.0724, HEALTHCARE: -0.0076, 'CONSUMER STAPLES': -0.0276, INDUSTRIALS: 0.0374, 'CONSUMER DISCRETIONARY': 0.0024 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -1776,7 +1846,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'RISK', text: 'Drift is a decision you did not make and are still carrying' },
       { category: 'MACHINE', text: 'Machine rebalances to policy on a drift threshold, not on a market view' },
     ],
-    portfolioEffect: { returnBias: 0.008, volatilityDelta: -0.01, correlationLevel: 0.49 },
+    portfolioEffect: {
+      returnBias: 0.008, volatilityDelta: -0.01, correlationLevel: 0.49,
+      positionReturns: bySector({ TECHNOLOGY: 0.0092, FINANCIALS: 0.0092, AIRLINES: 0.0172, HOTELS: 0.0152, ENERGY: 0.0112, HEALTHCARE: -0.0008, 'CONSUMER STAPLES': -0.0028, INDUSTRIALS: 0.0072, 'CONSUMER DISCRETIONARY': 0.0032 }),
+    },
     machineDecision: {
       actionCode: 'REDUCE',
       reasoning: [
@@ -1862,7 +1935,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'RISK', text: 'Crowded positioning is a condition, not a timing signal' },
       { category: 'MACHINE', text: 'Machine returns to policy discipline rather than to a view' },
     ],
-    portfolioEffect: { returnBias: 0.011, volatilityDelta: -0.02, correlationLevel: 0.42 },
+    portfolioEffect: {
+      returnBias: 0.011, volatilityDelta: -0.02, correlationLevel: 0.42,
+      positionReturns: bySector({ TECHNOLOGY: 0.0067, FINANCIALS: 0.0147, AIRLINES: 0.0207, HOTELS: 0.0187, ENERGY: 0.0167, HEALTHCARE: 0.0047, 'CONSUMER STAPLES': 0.0027, INDUSTRIALS: 0.0127, 'CONSUMER DISCRETIONARY': 0.0067 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [
@@ -1948,7 +2024,10 @@ export const COVID_CHECKPOINTS: CheckpointData[] = [
       { category: 'RECORD', text: 'Your decisions are now a record you can audit against the machine' },
       { category: 'MACHINE', text: 'Machine faced the identical information cutoff at every checkpoint' },
     ],
-    portfolioEffect: { returnBias: 0.006, volatilityDelta: -0.01, correlationLevel: 0.40 },
+    portfolioEffect: {
+      returnBias: 0.006, volatilityDelta: -0.01, correlationLevel: 0.40,
+      positionReturns: bySector({ TECHNOLOGY: 0.0036, FINANCIALS: 0.0056, AIRLINES: 0.0116, HOTELS: 0.0096, ENERGY: 0.0076, HEALTHCARE: 0.0046, 'CONSUMER STAPLES': 0.0046, INDUSTRIALS: 0.0056, 'CONSUMER DISCRETIONARY': 0.0046 }),
+    },
     machineDecision: {
       actionCode: 'HOLD',
       reasoning: [

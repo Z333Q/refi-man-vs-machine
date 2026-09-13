@@ -19,6 +19,7 @@ function sampleScore(confidence: number) {
     confidence,
     turnoverUsed: 0.05,
     turnoverBudget: 0.40,
+    checkpointReturn: -0.02,
     sharpe: null,
     sharpeSamples: 0,
     portfolioDD: -0.03,

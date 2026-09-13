@@ -16,11 +16,18 @@ const checkpoint = COVID_CHECKPOINTS[1];
 
 /**
  * `sharpe` is the run-so-far risk-adjusted return of the side being scored.
+ *
+ * It defaults to a run that is genuinely doing well, because conviction scales
+ * the distance from par and a fixture sitting exactly on par has no distance
+ * to scale: every stance would round to par at every conviction and the test
+ * would pass by measuring nothing.
  * It is what decides whether a checkpoint lands above or below par now that
  * the largest score component measures the run rather than agreement with the
  * machine, so a test about the downside has to describe a run that is behind.
  */
-function scoreAt(action: ActionCode, conviction: number, sharpe: number | null = null): number {
+const WINNING_SHARPE = 1.5;
+
+function scoreAt(action: ActionCode, conviction: number, sharpe: number | null = WINNING_SHARPE): number {
   return scoreCheckpoint({
     action,
     checkpoint,
@@ -28,6 +35,7 @@ function scoreAt(action: ActionCode, conviction: number, sharpe: number | null =
     confidence: conviction / 100,
     turnoverUsed: 0.05,
     turnoverBudget: 0.40,
+    checkpointReturn: -0.02,
     sharpe,
     sharpeSamples: sharpe === null ? 0 : 8,
     portfolioDD: -0.04,
@@ -78,25 +86,42 @@ test('conviction scales distance from par symmetrically', () => {
   const stances: ActionCode[] = ['HOLD', 'REDUCE', 'RAISE_CASH', 'ROTATE_DEFENSIVE'];
   const par = checkpoint.machinePar;
 
+  // Conviction scales a distance. Where a stance happens to land exactly on
+  // par at the resting conviction there is no distance to scale, and whole-
+  // point rounding decides the sign: the property is vacuous rather than
+  // violated, so those stances are skipped and the test asserts that some
+  // stance was actually off par to measure.
+  let measured = 0;
+
   for (const action of stances) {
     const atDefault = scoreAt(action, CONVICTION_DEFAULT) - par;
+    if (Math.abs(atDefault) < 1) continue;
+    measured++;
+
     const atMin = scoreAt(action, CONVICTION_MIN) - par;
     const atMax = scoreAt(action, CONVICTION_MAX) - par;
 
-    // Direction is preserved: raising conviction never flips a win into a loss.
-    assert.equal(Math.sign(atMin), Math.sign(atDefault), `${action} flipped sign at 50`);
+    // Raising conviction widens the gap and never flips its direction.
     assert.equal(Math.sign(atMax), Math.sign(atDefault), `${action} flipped sign at 95`);
-
-    // Magnitude tracks the multiplier, within the rounding to whole points.
     assert.ok(
       Math.abs(atMax) > Math.abs(atDefault),
       `${action} does not widen the gap at 95`,
     );
+
+    // Lowering it narrows the gap toward par, and may land on par: the hedged
+    // multiplier is 0.2, so any gap under three points rounds into par at 50.
+    // What must never happen is crossing to the far side of it.
     assert.ok(
       Math.abs(atMin) < Math.abs(atDefault),
       `${action} does not narrow the gap at 50`,
     );
+    assert.ok(
+      atMin === 0 || Math.sign(atMin) === Math.sign(atDefault),
+      `${action} crossed par at 50: ${atMin} against ${atDefault}`,
+    );
   }
+
+  assert.ok(measured > 0, 'every stance landed on par: the fixture measures nothing');
 });
 
 test('wrong at maximum conviction costs roughly double', () => {

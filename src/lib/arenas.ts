@@ -73,6 +73,38 @@ export function getTotalCheckpoints(arenaId: ArenaId): number {
 /** The arena a new run opens on when none is named. */
 export const DEFAULT_ARENA_ID: ArenaId = 'covid_black_swan';
 
+// ─── Authoring helpers ────────────────────────────────────────────────────────
+
+/**
+ * Per-symbol checkpoint returns, authored by sector.
+ *
+ * The engine falls back to the checkpoint's `returnBias` for any symbol a
+ * checkpoint does not name, so a book moved as one block: every holding
+ * returned the market number, and a sector rotation changed the exposure bars
+ * without changing a penny of the outcome. The arenas teach concentration and
+ * rotation, and neither lesson can land while composition has no economic
+ * consequence (2026-09-12 review).
+ *
+ * Authored by sector rather than by symbol because that is the resolution the
+ * signals are written at: "travel demand weakening", "tech correction",
+ * "banks under funding stress". Sectors the checkpoint does not name are left
+ * out and move with the market.
+ *
+ * These are game checkpoint returns for a historical window. They are not, and
+ * must never be presented as, ReFi benchmark performance (§26).
+ */
+export function sectorReturns(
+  book: Readonly<Record<string, string>>,
+  bySector: Readonly<Record<string, number>>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [symbol, sector] of Object.entries(book)) {
+    const r = bySector[sector];
+    if (r !== undefined) out[symbol] = r;
+  }
+  return out;
+}
+
 // ─── Shared portfolio helpers ─────────────────────────────────────────────────
 
 /**

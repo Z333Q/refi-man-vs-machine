@@ -54,6 +54,7 @@ export default function CheckpointScoreScreen({ onContinue, onViewAutopsy, resul
         confidence,
         turnoverUsed: 0.236,
         turnoverBudget: 0.40,
+        checkpointReturn: -0.02,
         // A demo card, not a run: a mid-pack Sharpe over a settled series.
         sharpe: 0.4,
         sharpeSamples: 8,

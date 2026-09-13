@@ -88,13 +88,62 @@ function computeDrawdownScore(
   return clamp(100 * (1 - consumed), 0, 100);
 }
 
-function computeDownsideScore(playerCapture: number): number {
-  if (playerCapture <= 0.50) return 100;
-  if (playerCapture <= 0.75) return 85;
-  if (playerCapture <= 1.00) return 70;
-  if (playerCapture <= 1.25) return 45;
-  if (playerCapture <= 1.50) return 25;
-  return 10;
+/**
+ * Downside capture: how much of a falling market the book actually took.
+ *
+ * Measured from the side's own realised checkpoint return against the
+ * checkpoint's market move. It used to be computed from the market return
+ * alone — `machineReturn / (machineReturn - 0.001)`, which is approximately 1
+ * for any market return and had no term for what the player did. A tenth of
+ * the score was a checkpoint constant (2026-09-12 review).
+ *
+ * The reference is the market, not the opponent, so both sides are measured
+ * against the same external thing and neither score is defined by the other's.
+ *
+ * On a rising checkpoint there is no downside to capture and the component is
+ * neutral. That is the metric's meaning, not a gap: the arena scores
+ * participation in a rally through return and risk, which is where it belongs.
+ */
+export const NO_DOWNSIDE_SCORE = 70;
+
+export function computeDownsideScore(playerReturn: number, marketReturn: number): number {
+  if (marketReturn >= 0) return NO_DOWNSIDE_SCORE;
+
+  // Both are negative in the ordinary case, so the ratio is positive and below
+  // one when the book fell less than the market. A book that rose while the
+  // market fell gives a negative ratio, which is the best possible capture.
+  const capture = playerReturn / marketReturn;
+
+  // Interpolated between the authored anchors rather than stepped through
+  // them. As a six-step ladder the whole realistic range of stances on a
+  // crash checkpoint — captures of 0.75 through 0.91 — landed in one bucket
+  // and scored identically, which is the same defect this component was
+  // reported for: a tenth of the score that barely moves with the decision.
+  // The anchors are unchanged, so the calibration is the same where it was
+  // ever stated; what changed is that the values between them now count.
+  return clamp(interpolate(capture, CAPTURE_ANCHORS), 0, 100);
+}
+
+/** Capture ratio to score. Lower capture is better: less of the fall was taken. */
+const CAPTURE_ANCHORS: readonly [number, number][] = [
+  [0.50, 100],
+  [0.75, 85],
+  [1.00, 70],
+  [1.25, 45],
+  [1.50, 25],
+  [2.00, 10],
+];
+
+/** Piecewise-linear through the anchors, flat beyond either end. */
+function interpolate(x: number, anchors: readonly [number, number][]): number {
+  const [firstX, firstY] = anchors[0];
+  if (x <= firstX) return firstY;
+  for (let i = 1; i < anchors.length; i++) {
+    const [x0, y0] = anchors[i - 1];
+    const [x1, y1] = anchors[i];
+    if (x <= x1) return y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+  }
+  return anchors[anchors.length - 1][1];
 }
 
 function computeRegimeAdaptScore(
@@ -233,6 +282,11 @@ export function scoreCheckpoint(params: {
   turnoverUsed: number;
   /** The run's total turnover allowance, so discipline is measured against it. */
   turnoverBudget: number;
+  /**
+   * This checkpoint's realised portfolio return for the side being scored,
+   * from the resolved transition. Downside capture is measured from it.
+   */
+  checkpointReturn: number;
   portfolioDD: number;
   /**
    * Run-so-far Sharpe for the side being scored, including this checkpoint,
@@ -249,21 +303,17 @@ export function scoreCheckpoint(params: {
 }): CheckpointScore {
   const {
     action, checkpoint, flags, confidence, turnoverUsed, turnoverBudget,
-    portfolioDD, machineDD, sharpe, sharpeSamples,
+    checkpointReturn, portfolioDD, machineDD, sharpe, sharpeSamples,
     riskBudgetDD = DEFAULT_RISK_BUDGET_DRAWDOWN,
   } = params;
 
-  const { portfolioEffect } = checkpoint;
-  // Downside capture still compares this checkpoint's move against the
-  // machine's, which is what capture means. It is a tenth of the score and it
-  // is a genuine comparison, unlike the agreement bonus that used to drive the
-  // quarter above it.
-  const machineReturn = portfolioEffect.returnBias;
-  const playerCapture = machineReturn < 0 ? Math.abs(machineReturn / (machineReturn - 0.001)) : 1.0;
+  // The checkpoint's market move: the broad return the arena authored for this
+  // moment in history, before any stance. Both sides are measured against it.
+  const marketReturn = checkpoint.portfolioEffect.returnBias;
 
   const raerScore = normalizeSharpe(sharpe, sharpeSamples);
   const drawdownScore = computeDrawdownScore(portfolioDD, machineDD, riskBudgetDD);
-  const downsideScore = computeDownsideScore(playerCapture);
+  const downsideScore = computeDownsideScore(checkpointReturn, marketReturn);
   const recoveryScore = 65;
   const regimeAdaptScore = computeRegimeAdaptScore(action, checkpoint, flags);
   const turnoverScore = computeTurnoverScore(action, flags, turnoverUsed, turnoverBudget);

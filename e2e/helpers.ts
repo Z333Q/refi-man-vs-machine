@@ -101,8 +101,19 @@ export async function dismissOverlays(page: Page) {
       const text = document.body.innerText;
       const tipOpen = text.includes('GUIDANCE: FULL');
       const escDismissible = text.includes('ESC TO DISMISS');
+      // Visible by geometry, not by offsetParent.
+      //
+      // offsetParent is null for anything inside a position:fixed ancestor,
+      // which is every overlay in this app: the blocking visual events, the
+      // spotlights, the tip cards. The filter therefore hid exactly the
+      // buttons this helper exists to press, and a run that raised a blocking
+      // DRAWDOWN WARNING sat in front of an [ACKNOWLEDGE] the helper could not
+      // see until the test timed out (2026-09-12).
       const labels = [...document.querySelectorAll('button')]
-        .filter(b => (b as HTMLElement).offsetParent !== null)
+        .filter(b => {
+          const r = b.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        })
         .map(b => b.textContent?.trim() ?? '');
       return { tipOpen, escDismissible, labels };
     });
@@ -275,7 +286,20 @@ export async function playCheckpoint(page: Page): Promise<boolean> {
   if (await page.getByRole('button', { name: /VIEW RUN RESULTS/ }).count() > 0) {
     return false;
   }
-  await dismissOverlays(page);
-  await page.getByRole('button', { name: /NEXT SIGNAL/ }).click();
-  return true;
+  // Advance, bounded, sweeping again on interception.
+  //
+  // A blocking visual event can land between the sweep and the click: the
+  // drawdown warning is emitted when the resolved portfolio arrives, which is
+  // after the score is on screen. Its scrim then intercepts this click, and an
+  // unbounded click retries against it until the test times out — the same
+  // failure the DECIDE click above is bounded for. Now that returns are
+  // computed from the book rather than a per-stance multiplier, drawdowns are
+  // deeper and this fires in the middle of COVID rather than never.
+  const advance = page.getByRole('button', { name: /NEXT SIGNAL/ });
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await dismissOverlays(page);
+    const clicked = await advance.click({ timeout: 3_000 }).then(() => true, () => false);
+    if (clicked) return true;
+  }
+  throw new Error('NEXT SIGNAL stayed unreachable after six sweeps');
 }
