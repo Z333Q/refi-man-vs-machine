@@ -1,8 +1,9 @@
 # ReFi Alpha Growth Architecture
 
-**Status:** RULED 2026-09-13. The seven open decisions in §17 carry owner
-rulings and are authoritative. PR A commits this document and nothing else.
-PR B does not start until the owner has reviewed this revision.
+**Status:** RULED 2026-09-13, corrected the same day after owner review of
+PR #78 (§17.11). The seven decisions in §17 and the corrections in §17.11
+are authoritative. PR A commits this document and nothing else. PR B does not
+start until the owner has reviewed this revision.
 **Supersedes:** the standalone "leaderboard project" framing. There is no
 leaderboard project. There is one growth system and the leaderboard is one
 module of it.
@@ -113,16 +114,19 @@ bind is `UPDATE game_sessions SET user_id, linked_at`. Anonymous history is
 never copied and never destroyed; it resolves through the session row.
 Multiple sessions (three browsers) resolve to one `app_user`.
 
-Collected at merge point 1, and nothing more:
+Collected at merge point 1, and nothing more. Claim friction is handle plus
+authentication; everything else is optional or later.
 
 ```text
-handle
+handle                      (required, §7.1 handle law)
 email or existing identity reference
-avatar (optional)
-country / region
-referral attribution (already captured first-touch, src/lib/events.ts)
-community memberships (later)
+display name, avatar        (optional)
+referral attribution        (already captured first-touch, src/lib/events.ts)
+community memberships       (later)
 ```
+
+Country or region is not collected at claim. It becomes an optional field
+only when a community feature has a concrete use for it.
 
 Preserved: runs, rankings, scores, machines, achievements, friends, challenge
 history, creator cohort.
@@ -196,6 +200,40 @@ compliance reasons, any sensitive provider payload.
 Binding rule: the projection is keyed to an authenticated `user_id`. It never
 trusts `x-alpha-session`, which is continuity, not authentication.
 
+**Transport (locked now, implemented in PR J).** PUSH from `refi-us-sec-ia`
+to the growth plane. Not a route on the existing persistence API, which is
+intentionally public for anonymous mirroring. A small private Cloud Run
+service, `projection-ingest`, with its own IAM boundary:
+
+- a dedicated user-managed service account for the projecting product
+  service;
+- the receiving service grants that principal Cloud Run Invoker only;
+- the caller sends a Google-signed OIDC ID token with the receiving service
+  as audience;
+- no downloaded service-account key; Workload Identity Federation if the
+  source workload ever runs outside GCP.
+
+Payload contract:
+
+```ts
+interface ProductStateProjection {
+  alphaUserId: string;        // app_users.id, the handoff `sub` under claimed identity
+  state: ProjectionState;
+  blockedCategory?: 'REVIEW' | 'REGION' | 'CLOSED';
+  sourceEventId: string;      // idempotency key for retries
+  sourceRevision: number;     // monotonically increasing per user
+  sourceVersion: string;      // projecting service's contract version
+  projectedAt: string;
+}
+```
+
+The receiver upserts only when `sourceRevision` exceeds the stored revision.
+Retries are idempotent by `sourceEventId`. A path-supplied user id is never
+trusted on its own: the receiver resolves the known Alpha identity binding
+first. Under claimed identity the handoff `sub` is the durable,
+provider-neutral `app_users.id`; the product stores that binding when it
+consumes the handoff and uses it for every projection.
+
 CTA routing derived from the projection and the §3 game state:
 
 ```text
@@ -219,16 +257,23 @@ Canonical. Every growth feature names the transition it moves.
 | 2 | ALPHA PLAYER | `game_sessions.user_id IS NOT NULL` and a `public_player_profiles` row | game |
 | 3 | COMPETITOR | ≥1 `ranked_attempts` row with a committed decision | game |
 | 4 | MACHINE BUILDER | ≥1 `player_machine_versions.locked_at IS NOT NULL` | game |
-| 5 | QUALIFIED | meets §12 qualification; `conversion.alpha_cta_seen` emitted | game |
+| 5 | QUALIFIED | the §12 qualification law, and nothing else | game |
 | 6 | ALPHA MEMBER | projection `ALPHA_MEMBER` | product, projected |
-| 7 | PAPER TRADER | projection `PAPER_READY` or `PAPER_ACTIVE` | product, projected |
-| 8 | REFI PROSPECT | projection `PAPER_ACTIVE` with sustained activity | product, projected |
+| 7 | PAPER READY | projection `PAPER_READY` | product, projected |
+| 8 | PAPER ACTIVE | projection `PAPER_ACTIVE` | product, projected |
 | 9 | REFI CLIENT | projection `COMMERCIAL_CLIENT` | product, projected |
 
 State 5 is named QUALIFIED rather than ALPHA CANDIDATE so that the game-side
 computation (intent demonstrated) and the product-side projection value
-(`ALPHA_CANDIDATE`, invited or eligible) cannot be confused. The game computes
-0 to 5. States 6 to 9 are read from the §2.3 projection and nothing else.
+(`ALPHA_CANDIDATE`, invited or eligible) cannot be confused. QUALIFIED is
+derived solely from the §12 law. It never depends on a telemetry event: the
+order is QUALIFIED → the qualifying surface actually renders → emit
+`conversion.alpha_cta_seen`. Telemetry never creates product state.
+
+States 6 to 9 are literal reads of the §2.3 projection, one value each, and
+nothing else. "REFI PROSPECT" may exist later as a derived growth segment
+(for example `PAPER_ACTIVE` with sustained activity) but it is not a
+canonical lifecycle state.
 
 ---
 
@@ -358,9 +403,24 @@ Extraction rules:
 
 ---
 
-## 7. Database extension (migration 0003, sketch)
+## 7. Database extension (target schema and migration ownership)
 
 Extend the founding schema. Do not replace it. Do not create forty tables.
+
+This section shows the **target** schema. It is not one migration. Each
+table lands, additively, in the PR that owns the feature it serves, so that
+no PR creates a table nothing reads yet:
+
+| Migration | PR | Creates |
+|---|---|---|
+| 0003 | B | `public_player_profiles`, `player_handle_history`, `growth_campaigns`, `acquisition_touches`, `experiment_assignments`, `outbox_events`, minimal `game_events` contract additions for typed telemetry |
+| 0004 | F | `result_cards`, `challenges`, `challenge_attempts` |
+| 0005 | G | `seasons`, `season_arenas`, `ranked_attempts`, `ranked_decisions`, `season_results` |
+| 0006 | I | `community_links`, later `crews`, `crew_members` |
+| 0007 | J | `product_state_projections` |
+
+Numbers are indicative of order, not reserved; whichever PR merges first
+takes the next number. PR B creates nothing from 0004 onward.
 
 ### 7.1 Public identity
 
@@ -378,11 +438,37 @@ CREATE TABLE public_player_profiles (
 );
 ```
 
+```sql
+-- Every handle a person has ever held, so a released handle is never
+-- reassigned and old /@handle routes redirect to the current one.
+CREATE TABLE player_handle_history (
+  handle        text PRIMARY KEY,                -- lowercase, same CHECK as above
+  user_id       uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  held_from     timestamptz NOT NULL DEFAULT now(),
+  released_at   timestamptz                      -- null while current
+);
+```
+
 `player_profiles` (keyed by `session_id`) remains the anonymous progression
 record. `public_player_profiles` is the durable social identity. The existing
 `player_profiles.handle` column becomes a pre-claim placeholder and is copied,
-not moved, at claim time. Handle policy (length, character set, reserved
-words, rename rules) is an open input to PR B (§17.10).
+not moved, at claim time.
+
+**Handle law (ruled).**
+
+- 3 to 20 characters, stored lowercase, ASCII `a-z`, `0-9`, `_`; first and
+  last character alphanumeric. Case-insensitive uniqueness follows from
+  lowercase storage. Column CHECK: `handle ~ '^[a-z0-9][a-z0-9_]{1,18}[a-z0-9]$'`.
+- Display name is separate, Unicode-capable, non-unique.
+- Reserved identities are dynamic policy in the API, not a CHECK constraint:
+  a maintained list of names and prefixes (refi, refitrading, refi_alpha,
+  admin, administrator, support, help, security, compliance, moderator,
+  staff, official, system, root, api, www, play, season, challenge,
+  leaderboard, machine, alpha, paper, managed, signal) plus ReFi-brand
+  impersonation patterns.
+- Renames allowed, at most once every 30 days. A prior handle is never
+  reassigned to another person; `player_handle_history` keeps ownership, and
+  a prior `/@handle` route permanently redirects to the current handle.
 
 ### 7.2 Competition
 
@@ -444,11 +530,21 @@ CREATE TABLE season_results (
 );
 ```
 
-Leaderboards read `season_results`, never raw `arena_runs`. Rank is derived
-from `COUNT(result_state = 'WIN')`, `SUM(score_margin)`, `AVG(player_score)`
-and an aggregate drawdown statistic, cached periodically in Postgres. Raw
-return is not a ranking input (CLAUDE.md §31.3, §61). `RISK_FAILURE` is never
-a win regardless of margin.
+Leaderboards read `season_results`, never raw `arena_runs`, cached
+periodically in Postgres. Ranking order (ruled), applied in sequence as
+tie-breaks:
+
+1. number of `WIN` results (machines beaten);
+2. arenas completed without `RISK_FAILURE`;
+3. cumulative eligible score margin versus the machine, where eligible means
+   `result_state <> 'RISK_FAILURE'`: a positive margin on a failed run is
+   stored as historical truth but never improves this sum;
+4. mean ReFi Score;
+5. lower maximum drawdown.
+
+Raw return is not a ranking input (CLAUDE.md §31.3, §61). `RISK_FAILURE` is
+never a win regardless of margin. Machine Beat Rate (§31.1) remains a
+prestige and profile metric, not the ranking algorithm.
 
 ### 7.3 Virality
 
@@ -536,15 +632,18 @@ CREATE TABLE experiment_assignments (
   PRIMARY KEY (session_id, experiment_id)
 );
 
--- §2.3. One row per user, overwritten by each projection. Coarse by
--- construction: the CHECK is the whole vocabulary and there is no free-text
--- column for a reason to leak into.
+-- §2.3, owned by PR J. One row per user. Coarse by construction: the CHECK
+-- is the whole vocabulary and there is no free-text column for a reason to
+-- leak into. Upsert only when source_revision increases; source_event_id
+-- makes retries idempotent.
 CREATE TABLE product_state_projections (
   user_id          uuid PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
   state            text NOT NULL CHECK (state IN
                      ('NONE','ALPHA_CANDIDATE','ALPHA_MEMBER','PAPER_READY',
                       'PAPER_ACTIVE','COMMERCIAL_CLIENT','BLOCKED')),
   blocked_category text CHECK (blocked_category IN ('REVIEW','REGION','CLOSED')),
+  source_event_id  text NOT NULL UNIQUE,
+  source_revision  bigint NOT NULL,
   source_version   text NOT NULL,                 -- projecting service's contract version
   projected_at     timestamptz NOT NULL,
   received_at      timestamptz NOT NULL DEFAULT now(),
@@ -564,12 +663,18 @@ CREATE TABLE outbox_events (
 Crews (`crews`, `crew_members`) are deferred until challenge virality is
 measured (§15, PR I).
 
-RLS: every player-owned table above carries owner scoping per USA spec §3.1.
-`season_results`, `challenges`, `result_cards` and `growth_campaigns` are
-readable by anon for public surfaces, with `visibility` respected.
-`product_state_projections` is writable only by the projecting service
-principal and readable only by its owner. The `schema-drift-gate` and
-`db/schema.test.ts` cover the migration.
+**Authorization model (ruled).** The founding schema is provider-neutral on
+purpose, and the API is responsible for resolving a verified principal and
+scoping every query. That remains the primary model for every table above.
+RLS is not reintroduced by default: it may be added later as defence in
+depth only if it is keyed to a ReFi-owned server or session principal
+context and is integration-tested. `auth.uid()`, Supabase auth-schema
+dependencies, or any other vendor identity function never enter the schema.
+Public surfaces (`season_results`, `challenges`, `result_cards`,
+`growth_campaigns`) are served by API read models that respect
+`visibility`. `product_state_projections` is written only by the
+`projection-ingest` service (§2.3). The `schema-drift-gate` and
+`db/schema.test.ts` cover every migration.
 
 ---
 
@@ -591,9 +696,13 @@ separate because it holds signing keys with a different blast radius.
 ├── cards        GET /r/{slug}  (OG HTML + JSON)
 ├── growth       POST /touches, GET /experiments/assignments
 ├── community    POST /community/discord/link, GET /community/roles
-├── projection   PUT /projection/{userId}   service-to-service only (§2.3)
 └── handoffs     POST (existing mint service, proxied or called directly)
 ```
+
+The product-state projection is **not** a route on this API. It arrives at a
+separate private Cloud Run service, `projection-ingest` (§2.3, PR J), because
+this API is public by design and `x-alpha-session` is continuity, not
+authentication.
 
 Split a module into its own service only when scale forces it. Async work
 (Discord role sync, card rendering, analytics forwarding, email, campaign
@@ -656,11 +765,13 @@ Presentation is where the drama lives, and it is the same drama at every
 margin:
 
 ```text
+WIN                             LOSS  (and TIE)
+
 YOU BEAT THE MACHINE            THE MACHINE WON
 
-76 — 71                         70 — 71
+76 / 71                         70 / 71
 
-COVID SURVIVED                  COVID SURVIVED
+COVID SURVIVED                  ARENA SURVIVED
 MAX DRAWDOWN   -8.4%            MACHINE NOT BEATEN
 TURNOVER       41%
 SEASON         2 / 5
@@ -668,12 +779,20 @@ SEASON         2 / 5
 [SEE WHY]                       [SEE WHERE IT WON]
 [NEXT REGIME]                   [NEXT REGIME]
 [CHALLENGE SOMEONE]             [RUN AGAIN IN PRACTICE]
+
+RISK_FAILURE
+
+NOT CLEARED
+DRAWDOWN EXCEEDED -20% AT CP09
 ```
 
-Note the LOSS card says `COVID SURVIVED / MACHINE NOT BEATEN`, not `COVID NOT
-CLEARED`: under CLAUDE.md §29.2 Bronze, a run that survives the risk budget
-has cleared the arena even when the machine won. Only `RISK_FAILURE` reads
-`NOT CLEARED`. See §17.9.
+Arena clear and machine beat are different achievements (ruled, confirming
+CLAUDE.md §29.2): a completed run inside the critical risk limit has
+survived the arena even when the machine wins. Progression is never
+redefined to require a machine beat merely to complete an arena; the beat is
+the higher-status competitive result. So LOSS and TIE read `ARENA SURVIVED /
+MACHINE NOT BEATEN`, and only `RISK_FAILURE` reads `NOT CLEARED`. The score
+separator is a slash because the em-dash gate bars that character in player copy.
 
 `ResultState` replaces the `outcome_tier` idea everywhere: `season_results`,
 share cards, challenge headlines, profile history, achievements.
@@ -812,18 +931,18 @@ If C breaks it cannot mutate the growth schema. If Ranked has an exploit,
 Practice is untouched. The funnel is measurable before community
 infrastructure is paid for.
 
-| PR | Name | Scope | Explicitly excluded | Transition |
-|---|---|---|---|---|
-| A | ARCHITECTURE LAW | this document, rulings incorporated | any runtime or schema change | all |
-| B | GROWTH DATA FOUNDATION | migration 0003, schema tests, event/attribution contracts, `public_player_profiles`, seasons, challenges, projection table | leaderboard UI, any engine change | measurement |
-| C | GAME CORE BOUNDARY | incremental pure-engine extraction with replay parity | any behaviour change | integrity |
-| D | GROWTH TELEMETRY | typed emitter, first and meaningful touch, funnel instrumentation | new UI | measurement |
-| E | CLAIMED PLAYER IDENTITY | handle, public profile, session → user binding | KYC, ranked | 1 → 2 |
-| F | RESULT + SHARE + CHALLENGE | `ResultState`, result screens, `/r/{slug}`, `/c/{slug}` | leaderboard | 0 → 1, 1 → 2, 2 → 3 |
-| G | RANKED SERVER | season manifest, sequential reveal, attempt lifecycle, server replay | public leaderboard | 2 → 3 |
-| H | VERIFIED LEADERBOARD | `season_results` read models, denominator, percentile gate | anything not server-verified | 3 retention |
-| I | COMMUNITY | Discord binding and roles; crews only if F data supports it | feed | 3 retention |
-| J | MACHINE → ALPHA | executable deployed machine, PAPER handoff, projection ingestion and CTA routing | advisory import | 4 → 6 |
+| PR | Name | Scope | Schema it owns | Explicitly excluded | Transition |
+|---|---|---|---|---|---|
+| A | ARCHITECTURE LAW | this document, rulings incorporated | none | any runtime or schema change | all |
+| B | GROWTH DATA FOUNDATION | schema tests, event/attribution contracts, public profile and handle primitives | 0003: `public_player_profiles`, `player_handle_history`, `growth_campaigns`, `acquisition_touches`, `experiment_assignments`, `outbox_events`, minimal `game_events` additions | seasons, ranked, challenges, cards, community, projection tables; leaderboard UI; any engine change | measurement |
+| C | GAME CORE BOUNDARY | incremental pure-engine extraction with replay parity | none | any behaviour change | integrity |
+| D | GROWTH TELEMETRY | typed emitter, first and meaningful touch, funnel instrumentation | none | new UI | measurement |
+| E | CLAIMED PLAYER IDENTITY | handle claim, reserved-name policy, public profile, session → user binding, rename and redirect | none (uses 0003) | KYC, ranked | 1 → 2 |
+| F | RESULT + SHARE + CHALLENGE | `ResultState`, result screens, `/r/{slug}`, `/c/{slug}` | 0004: `result_cards`, `challenges`, `challenge_attempts` | leaderboard | 0 → 1, 1 → 2, 2 → 3 |
+| G | RANKED SERVER | season manifest, sequential reveal, attempt lifecycle, server replay | 0005: `seasons`, `season_arenas`, `ranked_attempts`, `ranked_decisions`, `season_results` | public leaderboard | 2 → 3 |
+| H | VERIFIED LEADERBOARD | `season_results` read models, ruled ranking order, denominator, percentile gate | none (uses 0005) | anything not server-verified | 3 retention |
+| I | COMMUNITY | Discord binding and roles; crews only if F data supports it | 0006: `community_links`, later `crews`, `crew_members` | feed | 3 retention |
+| J | MACHINE → ALPHA | executable deployed machine, PAPER handoff, `projection-ingest` service, CTA routing | 0007: `product_state_projections` | advisory import | 4 → 6 |
 
 A is a prerequisite for everything. B, C and D may run in parallel branches
 once A lands and the owner has reviewed it. The 2026-09-13 turnover-lockout
@@ -876,16 +995,12 @@ trade*. Ours is *how well does your process survive*.
 
 ### 17.9 Contradictions these rulings surface elsewhere
 
-1. **Arena clear vs machine beat (CLAUDE.md §29.2).** Bronze clears an arena
-   by surviving the risk budget. The ruling's LOSS example used `COVID NOT
-   CLEARED`; under §29.2 that copy is only true for `RISK_FAILURE`. §10
-   adopts `COVID SURVIVED / MACHINE NOT BEATEN` for LOSS. Owner to confirm the
-   copy, or to rule that arena clear requires beating the machine (which
-   would change `progressionLaw.hasBronzeRun`).
-2. **ALPHA_CANDIDATE ownership.** The draft's lifecycle state 5 and the
-   projection value share a name but different owners. Resolved here by
-   renaming the game-computed state to `QUALIFIED` (§3). No owner action
-   needed unless the rename is disliked.
+1. **Arena clear vs machine beat (CLAUDE.md §29.2).** RESOLVED by owner
+   ruling (§17.11.1): the existing model stands. Surviving the risk limit
+   clears the arena; the machine beat is the higher-status result. §10
+   carries the copy. `progressionLaw.hasBronzeRun` is unchanged.
+2. **ALPHA_CANDIDATE ownership.** RESOLVED: the game-side state is
+   `QUALIFIED`, derived from the §12 law alone (§17.11.2).
 3. **CLAUDE.md §7.4 Iron Mode "limited action budget".** Consistent with the
    rulings, but the engine until 2026-09-13 applied a hard budget in standard
    play. Fixed the same day; §14.10 records the boundary. CLAUDE.md itself
@@ -899,14 +1014,49 @@ trade*. Ours is *how well does your process survive*.
    with HOLD as full credit and rewards no trading. Not a contradiction;
    noted so no one removes it by mistake.
 
-### 17.10 Remaining inputs before PR B
+### 17.10 Remaining inputs
 
-Two are genuine blockers for the migration. The rest can land later.
+Nothing blocks PR B. Both former blockers were ruled on 2026-09-13: the
+handle law is in §7.1 and the projection transport is locked in §2.3 and
+lands in PR J, outside B's scope.
 
-| Input | Blocks PR B? | Why |
+| Input | Needed before | Why |
 |---|---|---|
-| Projection ingestion transport and principal (push from refi-us-sec-ia over service-to-service auth, or pull) | **Yes** | Decides the RLS policy and grant on `product_state_projections` and whether `PUT /projection/{userId}` exists in this repo. |
-| Handle policy: length, character set, reserved words, whether renames are allowed | **Yes** | Becomes a CHECK constraint and a uniqueness rule in `public_player_profiles`; retrofitting it means a data migration. |
-| Season 1 arena list and duration | No | Seed data, not schema. Needed before PR G. |
-| Identity provider for the claim flow (magic link, existing product auth) | No | The schema is provider-neutral (`user_identities.provider`). Needed before PR E. |
-| Whether `BLOCKED` ships in v1 | No | The CHECK already admits it; omitting it from the product's projection contract costs nothing. |
+| Season 1 arena list and duration | PR G | Seed data, not schema. |
+| Identity provider for the claim flow (magic link, existing product auth) | PR E | The schema is provider-neutral (`user_identities.provider`). |
+| Whether `BLOCKED` ships in v1 | PR J | The CHECK already admits it; omitting it from the product's projection contract costs nothing. |
+| Initial reserved-name list beyond the seed in §7.1 | PR E | Dynamic policy in the API, not schema. |
+
+### 17.11 Corrections from owner review of PR #78, 2026-09-13
+
+1. **Arena clear vs machine beat.** Existing model confirmed. WIN `YOU BEAT
+   THE MACHINE`; LOSS and TIE `ARENA SURVIVED / MACHINE NOT BEATEN`;
+   RISK_FAILURE `NOT CLEARED`. Progression never requires a beat to complete
+   an arena. (§10)
+2. **QUALIFIED.** Name kept. Derived solely from the §12 law; never from
+   `conversion.alpha_cta_seen`, which is emitted downstream when the
+   qualifying surface renders. States 6 to 9 are literal projection reads;
+   REFI PROSPECT demoted to a possible derived segment. (§3)
+3. **Just-in-time schema.** §7 is a target, not one migration. PR B creates
+   only the growth foundation D and E need; every other table lands with its
+   owning PR as an additive migration. Projection transport is therefore not
+   a B blocker. (§7 ownership table, §15)
+4. **Projection transport.** Locked: PUSH, private Cloud Run
+   `projection-ingest`, OIDC ID token from a dedicated service account with
+   Invoker only, no downloaded keys, WIF if ever off-GCP, monotonic
+   `sourceRevision`, idempotent `sourceEventId`, binding resolved before any
+   write. Not a route on the public persistence API. Implemented in J.
+   (§2.3, §7.5, §8)
+5. **Handle law.** 3 to 20 chars, lowercase, `[a-z0-9_]`, alphanumeric ends,
+   CHECK regex; reserved names as dynamic policy; renames once per 30 days;
+   old handles never reassigned and permanently redirected via
+   `player_handle_history`; display name separate; no mandatory
+   country/region at claim. (§2.1, §7.1)
+6. **Leaderboard order.** Wins, then arenas completed without RISK_FAILURE,
+   then cumulative eligible margin (RISK_FAILURE margins excluded), then mean
+   ReFi Score, then lower max drawdown. Machine Beat Rate is a profile
+   metric. (§7.2)
+7. **Authorization model.** API-resolved principal and query scoping remain
+   primary. No default RLS reintroduction; RLS only later as tested defence
+   in depth keyed to a ReFi-owned principal; no `auth.uid()` or vendor auth
+   schema in the provider-neutral database. (§7.5)
