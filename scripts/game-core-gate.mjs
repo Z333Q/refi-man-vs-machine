@@ -21,9 +21,10 @@
 // there is exactly one copy of every rule.
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classify, CODE, COMMENT } from './lib/scan-code.mjs';
+import { moduleSpecifiers } from './lib/module-specifiers.mjs';
 
 // fileURLToPath, not .pathname: this checkout lives under a path with spaces.
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -96,6 +97,7 @@ for (const file of files) {
   const rel = relative(ROOT, file);
   const source = readFileSync(file, 'utf8');
   const codeLines = withoutComments(source, { keepStrings: false }).split('\n');
+  // Strings kept: a module specifier is a string, so the import scan needs it.
   const importLines = withoutComments(source, { keepStrings: true }).split('\n');
 
   codeLines.forEach((line, i) => {
@@ -106,21 +108,31 @@ for (const file of files) {
     }
   });
 
-  // Imports: relative, and inside the package. Nothing else, which includes
-  // node: builtins and every third-party module. The package currently
-  // depends on nothing at all, and that is the intended steady state.
-  importLines.forEach((line, i) => {
-    for (const m of line.matchAll(/\bfrom\s+['"]([^'"]+)['"]/g)) {
-      const spec = m[1];
-      const at = { rel, line: i + 1, text: line.trim() };
-      if (!spec.startsWith('.')) {
-        const known = FORBIDDEN_MODULES.includes(spec) ? ' (forbidden dependency)' : '';
-        findings.push({ ...at, why: `depends on a module outside the core: ${spec}${known}` });
-      } else if (spec.includes('..')) {
-        findings.push({ ...at, why: `imports outside the package: ${spec}` });
-      }
+  // Imports: relative, and resolving inside the package. Nothing else, which
+  // includes node: builtins and every third-party module. The package
+  // currently depends on nothing at all, and that is the intended steady
+  // state.
+  //
+  // Every literal loading form counts, not only `from '...'`: a side-effect
+  // import couples two modules exactly as completely as a named one, and it is
+  // the form this codebase actually uses for arena registration.
+  //
+  // The in-package test resolves the path rather than looking for '..' in the
+  // string. './a/../b' stays inside and is fine; '../../src/lib/x' does not
+  // and is not; and a directory legitimately named with dots cannot be
+  // mistaken for an escape.
+  for (const { spec, line } of moduleSpecifiers(importLines.join('\n'))) {
+    const at = { rel, line, text: (importLines[line - 1] ?? '').trim() };
+    if (!spec.startsWith('.')) {
+      const known = FORBIDDEN_MODULES.includes(spec) ? ' (forbidden dependency)' : '';
+      findings.push({ ...at, why: `depends on a module outside the core: ${spec}${known}` });
+      continue;
     }
-  });
+    const target = resolve(dirname(file), spec);
+    if (target !== PACKAGE_SRC && !target.startsWith(PACKAGE_SRC + '/')) {
+      findings.push({ ...at, why: `imports outside the package: ${spec}` });
+    }
+  }
 }
 
 // The shims. Each must re-export its module and contain no logic of its own,
@@ -164,6 +176,7 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `game-core-gate OK — ${files.length} core file(s) depend on nothing outside the package, ` +
-  `read no clock or random source, and ${Object.keys(SHIMS).length} shim(s) re-export without reimplementing`,
+  `game-core-gate OK — ${files.length} core file(s) import nothing outside the package `
+  + `(named, type, namespace, side-effect, re-export, literal dynamic), `
+  + `read no clock or random source, and ${Object.keys(SHIMS).length} shim(s) re-export without reimplementing`,
 );
