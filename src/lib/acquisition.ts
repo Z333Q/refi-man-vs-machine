@@ -30,6 +30,17 @@ import type { AttributionContext } from './growth';
 
 const FIRST_TOUCH_KEY = 'refi_touch_first';
 const LAST_MEANINGFUL_KEY = 'refi_touch_meaningful';
+const PENDING_KEY = 'refi_touch_pending';
+
+/**
+ * Cap on undelivered touches held on the device.
+ *
+ * The first touch is never dropped to make room: it is the one fact here that
+ * cannot be reconstructed later, and a device that has been offline long
+ * enough to hit this cap is exactly the device whose origin story matters.
+ * Surplus meaningful touches are dropped newest-first instead.
+ */
+const PENDING_MAX = 50;
 
 function readLocal(key: string): string | null {
   try {
@@ -53,8 +64,10 @@ export interface CapturedAcquisition {
   parsed: ParsedAttribution;
   first: AcquisitionTouch | null;
   meaningful: AcquisitionTouch | null;
-  /** True when a touch was accepted by the persistence port. */
+  /** True when this landing's own touch was acknowledged by the store. */
   persisted: boolean;
+  /** Touches still undelivered after this landing, including earlier ones. */
+  pending: number;
 }
 
 /** The non-sensitive acquisition context an event may carry. */
@@ -83,25 +96,89 @@ export async function captureAcquisition(
   const sessionId = getSessionId();
   let first: AcquisitionTouch | null = null;
   let meaningful: AcquisitionTouch | null = null;
-  let persisted = false;
 
   if (!readLocal(FIRST_TOUCH_KEY)) {
     // The first touch is recorded whether or not it names a campaign: an
     // unlabelled arrival is still an arrival, and "direct" is an answer.
     first = toTouch('first', parsed, now);
     writeLocal(FIRST_TOUCH_KEY, JSON.stringify(first));
-    persisted = (await save(port, sessionId, first)) || persisted;
+    enqueuePending(first);
   } else if (isNewMeaningfulTouch(parsed, readLocal(LAST_MEANINGFUL_KEY))) {
     meaningful = toTouch('meaningful', parsed, now);
     writeLocal(LAST_MEANINGFUL_KEY, meaningfulKey(parsed));
-    persisted = (await save(port, sessionId, meaningful)) || persisted;
+    enqueuePending(meaningful);
   }
 
   // The first arrival also sets the meaningful baseline, so an immediate
   // reload of the same campaign link does not read as a second arrival.
   if (first && parsed.attributable) writeLocal(LAST_MEANINGFUL_KEY, meaningfulKey(parsed));
 
-  return { parsed, first, meaningful, persisted };
+  // Every landing tries the backlog, not just its own touch. Without this, a
+  // first touch whose delivery failed once would never be attempted again:
+  // the local key says it was captured, and the row that actually matters
+  // would be stranded on the device by one transient network error.
+  const delivered = await flushPending(port, sessionId);
+  const mine = first ?? meaningful;
+  return {
+    parsed,
+    first,
+    meaningful,
+    persisted: mine ? delivered.some(t => sameTouch(t, mine)) : false,
+    pending: pendingTouches().length,
+  };
+}
+
+/** Undelivered touches, oldest first. */
+export function pendingTouches(): AcquisitionTouch[] {
+  const raw = readLocal(PENDING_KEY);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as AcquisitionTouch[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function enqueuePending(touch: AcquisitionTouch): void {
+  const held = pendingTouches();
+  if (held.length >= PENDING_MAX) {
+    // Drop a meaningful touch, newest first, and never the first touch.
+    const victim = held.map((t, i) => ({ t, i })).reverse()
+      .find(({ t }) => t.kind === 'meaningful');
+    if (!victim) return;
+    held.splice(victim.i, 1);
+  }
+  writeLocal(PENDING_KEY, JSON.stringify([...held, touch]));
+}
+
+/**
+ * Try to deliver the backlog, oldest first, and keep whatever does not land.
+ *
+ * A touch leaves the queue only on an acknowledged write, so the original
+ * occurred_at travels with it across every retry: the arrival time is when the
+ * player arrived, never when the network recovered. The first failure stops
+ * the run, because the sink is down and pushing the rest only loses ordering.
+ */
+async function flushPending(port: TouchSink, sessionId: string): Promise<AcquisitionTouch[]> {
+  const queued = pendingTouches();
+  if (queued.length === 0) return [];
+
+  const delivered: AcquisitionTouch[] = [];
+  for (const touch of queued) {
+    if (!(await save(port, sessionId, touch))) break;
+    delivered.push(touch);
+  }
+  if (delivered.length > 0) {
+    writeLocal(PENDING_KEY, JSON.stringify(queued.slice(delivered.length)));
+  }
+  return delivered;
+}
+
+/** Identity by value: the same arrival, whatever object carries it. */
+function sameTouch(a: AcquisitionTouch, b: AcquisitionTouch): boolean {
+  return a.kind === b.kind && a.occurredAt === b.occurredAt &&
+    a.source === b.source && a.campaign === b.campaign && a.landingPath === b.landingPath;
 }
 
 async function save(

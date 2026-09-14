@@ -837,11 +837,42 @@ export async function insertTouch(
     // header proves nothing about who is holding it. Attribution for a
     // claimed player needs a verified principal, which PR E owns.
     await resolveSessionForWrite(c, sessionId);
+    // Two idempotency rules, because the two kinds have different guarantees.
+    //
+    // A first touch is structurally unique per session (0003 holds a partial
+    // unique index on kind='first'), so ON CONFLICT DO NOTHING is enough and
+    // the database is the authority.
+    //
+    // A meaningful touch has no such constraint, and must not: a session
+    // legitimately gathers several. But the client retries an undelivered
+    // touch until it is acknowledged, so an exact repeat — same session, same
+    // fields, same arrival time — is one arrival delivered twice, not two
+    // arrivals. The NOT EXISTS guard matches on the facts themselves,
+    // occurred_at included, which is what makes it exact rather than a
+    // general dedup heuristic: a genuinely different touch differs in at
+    // least one of these columns and still appends.
+    //
+    // IS NOT DISTINCT FROM, not =, because most of these columns are
+    // nullable and NULL = NULL is unknown, which would let every
+    // sparsely-labelled retry through.
     await c.query(
       `INSERT INTO acquisition_touches
          (session_id, kind, source, medium, campaign, content, term, referrer,
           landing_path, occurred_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10::timestamptz, now()))
+       SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10::timestamptz
+       WHERE NOT EXISTS (
+         SELECT 1 FROM acquisition_touches
+          WHERE session_id = $1
+            AND kind = $2
+            AND source       IS NOT DISTINCT FROM $3
+            AND medium       IS NOT DISTINCT FROM $4
+            AND campaign     IS NOT DISTINCT FROM $5
+            AND content      IS NOT DISTINCT FROM $6
+            AND term         IS NOT DISTINCT FROM $7
+            AND referrer     IS NOT DISTINCT FROM $8
+            AND landing_path IS NOT DISTINCT FROM $9
+            AND occurred_at  IS NOT DISTINCT FROM $10::timestamptz
+       )
        ON CONFLICT DO NOTHING`,
       [sessionId, touch.kind, touch.source, touch.medium, touch.campaign,
        touch.content, touch.term, touch.referrer, touch.landing_path,

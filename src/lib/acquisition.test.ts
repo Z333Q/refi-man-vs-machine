@@ -97,3 +97,93 @@ test('a failing store never throws into the page', async () => {
 // so a test of this module would be asserting somebody else's defect. It is
 // pre-existing, it is reported with this PR, and fixing it belongs to the PR
 // that owns identity rather than to telemetry.
+
+// ─── Delivery is retried until it lands ──────────────────────────────────────
+//
+// The failure this guards against: the first landing captures the touch, marks
+// it captured locally, fails to reach the API once, and never tries again. The
+// local key says the job is done, so the authoritative row is stranded on the
+// device by one transient network error, and the session's origin is lost for
+// good.
+
+/** A port that refuses everything until it is told to start working. */
+function flakyPort() {
+  const saved: AcquisitionTouch[] = [];
+  const state = { up: false };
+  return {
+    saved,
+    state,
+    saveAcquisitionTouch: async (_s: string, t: AcquisitionTouch) => {
+      if (!state.up) return false;
+      saved.push(t);
+      return true;
+    },
+  };
+}
+
+test('a first touch whose delivery fails stays pending and is retried later', async () => {
+  const port = flakyPort();
+  setUrl('https://alpha.refi.trading/alpha?utm_source=x&utm_campaign=launch');
+
+  const arrival = await captureAcquisition(port, '2026-09-14T10:00:00.000Z');
+  assert.equal(arrival.first?.source, 'x');
+  assert.equal(arrival.persisted, false, 'a refused write reported success');
+  assert.equal(arrival.pending, 1, 'a refused touch was dropped instead of queued');
+  assert.equal(port.saved.length, 0);
+
+  // The player comes back. Nothing about this landing is new, so it creates no
+  // touch of its own, and it still carries the backlog.
+  port.state.up = true;
+  setUrl('https://alpha.refi.trading/alpha');
+  const later = await captureAcquisition(port, '2026-09-20T09:00:00.000Z');
+
+  assert.equal(later.first, null, 'the retry rewrote history as a new first touch');
+  assert.equal(later.meaningful, null);
+  assert.equal(later.pending, 0, 'the delivered touch stayed in the queue');
+  assert.equal(port.saved.length, 1);
+});
+
+test('a retried touch keeps the time the player actually arrived', async () => {
+  // The whole point of retrying the original rather than re-capturing: a
+  // stamp taken on the retry would say when the network recovered, which
+  // after an outage is days from the arrival and is not an acquisition fact.
+  const port = flakyPort();
+  setUrl('https://alpha.refi.trading/alpha?utm_source=x');
+  await captureAcquisition(port, '2026-09-14T10:00:00.000Z');
+
+  port.state.up = true;
+  setUrl('https://alpha.refi.trading/alpha');
+  await captureAcquisition(port, '2026-09-20T09:00:00.000Z');
+
+  assert.equal(port.saved[0].occurredAt, '2026-09-14T10:00:00.000Z',
+    'the retry recorded delivery time as arrival time');
+  assert.equal(firstTouch()?.occurredAt, '2026-09-14T10:00:00.000Z');
+});
+
+test('the backlog drains oldest first and keeps what still cannot be sent', async () => {
+  const port = flakyPort();
+  setUrl('https://alpha.refi.trading/alpha?utm_source=first&utm_campaign=launch');
+  await captureAcquisition(port, '2026-09-14T10:00:00.000Z');
+  setUrl('https://alpha.refi.trading/alpha?utm_source=second&utm_campaign=creator');
+  const second = await captureAcquisition(port, '2026-09-15T10:00:00.000Z');
+  assert.equal(second.pending, 2, 'both arrivals should be waiting');
+
+  port.state.up = true;
+  setUrl('https://alpha.refi.trading/alpha');
+  const drained = await captureAcquisition(port, '2026-09-16T10:00:00.000Z');
+  assert.equal(drained.pending, 0);
+  assert.deepEqual(port.saved.map(t => t.kind), ['first', 'meaningful'],
+    'the backlog was delivered out of order');
+  assert.deepEqual(port.saved.map(t => t.source), ['first', 'second']);
+});
+
+test('a touch already delivered is not sent again on the next landing', async () => {
+  const port = fakePort();
+  setUrl('https://alpha.refi.trading/alpha?utm_source=x&utm_campaign=launch');
+  await captureAcquisition(port, '2026-09-14T10:00:00.000Z');
+  setUrl('https://alpha.refi.trading/alpha');
+  await captureAcquisition(port, '2026-09-15T10:00:00.000Z');
+  await captureAcquisition(port, '2026-09-16T10:00:00.000Z');
+
+  assert.equal(port.saved.length, 1, 'an acknowledged touch was re-sent');
+});

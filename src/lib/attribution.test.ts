@@ -58,6 +58,34 @@ test('an internal navigation is not an arrival from anywhere', () => {
   assert.equal(facts.referrer, undefined, 'the game referred itself and was counted as a source');
 });
 
+test('a lookalike domain is external, however our origin starts the string', () => {
+  // The prefix test this replaces called alpha.refi.trading.evil.example
+  // internal, which would have deleted it from the acquisition record: the
+  // one arrival most worth keeping.
+  const evil = parseAttribution({
+    url: 'https://alpha.refi.trading/alpha',
+    referrer: 'https://alpha.refi.trading.evil.example/path?steal=1',
+    occurredAt: AT,
+  });
+  assert.equal(evil.facts.referrer, 'https://alpha.refi.trading.evil.example/path',
+    'a lookalike origin was treated as our own');
+
+  const ours = parseAttribution({
+    url: 'https://alpha.refi.trading/alpha',
+    referrer: 'https://alpha.refi.trading/path',
+    occurredAt: AT,
+  });
+  assert.equal(ours.facts.referrer, undefined, 'our own page counted as a referrer');
+
+  // Same host, different scheme or port is a different origin, and is kept.
+  const otherPort = parseAttribution({
+    url: 'https://alpha.refi.trading/alpha',
+    referrer: 'https://alpha.refi.trading:8443/path',
+    occurredAt: AT,
+  });
+  assert.equal(otherPort.facts.referrer, 'https://alpha.refi.trading:8443/path');
+});
+
 test('an unlabelled arrival is recorded but is not attributable', () => {
   // "Direct" is an answer, and it belongs in the first touch. It is not a
   // campaign, so it can never open a meaningful touch.

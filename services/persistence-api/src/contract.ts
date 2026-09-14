@@ -325,7 +325,8 @@ export interface WireTouch {
   term: string | null;
   referrer: string | null;
   landing_path: string | null;
-  occurred_at: string | null;
+  /** When the player arrived. Required: never stamped by the server. */
+  occurred_at: string;
 }
 
 // ─── Primitive checks ─────────────────────────────────────────────────────────
@@ -700,13 +701,29 @@ export function validateEvent(body: unknown): WireEvent {
     // storing an empty object would hide that from everyone downstream.
     bad('payload');
   }
-  // Experiment assignments: absent on v1, a map of experiment id to variant on
-  // v2. An array, a number or a JSON null are rejected rather than coerced,
-  // because a sender that ships one is broken and storing something plausible
-  // would hide that from whoever reads the column later.
+  // Envelope versions are exact, not a range with optional extras.
+  //
+  //   v1: experiment_assignments MUST be absent   → stored as SQL NULL
+  //   v2: experiment_assignments MUST be present  → an object of strings,
+  //       where {} is the explicit claim "no assignments"
+  //
+  // Both halves are enforced. A v2 envelope with the field omitted and a v1
+  // envelope carrying it are each rejected, because either one would make the
+  // version number stop meaning anything: the whole value of the distinction
+  // is that a reader can tell "reported none" from "never looked" without
+  // guessing which emitter wrote the row.
+  const version = num(body, 'event_version');
+  if (version !== 1 && version !== 2) bad('event_version');
+
   const assignments = body['experiment_assignments'];
   let experimentAssignments: Record<string, string> | null = null;
-  if (assignments !== undefined) {
+  if (version === 1) {
+    if (assignments !== undefined) bad('experiment_assignments');
+  } else {
+    if (assignments === undefined) bad('experiment_assignments');
+    // An array, a number, a string or a JSON null are refused rather than
+    // coerced: a sender that ships one is broken, and storing something
+    // plausible hides that from everyone downstream.
     if (!isRecord(assignments)) bad('experiment_assignments');
     for (const [key, value] of Object.entries(assignments)) {
       if (typeof value !== 'string') bad(`experiment_assignments.${key}`);
@@ -717,7 +734,8 @@ export function validateEvent(body: unknown): WireEvent {
   return {
     event_id: str(body, 'event_id'),
     event_type: str(body, 'event_type'),
-    event_version: num(body, 'event_version'),
+    // The sender's version, persisted exactly as sent.
+    event_version: version,
     experiment_assignments: experimentAssignments,
     occurred_at: isoDate(body, 'occurred_at'),
     session_id: sessionId,
@@ -769,8 +787,11 @@ export function validateTouch(body: unknown): WireTouch {
     term: optional('term'),
     referrer: optional('referrer'),
     landing_path: optional('landingPath') ?? optional('landing_path'),
-    occurred_at: body['occurredAt'] === undefined && body['occurred_at'] === undefined
-      ? null
-      : isoDateOrNull(body, body['occurredAt'] !== undefined ? 'occurredAt' : 'occurred_at'),
+    // Required, and never defaulted server-side. A touch is retried until it
+    // lands, so a server timestamp would record when delivery succeeded
+    // rather than when the player arrived: after an outage those are days
+    // apart, and the second one is not a fact about acquisition at all. The
+    // client knows the real time, so it sends it.
+    occurred_at: isoDate(body, body['occurredAt'] !== undefined ? 'occurredAt' : 'occurred_at'),
   };
 }

@@ -104,9 +104,18 @@ export function parseAttribution(input: AttributionInput): ParsedAttribution {
     return { facts: {}, attributable: false };
   }
   const q = url.searchParams;
+  // Origins compared as origins, never as strings. A prefix test would read
+  // https://alpha.refi.trading.evil.example/ as internal, because it begins
+  // with our origin: that is the classic way a same-origin check becomes an
+  // attacker's way to launder a referrer into "internal navigation" and
+  // disappear from the acquisition record.
   const sameOrigin = (() => {
-    const ref = input.referrer ? sanitizeReferrer(input.referrer) : undefined;
-    return ref ? ref.startsWith(url.origin) : false;
+    if (!input.referrer) return false;
+    try {
+      return new URL(input.referrer).origin === url.origin;
+    } catch {
+      return false;
+    }
   })();
 
   const facts: AttributionFacts = {

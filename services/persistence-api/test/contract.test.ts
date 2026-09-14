@@ -212,18 +212,43 @@ test('the session header is required and exactly ses_<20 hex>', () => {
 
 // ─── Envelope version 2: experiment assignments ───────────────────────────────
 
+const AT = '2026-09-14T12:00:00.000Z';
+
 const ENVELOPE = {
   event_id: 'evt_1', event_type: 'arena.started', event_version: 2,
   occurred_at: '2026-09-14T12:00:00.000Z', session_id: 'ses_' + '0'.repeat(20),
   payload: {},
 };
 
-test('a v1 envelope that says nothing about experiments stays silent', () => {
+test('a v1 envelope says nothing about experiments, and may not', () => {
   // Not coerced to {}. "Did not report" and "reported none" are different
   // facts, and the column keeps them apart (0003).
   const event = validateEvent({ ...ENVELOPE, event_version: 1 });
   assert.equal(event.experiment_assignments, null);
   assert.equal(event.event_version, 1, 'the sender version was rewritten');
+
+  // And a v1 envelope that carries the field is refused: allowing it would
+  // make the version number stop meaning anything.
+  assert.throws(
+    () => validateEvent({ ...ENVELOPE, event_version: 1, experiment_assignments: {} }),
+    HttpError,
+    'a v1 envelope was allowed to report experiments');
+});
+
+test('a v2 envelope must report, even if it reports none', () => {
+  assert.throws(
+    () => validateEvent({ ...ENVELOPE, event_version: 2 }),
+    HttpError,
+    'a v2 envelope omitted the field that defines v2');
+});
+
+test('an envelope version this contract does not know is refused', () => {
+  for (const version of [0, 3, 1.5, -1]) {
+    assert.throws(
+      () => validateEvent({ ...ENVELOPE, event_version: version, experiment_assignments: {} }),
+      HttpError,
+      `version ${String(version)} was accepted`);
+  }
 });
 
 test('a v2 envelope reporting no assignments says so explicitly', () => {
@@ -250,9 +275,9 @@ test('anything that is not a map of strings is refused, not coerced', () => {
 // ─── Acquisition touches ──────────────────────────────────────────────────────
 
 test('a touch carries a kind the schema knows', () => {
-  assert.equal(validateTouch({ kind: 'first' }).kind, 'first');
-  assert.equal(validateTouch({ kind: 'meaningful' }).kind, 'meaningful');
-  assert.throws(() => validateTouch({ kind: 'bookmark' }), HttpError);
+  assert.equal(validateTouch({ kind: 'first', occurredAt: AT }).kind, 'first');
+  assert.equal(validateTouch({ kind: 'meaningful', occurredAt: AT }).kind, 'meaningful');
+  assert.throws(() => validateTouch({ kind: 'bookmark', occurredAt: AT }), HttpError);
   assert.throws(() => validateTouch({}), HttpError);
 });
 
@@ -261,7 +286,7 @@ test('a touch may not name a user', () => {
   // game_sessions.user_id. Accepting an owner here would let a caller
   // attribute somebody else's arrival.
   assert.throws(
-    () => validateTouch({ kind: 'first', user_id: 'usr_1' }),
+    () => validateTouch({ kind: 'first', user_id: 'usr_1', occurredAt: AT }),
     HttpError,
     'a caller was allowed to attribute an arrival to a user');
 });
@@ -277,9 +302,18 @@ test('a touch maps the client field names and bounds their length', () => {
   assert.equal(touch.referrer, 'https://news.example.com/story');
 
   // Unbounded free text on an unauthenticated route is a storage amplifier.
-  assert.throws(() => validateTouch({ kind: 'first', campaign: 'x'.repeat(513) }), HttpError);
+  assert.throws(
+    () => validateTouch({ kind: 'first', campaign: 'x'.repeat(513), occurredAt: AT }),
+    HttpError);
 });
 
-test('a touch without a time is allowed and left for the server to stamp', () => {
-  assert.equal(validateTouch({ kind: 'first' }).occurred_at, null);
+test('a touch must say when the player arrived', () => {
+  // Not defaulted server-side: a touch is retried until it lands, so now()
+  // would record when delivery succeeded. After an outage those are days
+  // apart, and only one of them is a fact about acquisition.
+  assert.throws(() => validateTouch({ kind: 'first' }), HttpError);
+  assert.throws(() => validateTouch({ kind: 'first', occurredAt: 'yesterday' }), HttpError);
+  assert.equal(
+    validateTouch({ kind: 'first', occurredAt: AT }).occurred_at, AT,
+    'the arrival time was rewritten');
 });

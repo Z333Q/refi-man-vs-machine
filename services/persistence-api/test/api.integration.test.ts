@@ -703,12 +703,13 @@ describe('persistence-api against the founding schema', {
 
   test('a session may gather several meaningful touches', async () => {
     const session = sid(0x51);
+    const at = (m: number) => `2026-09-14T12:0${String(m)}:00.000Z`;
     assert.equal((await post('/v1/growth/touches', session,
-      { kind: 'first', source: 'x' })).status, 204);
+      { kind: 'first', source: 'x', occurredAt: at(0) })).status, 204);
     assert.equal((await post('/v1/growth/touches', session,
-      { kind: 'meaningful', source: 'creator', campaign: 'kiu' })).status, 204);
+      { kind: 'meaningful', source: 'creator', campaign: 'kiu', occurredAt: at(1) })).status, 204);
     assert.equal((await post('/v1/growth/touches', session,
-      { kind: 'meaningful', source: 'partner', campaign: 'desk' })).status, 204);
+      { kind: 'meaningful', source: 'partner', campaign: 'desk', occurredAt: at(2) })).status, 204);
 
     const { rows } = await pool.query(
       `SELECT kind, campaign FROM acquisition_touches
@@ -719,7 +720,8 @@ describe('persistence-api against the founding schema', {
 
   test('a touch reaches a claimed player through the session, never through a user id', async () => {
     const session = sid(0x52);
-    await post('/v1/growth/touches', session, { kind: 'first', campaign: 'launch' });
+    await post('/v1/growth/touches', session,
+      { kind: 'first', campaign: 'launch', occurredAt: '2026-09-14T12:00:00.000Z' });
 
     // The session is later claimed. Nothing is copied: the link is the join.
     const { rows: [user] } = await pool.query(
@@ -736,14 +738,95 @@ describe('persistence-api against the founding schema', {
     // And the route's existing session boundary is unchanged: a linked session
     // belongs to a verified principal, which this header is not.
     assert.equal((await post('/v1/growth/touches', session,
-      { kind: 'meaningful', campaign: 'later' })).status, 403);
+      { kind: 'meaningful', campaign: 'later', occurredAt: '2026-09-15T12:00:00.000Z' })).status,
+      403);
+  });
+
+  test('an exact retry of a meaningful touch does not append a second row', async () => {
+    // The client retries an undelivered touch until it is acknowledged, so
+    // the same arrival can arrive twice. Same session, same facts, same
+    // arrival time is one arrival delivered twice.
+    const session = sid(0x54);
+    const at = '2026-09-14T12:00:00.000Z';
+    const touch = {
+      kind: 'meaningful', source: 'creator', campaign: 'kiu',
+      referrer: 'https://x.example/p', landingPath: '/alpha', occurredAt: at,
+    };
+    for (let i = 0; i < 3; i++) {
+      assert.equal((await post('/v1/growth/touches', session, touch)).status, 204);
+    }
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM acquisition_touches
+       WHERE session_id = $1 AND kind = 'meaningful'`, [session]);
+    assert.equal(rows[0].n, 1, 'a retry was recorded as a second arrival');
+  });
+
+  test('a genuinely different meaningful touch still appends', async () => {
+    // The guard is exact, not a dedup heuristic: one differing field, even
+    // only the arrival time, is a different arrival.
+    const session = sid(0x55);
+    const base = {
+      kind: 'meaningful', source: 'creator', campaign: 'kiu', landingPath: '/alpha',
+    };
+    assert.equal((await post('/v1/growth/touches', session,
+      { ...base, occurredAt: '2026-09-14T12:00:00.000Z' })).status, 204);
+    assert.equal((await post('/v1/growth/touches', session,
+      { ...base, occurredAt: '2026-09-16T09:00:00.000Z' })).status, 204);
+    assert.equal((await post('/v1/growth/touches', session,
+      { ...base, campaign: 'desk', occurredAt: '2026-09-16T09:00:00.000Z' })).status, 204);
+
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM acquisition_touches WHERE session_id = $1`, [session]);
+    assert.equal(rows[0].n, 3);
+  });
+
+  test('the arrival time the client sent is the arrival time stored', async () => {
+    const session = sid(0x56);
+    const at = '2026-09-10T08:30:00.000Z';
+    assert.equal((await post('/v1/growth/touches', session,
+      { kind: 'first', source: 'x', occurredAt: at })).status, 204);
+    const { rows } = await pool.query(
+      `SELECT occurred_at FROM acquisition_touches WHERE session_id = $1`, [session]);
+    assert.equal(new Date(rows[0].occurred_at).toISOString(), at,
+      'the server stamped its own time over the arrival');
+  });
+
+  test('a v2 envelope that omits assignments, and a v1 that carries them, are refused', async () => {
+    const omitted = await postEvent({
+      event_id: 'evt_v2_omitted', event_type: 'arena.started', event_version: 2,
+      occurred_at: '2026-09-14T12:00:00.000Z', session_id: sid(0x44), payload: {},
+    });
+    assert.equal(omitted.status, 400, 'a v2 envelope omitted the field that defines v2');
+
+    const smuggled = await postEvent({
+      event_id: 'evt_v1_smuggled', event_type: 'arena.started', event_version: 1,
+      occurred_at: '2026-09-14T12:00:00.000Z', session_id: sid(0x44),
+      experiment_assignments: {}, payload: {},
+    });
+    assert.equal(smuggled.status, 400, 'a v1 envelope reported experiments');
+
+    const unknown = await postEvent({
+      event_id: 'evt_v9', event_type: 'arena.started', event_version: 9,
+      occurred_at: '2026-09-14T12:00:00.000Z', session_id: sid(0x44),
+      experiment_assignments: {}, payload: {},
+    });
+    assert.equal(unknown.status, 400, 'an unknown envelope version was accepted');
+
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM game_events
+       WHERE event_id IN ('evt_v2_omitted','evt_v1_smuggled','evt_v9')`);
+    assert.equal(rows[0].n, 0);
   });
 
   test('a malformed touch is a 400 and writes nothing', async () => {
     const session = sid(0x53);
-    assert.equal((await post('/v1/growth/touches', session, { kind: 'bookmark' })).status, 400);
+    const at = '2026-09-14T12:00:00.000Z';
     assert.equal((await post('/v1/growth/touches', session,
-      { kind: 'first', user_id: 'usr_1' })).status, 400);
+      { kind: 'bookmark', occurredAt: at })).status, 400);
+    assert.equal((await post('/v1/growth/touches', session,
+      { kind: 'first', user_id: 'usr_1', occurredAt: at })).status, 400);
+    // The arrival time is required: the server will not stamp one.
+    assert.equal((await post('/v1/growth/touches', session, { kind: 'first' })).status, 400);
     const { rows } = await pool.query(
       `SELECT count(*)::int AS n FROM acquisition_touches WHERE session_id = $1`, [session]);
     assert.equal(rows[0].n, 0);
