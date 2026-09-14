@@ -132,6 +132,8 @@ test('a touch goes to the growth route with the session in the header, not the U
 test('a touch the server refuses reports failure rather than throwing', async () => {
   respondWith(() => new Response('nope', { status: 500 }));
   assert.equal(
-    await makeRefiRemote('https://api.test').saveAcquisitionTouch('ses_a', { kind: 'first' }),
+    await makeRefiRemote('https://api.test').saveAcquisitionTouch('ses_a', {
+      kind: 'first', occurredAt: '2026-09-14T12:00:00.000Z',
+    }),
     false);
 });
