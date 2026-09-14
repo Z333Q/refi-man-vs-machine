@@ -1,7 +1,10 @@
 import ActionZone from '../components/ui/ActionZone';
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import BuildStamp from '../components/BuildStamp';
-import { emitEvent, captureFunnelAttribution, getFunnelAttribution } from '../lib/events';
+import { captureFunnelAttribution, getFunnelAttribution } from '../lib/events';
+import { track } from '../lib/growth';
+import { captureAcquisition, attributionContext } from '../lib/acquisition';
+import { persistence } from '../lib/persistence';
 
 // Arcade-style attract screen — the customized first step into the game.
 //
@@ -92,14 +95,30 @@ export default function TitleScreen({ onEnter }: Props) {
   // attribution from the ReFi funnel and log the attract view (§7 / §63).
   useEffect(() => {
     const attribution = captureFunnelAttribution();
-    emitEvent('onboarding.attract_viewed', { attribution, entry: 'title' });
+    void track('onboarding.attract_viewed', { attribution, entry: 'title' });
+
+    // How this session arrived, recorded once and never rewritten. The
+    // campaign event fires only when a touch was actually taken, so it counts
+    // arrivals rather than page views, and nothing here is visible to the
+    // player or blocks the screen.
+    void captureAcquisition(persistence).then(captured => {
+      const touch = captured.first ?? captured.meaningful;
+      if (!touch) return;
+      return track('campaign.attributed', {
+        touchKind: touch.kind,
+        attribution: attributionContext(captured.parsed),
+        persisted: captured.persisted,
+      });
+    }).catch(() => {
+      // Measurement never breaks a landing page.
+    });
   }, []);
 
   // Funnel-entry action. Emits onboarding.entered (with attribution) so the
   // ReFi marketing funnel can tie this session to its acquisition source,
   // then hands off to the game flow.
   const start = useCallback(() => {
-    emitEvent('onboarding.entered', { attribution: getFunnelAttribution(), from: panel });
+    void track('onboarding.entered', { attribution: getFunnelAttribution(), from: panel });
     onEnter();
   }, [onEnter, panel]);
 

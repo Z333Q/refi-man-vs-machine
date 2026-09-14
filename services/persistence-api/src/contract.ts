@@ -304,6 +304,29 @@ export interface WireEvent {
   correlation_id?: string | null;
   causation_id?: string | null;
   payload: Record<string, unknown>;
+  /**
+   * Envelope v2 only: which experiment variants the player was in.
+   *
+   * null means the sender did not report (a v1 emitter, including every
+   * envelope already sitting in a browser buffer). An empty object means a v2
+   * emitter reported none. The database keeps both, and 0003 constrains the
+   * column to NULL or a JSON object, so the two can never be confused.
+   */
+  experiment_assignments?: Record<string, string> | null;
+}
+
+/** One acquisition touch (§7.4), exactly the fields 0003 can store. */
+export interface WireTouch {
+  kind: 'first' | 'meaningful';
+  source: string | null;
+  medium: string | null;
+  campaign: string | null;
+  content: string | null;
+  term: string | null;
+  referrer: string | null;
+  landing_path: string | null;
+  /** When the player arrived. Required: never stamped by the server. */
+  occurred_at: string;
 }
 
 // ─── Primitive checks ─────────────────────────────────────────────────────────
@@ -678,10 +701,42 @@ export function validateEvent(body: unknown): WireEvent {
     // storing an empty object would hide that from everyone downstream.
     bad('payload');
   }
+  // Envelope versions are exact, not a range with optional extras.
+  //
+  //   v1: experiment_assignments MUST be absent   → stored as SQL NULL
+  //   v2: experiment_assignments MUST be present  → an object of strings,
+  //       where {} is the explicit claim "no assignments"
+  //
+  // Both halves are enforced. A v2 envelope with the field omitted and a v1
+  // envelope carrying it are each rejected, because either one would make the
+  // version number stop meaning anything: the whole value of the distinction
+  // is that a reader can tell "reported none" from "never looked" without
+  // guessing which emitter wrote the row.
+  const version = num(body, 'event_version');
+  if (version !== 1 && version !== 2) bad('event_version');
+
+  const assignments = body['experiment_assignments'];
+  let experimentAssignments: Record<string, string> | null = null;
+  if (version === 1) {
+    if (assignments !== undefined) bad('experiment_assignments');
+  } else {
+    if (assignments === undefined) bad('experiment_assignments');
+    // An array, a number, a string or a JSON null are refused rather than
+    // coerced: a sender that ships one is broken, and storing something
+    // plausible hides that from everyone downstream.
+    if (!isRecord(assignments)) bad('experiment_assignments');
+    for (const [key, value] of Object.entries(assignments)) {
+      if (typeof value !== 'string') bad(`experiment_assignments.${key}`);
+    }
+    experimentAssignments = assignments as Record<string, string>;
+  }
+
   return {
     event_id: str(body, 'event_id'),
     event_type: str(body, 'event_type'),
-    event_version: num(body, 'event_version'),
+    // The sender's version, persisted exactly as sent.
+    event_version: version,
+    experiment_assignments: experimentAssignments,
     occurred_at: isoDate(body, 'occurred_at'),
     session_id: sessionId,
     alpha_player_id: optional('alpha_player_id'),
@@ -693,5 +748,50 @@ export function validateEvent(body: unknown): WireEvent {
     correlation_id: optional('correlation_id'),
     causation_id: optional('causation_id'),
     payload,
+  };
+}
+
+const TOUCH_KINDS = new Set(['first', 'meaningful']);
+
+/**
+ * One acquisition touch.
+ *
+ * No user id, by design and not by omission: a touch belongs to a session and
+ * reaches a claimed player through game_sessions.user_id. Accepting one here
+ * would let a caller attribute somebody else's arrival, and would duplicate a
+ * fact the schema deliberately stores in one place.
+ */
+export function validateTouch(body: unknown): WireTouch {
+  if (!isRecord(body)) throw new HttpError(400, 'body must be an acquisition touch');
+  if ('user_id' in body) bad('user_id');
+
+  const kind = body['kind'];
+  if (typeof kind !== 'string' || !TOUCH_KINDS.has(kind)) bad('kind');
+
+  const optional = (k: string): string | null => {
+    const v = body[k];
+    if (v === undefined || v === null) return null;
+    if (typeof v !== 'string') bad(k);
+    // Free-form marketing strings are bounded: an unbounded field on an
+    // unauthenticated route is a storage amplifier.
+    if (v.length > 512) bad(k);
+    return v;
+  };
+
+  return {
+    kind: kind as 'first' | 'meaningful',
+    source: optional('source'),
+    medium: optional('medium'),
+    campaign: optional('campaign'),
+    content: optional('content'),
+    term: optional('term'),
+    referrer: optional('referrer'),
+    landing_path: optional('landingPath') ?? optional('landing_path'),
+    // Required, and never defaulted server-side. A touch is retried until it
+    // lands, so a server timestamp would record when delivery succeeded
+    // rather than when the player arrived: after an outage those are days
+    // apart, and the second one is not a fact about acquisition at all. The
+    // client knows the real time, so it sends it.
+    occurred_at: isoDate(body, body['occurredAt'] !== undefined ? 'occurredAt' : 'occurred_at'),
   };
 }

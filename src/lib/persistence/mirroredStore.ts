@@ -232,6 +232,14 @@ export function makeMirroredStore(remote: RefiRemote): PersistencePort {
     },
 
     deliverEvent: remote.deliverEvent,
+
+    async saveAcquisitionTouch(sessionId, touch) {
+      // Local first, like every other write here, so a device that never
+      // reaches the API still knows how the player arrived. The remote answer
+      // is what the caller reports as persisted.
+      await localStore.saveAcquisitionTouch(sessionId, touch);
+      return remote.saveAcquisitionTouch(sessionId, touch);
+    },
   };
 }
 

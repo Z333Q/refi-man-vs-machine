@@ -611,6 +611,227 @@ describe('persistence-api against the founding schema', {
     assert.equal(res.status, 400);
   });
 
+  // ─── Envelope versions ──────────────────────────────────────────────────────
+
+  function postEvent(body: unknown) {
+    return fetch(`${base}/v1/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  test('a v1 envelope from a browser buffer still ingests after v2 exists', async () => {
+    // The buffer is durable and offline: envelopes written before this release
+    // are sitting in browsers now, and they must drain, not be rejected.
+    const session = sid(0x40);
+    assert.equal((await postEvent({
+      event_id: 'evt_v1_legacy', event_type: 'arena.started', event_version: 1,
+      occurred_at: '2026-09-14T12:00:00.000Z', session_id: session, payload: {},
+    })).status, 204);
+
+    const { rows } = await pool.query(
+      `SELECT event_version, experiment_assignments FROM game_events WHERE event_id='evt_v1_legacy'`);
+    assert.equal(rows[0].event_version, 1, 'the sender version was rewritten');
+    assert.equal(rows[0].experiment_assignments, null,
+      'a v1 event was given an experiment claim its emitter never made');
+  });
+
+  test('a v2 envelope records that it looked and found no experiments', async () => {
+    assert.equal((await postEvent({
+      event_id: 'evt_v2_empty', event_type: 'arena.started', event_version: 2,
+      occurred_at: '2026-09-14T12:00:00.000Z', session_id: sid(0x41),
+      experiment_assignments: {}, payload: {},
+    })).status, 204);
+
+    const { rows } = await pool.query(
+      `SELECT event_version, experiment_assignments FROM game_events WHERE event_id='evt_v2_empty'`);
+    assert.equal(rows[0].event_version, 2);
+    assert.deepEqual(rows[0].experiment_assignments, {},
+      'reported-none was stored as never-looked');
+  });
+
+  test('a v2 envelope stores the variants the player was in', async () => {
+    assert.equal((await postEvent({
+      event_id: 'evt_v2_map', event_type: 'decision.committed', event_version: 2,
+      occurred_at: '2026-09-14T12:00:00.000Z', session_id: sid(0x42),
+      experiment_assignments: { hero_copy: 'B' }, payload: {},
+    })).status, 204);
+
+    const { rows } = await pool.query(
+      `SELECT experiment_assignments FROM game_events WHERE event_id='evt_v2_map'`);
+    assert.deepEqual(rows[0].experiment_assignments, { hero_copy: 'B' });
+  });
+
+  test('an envelope whose assignments are not a map is refused and writes nothing', async () => {
+    for (const [i, bad] of [['A', 'B'], 42, 'control', null].entries()) {
+      const id = `evt_v2_bad_${String(i)}`;
+      assert.equal((await postEvent({
+        event_id: id, event_type: 'arena.started', event_version: 2,
+        occurred_at: '2026-09-14T12:00:00.000Z', session_id: sid(0x43),
+        experiment_assignments: bad, payload: {},
+      })).status, 400, `${JSON.stringify(bad)} was accepted`);
+      const { rows } = await pool.query(
+        `SELECT count(*)::int AS n FROM game_events WHERE event_id = $1`, [id]);
+      assert.equal(rows[0].n, 0);
+    }
+  });
+
+  // ─── Acquisition touches ────────────────────────────────────────────────────
+
+  test('a first touch is recorded once, and a retry of it is success not error', async () => {
+    const session = sid(0x50);
+    const touch = {
+      kind: 'first', source: 'x', medium: 'social', campaign: 'launch',
+      referrer: 'https://news.example.com/story', landingPath: '/alpha',
+      occurredAt: '2026-09-14T12:00:00.000Z',
+    };
+    // Twice, as a retrying client does. The second is a fact that is already
+    // true, which is a success; 0003's partial unique index is what makes it
+    // structurally impossible to write a second origin story.
+    assert.equal((await post('/v1/growth/touches', session, touch)).status, 204);
+    assert.equal((await post('/v1/growth/touches', session, touch)).status, 204);
+
+    const { rows } = await pool.query(
+      `SELECT kind, source, campaign, referrer, landing_path, occurred_at
+       FROM acquisition_touches WHERE session_id = $1`, [session]);
+    assert.equal(rows.length, 1, 'a session acquired a second first touch');
+    assert.equal(rows[0].source, 'x');
+    assert.equal(rows[0].landing_path, '/alpha');
+    assert.equal(rows[0].referrer, 'https://news.example.com/story');
+  });
+
+  test('a session may gather several meaningful touches', async () => {
+    const session = sid(0x51);
+    const at = (m: number) => `2026-09-14T12:0${String(m)}:00.000Z`;
+    assert.equal((await post('/v1/growth/touches', session,
+      { kind: 'first', source: 'x', occurredAt: at(0) })).status, 204);
+    assert.equal((await post('/v1/growth/touches', session,
+      { kind: 'meaningful', source: 'creator', campaign: 'kiu', occurredAt: at(1) })).status, 204);
+    assert.equal((await post('/v1/growth/touches', session,
+      { kind: 'meaningful', source: 'partner', campaign: 'desk', occurredAt: at(2) })).status, 204);
+
+    const { rows } = await pool.query(
+      `SELECT kind, campaign FROM acquisition_touches
+       WHERE session_id = $1 ORDER BY occurred_at, campaign`, [session]);
+    assert.equal(rows.length, 3);
+    assert.equal(rows.filter(r => r.kind === 'meaningful').length, 2);
+  });
+
+  test('a touch reaches a claimed player through the session, never through a user id', async () => {
+    const session = sid(0x52);
+    await post('/v1/growth/touches', session,
+      { kind: 'first', campaign: 'launch', occurredAt: '2026-09-14T12:00:00.000Z' });
+
+    // The session is later claimed. Nothing is copied: the link is the join.
+    const { rows: [user] } = await pool.query(
+      `INSERT INTO app_users DEFAULT VALUES RETURNING id`);
+    await pool.query(
+      `UPDATE game_sessions SET user_id = $1, linked_at = now() WHERE id = $2`,
+      [user.id, session]);
+
+    const { rows } = await pool.query(
+      `SELECT t.campaign FROM acquisition_touches t
+       JOIN game_sessions s ON s.id = t.session_id WHERE s.user_id = $1`, [user.id]);
+    assert.equal(rows[0].campaign, 'launch');
+
+    // And the route's existing session boundary is unchanged: a linked session
+    // belongs to a verified principal, which this header is not.
+    assert.equal((await post('/v1/growth/touches', session,
+      { kind: 'meaningful', campaign: 'later', occurredAt: '2026-09-15T12:00:00.000Z' })).status,
+      403);
+  });
+
+  test('an exact retry of a meaningful touch does not append a second row', async () => {
+    // The client retries an undelivered touch until it is acknowledged, so
+    // the same arrival can arrive twice. Same session, same facts, same
+    // arrival time is one arrival delivered twice.
+    const session = sid(0x54);
+    const at = '2026-09-14T12:00:00.000Z';
+    const touch = {
+      kind: 'meaningful', source: 'creator', campaign: 'kiu',
+      referrer: 'https://x.example/p', landingPath: '/alpha', occurredAt: at,
+    };
+    for (let i = 0; i < 3; i++) {
+      assert.equal((await post('/v1/growth/touches', session, touch)).status, 204);
+    }
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM acquisition_touches
+       WHERE session_id = $1 AND kind = 'meaningful'`, [session]);
+    assert.equal(rows[0].n, 1, 'a retry was recorded as a second arrival');
+  });
+
+  test('a genuinely different meaningful touch still appends', async () => {
+    // The guard is exact, not a dedup heuristic: one differing field, even
+    // only the arrival time, is a different arrival.
+    const session = sid(0x55);
+    const base = {
+      kind: 'meaningful', source: 'creator', campaign: 'kiu', landingPath: '/alpha',
+    };
+    assert.equal((await post('/v1/growth/touches', session,
+      { ...base, occurredAt: '2026-09-14T12:00:00.000Z' })).status, 204);
+    assert.equal((await post('/v1/growth/touches', session,
+      { ...base, occurredAt: '2026-09-16T09:00:00.000Z' })).status, 204);
+    assert.equal((await post('/v1/growth/touches', session,
+      { ...base, campaign: 'desk', occurredAt: '2026-09-16T09:00:00.000Z' })).status, 204);
+
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM acquisition_touches WHERE session_id = $1`, [session]);
+    assert.equal(rows[0].n, 3);
+  });
+
+  test('the arrival time the client sent is the arrival time stored', async () => {
+    const session = sid(0x56);
+    const at = '2026-09-10T08:30:00.000Z';
+    assert.equal((await post('/v1/growth/touches', session,
+      { kind: 'first', source: 'x', occurredAt: at })).status, 204);
+    const { rows } = await pool.query(
+      `SELECT occurred_at FROM acquisition_touches WHERE session_id = $1`, [session]);
+    assert.equal(new Date(rows[0].occurred_at).toISOString(), at,
+      'the server stamped its own time over the arrival');
+  });
+
+  test('a v2 envelope that omits assignments, and a v1 that carries them, are refused', async () => {
+    const omitted = await postEvent({
+      event_id: 'evt_v2_omitted', event_type: 'arena.started', event_version: 2,
+      occurred_at: '2026-09-14T12:00:00.000Z', session_id: sid(0x44), payload: {},
+    });
+    assert.equal(omitted.status, 400, 'a v2 envelope omitted the field that defines v2');
+
+    const smuggled = await postEvent({
+      event_id: 'evt_v1_smuggled', event_type: 'arena.started', event_version: 1,
+      occurred_at: '2026-09-14T12:00:00.000Z', session_id: sid(0x44),
+      experiment_assignments: {}, payload: {},
+    });
+    assert.equal(smuggled.status, 400, 'a v1 envelope reported experiments');
+
+    const unknown = await postEvent({
+      event_id: 'evt_v9', event_type: 'arena.started', event_version: 9,
+      occurred_at: '2026-09-14T12:00:00.000Z', session_id: sid(0x44),
+      experiment_assignments: {}, payload: {},
+    });
+    assert.equal(unknown.status, 400, 'an unknown envelope version was accepted');
+
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM game_events
+       WHERE event_id IN ('evt_v2_omitted','evt_v1_smuggled','evt_v9')`);
+    assert.equal(rows[0].n, 0);
+  });
+
+  test('a malformed touch is a 400 and writes nothing', async () => {
+    const session = sid(0x53);
+    const at = '2026-09-14T12:00:00.000Z';
+    assert.equal((await post('/v1/growth/touches', session,
+      { kind: 'bookmark', occurredAt: at })).status, 400);
+    assert.equal((await post('/v1/growth/touches', session,
+      { kind: 'first', user_id: 'usr_1', occurredAt: at })).status, 400);
+    // The arrival time is required: the server will not stamp one.
+    assert.equal((await post('/v1/growth/touches', session, { kind: 'first' })).status, 400);
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM acquisition_touches WHERE session_id = $1`, [session]);
+    assert.equal(rows[0].n, 0);
+  });
+
   // ─── Malformed bodies ───────────────────────────────────────────────────────
 
   test('a malformed run body is a 400 and writes nothing', async () => {

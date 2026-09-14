@@ -1,12 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { Pool } from 'pg';
 import {
-  HttpError, validSessionId, validateEvent, validateGuidance,
+  HttpError, validSessionId, validateEvent, validateTouch, validateGuidance,
   validateMachineVersion, validateProfile, validateRunRecord, validateTape,
   validateTip,
 } from './contract.js';
 import {
-  getProfile, getTape, insertEvent, listMachineVersions, listRuns,
+  getProfile, getTape, insertEvent, insertTouch, listMachineVersions, listRuns,
   putGuidance, putMachineVersion, putProfile, putRun, putTape, putTip,
 } from './store.js';
 
@@ -145,6 +145,15 @@ export async function route(
   }
 
   const sessionId = validSessionId(req.headers['x-alpha-session']);
+
+  // How this session arrived (§7.4). Session-scoped like every other write
+  // below, and carrying no user id: a touch reaches a claimed player through
+  // game_sessions.user_id and is never copied onto the user.
+  if (method === 'POST' && path === '/v1/growth/touches') {
+    await insertTouch(p, sessionId, validateTouch(await readJson(req)));
+    noContent(res);
+    return;
+  }
 
   if (path === '/v1/progress') {
     if (method === 'GET') {

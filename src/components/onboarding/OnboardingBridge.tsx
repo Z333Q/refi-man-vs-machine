@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { isProgressSaved, markProgressSaved } from '../../lib/alphaIdentity';
 import { claimHandoff, HANDOFF_MODE, type IntendedDestination } from '../../lib/handoff';
-import { emitEvent } from '../../lib/events';
+import { track } from '../../lib/growth';
 
 // Never-trap onboarding bridge (§4.1) — a persistent, unobtrusive surface
 // that lets the player (a) save their run into a lightweight Alpha identity
@@ -42,7 +42,7 @@ export function OnboardingBridge() {
   const openMenu = () => {
     setOpen(o => {
       const next = !o;
-      if (next) emitEvent('conversion.paper_cta_viewed', { surface: 'onboarding_bridge' });
+      if (next) track('conversion.paper_cta_viewed', { surface: 'onboarding_bridge' });
       return next;
     });
   };
@@ -50,10 +50,10 @@ export function OnboardingBridge() {
   const startHandoff = async (dest: IntendedDestination) => {
     if (handoffPending) return;
 
-    if (dest === 'PAPER') emitEvent('conversion.paper_started', { surface: 'onboarding_bridge' });
+    if (dest === 'PAPER') track('conversion.paper_started', { surface: 'onboarding_bridge' });
     // Which door was taken matters to the funnel: a minted handoff and a
     // marketing link convert at different rates and mean different things.
-    emitEvent('conversion.refi_handoff_started', {
+    track('conversion.refi_handoff_started', {
       surface: 'onboarding_bridge',
       destination: dest,
       mode: HANDOFF_MODE,

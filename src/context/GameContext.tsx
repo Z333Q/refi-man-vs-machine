@@ -12,8 +12,9 @@ import {
 import { getSessionId } from '../lib/identity';
 import { persistence, startPersistenceSync } from '../lib/persistence';
 import {
-  emitEvent, beginRunTelemetry, endRunTelemetry, setRunTelemetryId, covidCrisisDayToISO,
+  beginRunTelemetry, endRunTelemetry, setRunTelemetryId, covidCrisisDayToISO,
 } from '../lib/events';
+import { track } from '../lib/growth';
 import { markProgressSaved } from '../lib/alphaIdentity';
 import {
   saveRun, latestUnfinishedRun, replayRun, replayMatchesRecord,
@@ -117,7 +118,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   // session.started — once per mount.
   useEffect(() => {
-    emitEvent('session.started', { sessionId: getSessionId() });
+    track('session.started', { sessionId: getSessionId() });
   }, []);
 
   // checkpoint.loaded — whenever the active checkpoint changes.
@@ -127,7 +128,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!run) { prevCheckpoint.current = null; return; }
     if (run.currentCheckpoint !== prevCheckpoint.current) {
       const cp = getCheckpoint(run.arenaId, run.currentCheckpoint);
-      emitEvent('checkpoint.loaded',
+      track('checkpoint.loaded',
         { sequence: run.currentCheckpoint, phase: cp?.phase, crisisDay: cp?.crisisDay },
         {
           arenaId: run.arenaId,
@@ -152,7 +153,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         checkpointId: checkpointId(run.arenaId, d.checkpointSequence),
         simulationTimestamp: covidCrisisDayToISO(cp?.crisisDay),
       };
-      emitEvent('decision.committed', {
+      track('decision.committed', {
         actionCode: d.actionCode,
         thesisCode: d.thesisCode ?? null,
         confidence: d.confidence ?? null,
@@ -160,7 +161,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         modulesConsulted: d.modulesConsulted,
         behavioralFlags: d.behavioralFlags,
       }, ctx);
-      emitEvent('score.checkpoint.computed', {
+      track('score.checkpoint.computed', {
         scoreContribution: d.scoreContribution,
         quality: d.quality,
         playerScore: run.playerScore,
@@ -208,13 +209,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         result === 'PASSED' ? 'arena.passed' :
         'arena.failed';
       const ctx = { arenaId: run.arenaId };
-      emitEvent(evt, {
+      track(evt, {
         result,
         playerScore: run.playerScore,
         machineScore: run.machineScore,
         criticalFailure: run.criticalFailure,
       }, ctx);
-      emitEvent('score.run.computed', {
+      track('score.run.computed', {
         result,
         playerScore: run.playerScore,
         machineScore: run.machineScore,
@@ -241,7 +242,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const opponentPolicy = opponentPolicyFor(machineId);
     const deployed = deployedMachine();
     dispatch({ type: 'START_RUN', runId, seed: mintSeed(), arenaId, machineId, opponentPolicy, deployed });
-    emitEvent('arena.started', {
+    track('arena.started', {
       arenaId, machineId,
       opponentPolicy: opponentPolicy.kind,
       deployedMachineId: deployed?.machineId ?? null,
@@ -267,7 +268,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // one chain across the interruption.
     setRunTelemetryId(record.runId);
     dispatch({ type: 'RESUME_RUN', run: replayed });
-    emitEvent('session.resumed', {
+    track('session.resumed', {
       arenaId: record.arenaId,
       checkpoint: record.currentCheckpoint,
       decisions: record.decisions.length,

@@ -1,6 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
+import type { AcquisitionTouch } from '../attribution';
 import type { RefiRemote } from './refiApi';
 import type { RemoteResult, ProfileSnapshot } from './types';
 import { makeMirroredStore, hydrateFromRemote, wireMirrors, syncConflicts } from './mirroredStore';
@@ -45,13 +46,17 @@ beforeEach(() => {
 
 /** A remote whose every answer is scripted. Unscripted methods answer NETWORK_ERROR. */
 function fakeRemote(overrides: Partial<RefiRemote> = {}): RefiRemote & {
-  saved: { runs: RunRecord[]; machines: MachineVersionRecord[]; profiles: ProfileSnapshot[] };
+  saved: {
+    runs: RunRecord[]; machines: MachineVersionRecord[];
+    profiles: ProfileSnapshot[]; touches: AcquisitionTouch[];
+  };
 } {
   const down = async <T>(): Promise<RemoteResult<T>> => ({ kind: 'NETWORK_ERROR' });
   const saved = {
     runs: [] as RunRecord[],
     machines: [] as MachineVersionRecord[],
     profiles: [] as ProfileSnapshot[],
+    touches: [] as AcquisitionTouch[],
   };
   return {
     saved,
@@ -66,6 +71,7 @@ function fakeRemote(overrides: Partial<RefiRemote> = {}): RefiRemote & {
     loadMachineVersions: down,
     saveMachineVersion: async (_s, m) => { saved.machines.push(m); return { kind: 'VALUE', value: null }; },
     deliverEvent: async () => false,
+    saveAcquisitionTouch: async (_s, t) => { saved.touches.push(t); return true; },
     ...overrides,
   };
 }
