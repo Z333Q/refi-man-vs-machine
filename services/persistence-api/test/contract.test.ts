@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   HttpError, derivedMachineId, validSessionId, validateEvent, validateGuidance,
   validateMachineVersion, validateProfile, validateRunRecord, validateTape,
-  validateTip,
+  validateTip, validateTouch,
 } from '../src/contract.js';
 import { runFixture, runFixtureV2, machineFixture, profileFixture, sid } from './fixtures.js';
 
@@ -208,4 +208,78 @@ test('the session header is required and exactly ses_<20 hex>', () => {
   refused(() => validSessionId('ses_abc-123'), 400);
   refused(() => validSessionId('ses_' + 'a'.repeat(19)));
   assert.equal(validSessionId(sid(7)), sid(7));
+});
+
+// ─── Envelope version 2: experiment assignments ───────────────────────────────
+
+const ENVELOPE = {
+  event_id: 'evt_1', event_type: 'arena.started', event_version: 2,
+  occurred_at: '2026-09-14T12:00:00.000Z', session_id: 'ses_' + '0'.repeat(20),
+  payload: {},
+};
+
+test('a v1 envelope that says nothing about experiments stays silent', () => {
+  // Not coerced to {}. "Did not report" and "reported none" are different
+  // facts, and the column keeps them apart (0003).
+  const event = validateEvent({ ...ENVELOPE, event_version: 1 });
+  assert.equal(event.experiment_assignments, null);
+  assert.equal(event.event_version, 1, 'the sender version was rewritten');
+});
+
+test('a v2 envelope reporting no assignments says so explicitly', () => {
+  const event = validateEvent({ ...ENVELOPE, experiment_assignments: {} });
+  assert.deepEqual(event.experiment_assignments, {});
+});
+
+test('a v2 envelope carries a map of experiment to variant', () => {
+  const event = validateEvent({
+    ...ENVELOPE, experiment_assignments: { hero_copy: 'B', start_cta: 'A' },
+  });
+  assert.deepEqual(event.experiment_assignments, { hero_copy: 'B', start_cta: 'A' });
+});
+
+test('anything that is not a map of strings is refused, not coerced', () => {
+  for (const bad of [['A', 'B'], 42, 'control', null, { hero_copy: 7 }]) {
+    assert.throws(
+      () => validateEvent({ ...ENVELOPE, experiment_assignments: bad }),
+      HttpError,
+      `${JSON.stringify(bad)} was accepted as an experiment assignment map`);
+  }
+});
+
+// ─── Acquisition touches ──────────────────────────────────────────────────────
+
+test('a touch carries a kind the schema knows', () => {
+  assert.equal(validateTouch({ kind: 'first' }).kind, 'first');
+  assert.equal(validateTouch({ kind: 'meaningful' }).kind, 'meaningful');
+  assert.throws(() => validateTouch({ kind: 'bookmark' }), HttpError);
+  assert.throws(() => validateTouch({}), HttpError);
+});
+
+test('a touch may not name a user', () => {
+  // A touch belongs to a session and reaches a claimed player through
+  // game_sessions.user_id. Accepting an owner here would let a caller
+  // attribute somebody else's arrival.
+  assert.throws(
+    () => validateTouch({ kind: 'first', user_id: 'usr_1' }),
+    HttpError,
+    'a caller was allowed to attribute an arrival to a user');
+});
+
+test('a touch maps the client field names and bounds their length', () => {
+  const touch = validateTouch({
+    kind: 'meaningful', source: 'x', medium: 'social', campaign: 'launch',
+    content: 'hero', term: 'machine', referrer: 'https://news.example.com/story',
+    landingPath: '/alpha', occurredAt: '2026-09-14T12:00:00.000Z',
+  });
+  assert.equal(touch.landing_path, '/alpha');
+  assert.equal(touch.occurred_at, '2026-09-14T12:00:00.000Z');
+  assert.equal(touch.referrer, 'https://news.example.com/story');
+
+  // Unbounded free text on an unauthenticated route is a storage amplifier.
+  assert.throws(() => validateTouch({ kind: 'first', campaign: 'x'.repeat(513) }), HttpError);
+});
+
+test('a touch without a time is allowed and left for the server to stamp', () => {
+  assert.equal(validateTouch({ kind: 'first' }).occurred_at, null);
 });

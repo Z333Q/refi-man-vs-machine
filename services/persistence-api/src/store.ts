@@ -4,7 +4,7 @@ import {
   derivedMachineId, phaseOrdinal,
   type WireRunRecord, type WireDecision, type WireMachineVersion,
   type WireOpponentPolicy, type WireDeployedMachine,
-  type WireProfile, type WireTip, type WireTape, type WireEvent,
+  type WireProfile, type WireTip, type WireTape, type WireEvent, type WireTouch,
 } from './contract.js';
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -798,12 +798,54 @@ export async function insertEvent(pool: Pool, event: WireEvent): Promise<void> {
     `INSERT INTO game_events
        (event_id, event_type, event_version, occurred_at, alpha_player_id,
         formal_user_id, session_id, arena_id, run_id, checkpoint_id,
-        simulation_timestamp, correlation_id, causation_id, payload)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        simulation_timestamp, correlation_id, causation_id, payload,
+        experiment_assignments)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      ON CONFLICT (event_id) DO NOTHING`,
     [event.event_id, event.event_type, event.event_version, event.occurred_at,
      event.alpha_player_id, event.formal_user_id, event.session_id, event.arena_id,
      event.run_id, event.checkpoint_id, event.simulation_timestamp,
-     event.correlation_id, event.causation_id, event.payload],
+     event.correlation_id, event.causation_id, event.payload,
+     // null, not '{}', when the sender said nothing: a v1 envelope did not
+     // report assignments, and manufacturing an empty map here would erase
+     // the difference between "reported none" and "never looked".
+     event.experiment_assignments ?? null],
   );
+}
+
+/**
+ * Record one acquisition touch (§7.4).
+ *
+ * The session row is ensured first because a touch can land before anything
+ * else this session ever writes: the landing page is the first thing that
+ * happens, and a foreign key failure there would lose the arrival that
+ * explains every later event.
+ *
+ * Idempotent on the first touch. 0003 holds a partial unique index on
+ * kind='first', so a retry of the same arrival conflicts and is swallowed
+ * rather than raised: a repeated delivery of a fact that is already true is a
+ * success, not a client error. Meaningful touches are appended, since a
+ * session legitimately has several.
+ */
+export async function insertTouch(
+  pool: Pool, sessionId: string, touch: WireTouch,
+): Promise<void> {
+  await inTransaction(pool, async c => {
+    // The same authorization every other write uses, unweakened: the session
+    // row is created if this is the first thing it ever does, and a session
+    // that already belongs to an account is refused, because the continuity
+    // header proves nothing about who is holding it. Attribution for a
+    // claimed player needs a verified principal, which PR E owns.
+    await resolveSessionForWrite(c, sessionId);
+    await c.query(
+      `INSERT INTO acquisition_touches
+         (session_id, kind, source, medium, campaign, content, term, referrer,
+          landing_path, occurred_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10::timestamptz, now()))
+       ON CONFLICT DO NOTHING`,
+      [sessionId, touch.kind, touch.source, touch.medium, touch.campaign,
+       touch.content, touch.term, touch.referrer, touch.landing_path,
+       touch.occurred_at],
+    );
+  });
 }

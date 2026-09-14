@@ -1,5 +1,6 @@
 import type { PlayerProfile } from '../gameTypes';
 import type { EventEnvelope } from '../eventBuffer';
+import type { AcquisitionTouch } from '../attribution';
 import type { RunRecord } from '../runRecord';
 import type { MachineVersionRecord } from '../machineVersions';
 
@@ -90,4 +91,16 @@ export interface PersistencePort {
    * caller's durable buffer retries.
    */
   deliverEvent(envelope: EventEnvelope): Promise<boolean>;
+
+  /**
+   * Record how a session arrived (§7.4). Returns false on any failure,
+   * without throwing: attribution is measurement, and measurement must never
+   * be able to break a landing page.
+   *
+   * Session-scoped by design, and there is no user id in the call. A touch
+   * reaches a claimed player through game_sessions.user_id and is never
+   * copied onto the user, so claiming an identity cannot rewrite how the
+   * player arrived.
+   */
+  saveAcquisitionTouch(sessionId: string, touch: AcquisitionTouch): Promise<boolean>;
 }

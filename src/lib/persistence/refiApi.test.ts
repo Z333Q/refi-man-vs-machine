@@ -107,3 +107,31 @@ test('runs and machine versions address their own resource routes', async () => 
   assert.equal(calls[3].url, 'https://api.test/v1/machine-versions/MY%20MACHINE/3');
   assert.equal(calls[3].init?.method, 'PUT');
 });
+
+// ─── Acquisition touches (PR D) ───────────────────────────────────────────────
+
+test('a touch goes to the growth route with the session in the header, not the URL', async () => {
+  // An identifier in a query string ends up in logs, referrers and share
+  // links. Every other route already carries it as a header; so does this one.
+  respondWith(() => new Response(null, { status: 204 }));
+  const ok = await makeRefiRemote('https://api.test').saveAcquisitionTouch('ses_a', {
+    kind: 'first', source: 'x', campaign: 'launch',
+    landingPath: '/alpha', occurredAt: '2026-09-14T12:00:00.000Z',
+  });
+
+  assert.equal(ok, true);
+  assert.equal(calls[0].url, 'https://api.test/v1/growth/touches');
+  assert.equal(calls[0].init?.method, 'POST');
+  assert.equal(
+    (calls[0].init?.headers as Record<string, string>)['x-alpha-session'], 'ses_a');
+  const body = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+  assert.equal(body.kind, 'first');
+  assert.equal('user_id' in body, false, 'the client sent an owner for an arrival');
+});
+
+test('a touch the server refuses reports failure rather than throwing', async () => {
+  respondWith(() => new Response('nope', { status: 500 }));
+  assert.equal(
+    await makeRefiRemote('https://api.test').saveAcquisitionTouch('ses_a', { kind: 'first' }),
+    false);
+});

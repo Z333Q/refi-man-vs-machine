@@ -2,6 +2,7 @@ import type {
   PersistencePort, ProfileSnapshot, TipRecord, DailyTapeSubmission,
 } from './types';
 import type { EventEnvelope } from '../eventBuffer';
+import type { AcquisitionTouch } from '../attribution';
 import { listRunRecords, applyRemoteRun } from '../runRecord';
 import { listMachineVersions, applyRemoteMachineVersion } from '../machineVersions';
 
@@ -23,6 +24,7 @@ import { listMachineVersions, applyRemoteMachineVersion } from '../machineVersio
 const PROFILE_KEY = 'refi_profile';
 const TIP_STATE_KEY = 'refi_tip_states';
 const TAPE_KEY = 'refi_daily_tape';
+const TOUCH_KEY = 'refi_acquisition_touches';
 
 function read<T>(key: string): T | null {
   try {
@@ -116,4 +118,20 @@ export const localStore: PersistencePort = {
     // events survive until a real sink is configured.
     return false;
   },
+
+  async saveAcquisitionTouch(_sessionId: string, touch: AcquisitionTouch) {
+    // Kept on the device so a no-API build still knows how the player arrived,
+    // and so a later adoption has something to send. First touch wins here
+    // too: an existing first touch is never replaced, which mirrors the
+    // partial unique index the database enforces in 0003.
+    const held = read<AcquisitionTouch[]>(TOUCH_KEY) ?? [];
+    if (touch.kind === 'first' && held.some(t => t.kind === 'first')) return true;
+    write(TOUCH_KEY, [...held, touch]);
+    return true;
+  },
 };
+
+/** Touches recorded on this device, oldest first. Diagnostics and tests. */
+export function localAcquisitionTouches(): AcquisitionTouch[] {
+  return read<AcquisitionTouch[]>(TOUCH_KEY) ?? [];
+}

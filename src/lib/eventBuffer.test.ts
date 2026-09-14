@@ -205,3 +205,54 @@ test('the secret-key message names the two actions that matter', () => {
   assert.match(msg, /publishable/i);
   assert.match(msg, /rotate/i);
 });
+
+// ─── Envelope versions in the queue (PR D) ───────────────────────────────────
+//
+// The buffer is durable and offline, so the release that adds envelope v2 ships
+// into browsers that are already holding v1 envelopes. Those have to drain, in
+// order, unchanged: the queue's whole job is that nothing written before the
+// sink existed is lost by the sink arriving.
+
+test('v1 envelopes already queued drain unchanged after v2 exists', () => {
+  const storage = memory();
+  const legacy: EventEnvelope = {
+    event_id: 'evt_legacy', event_type: 'arena.started', event_version: 1,
+    occurred_at: '2026-09-14T11:00:00.000Z', payload: { arenaId: 'covid' },
+  };
+  const modern: EventEnvelope = {
+    event_id: 'evt_modern', event_type: 'arena.started', event_version: 2,
+    occurred_at: '2026-09-14T12:00:00.000Z', experiment_assignments: {},
+    payload: { arenaId: 'covid' },
+  };
+  bufferEvent(storage, legacy);
+  bufferEvent(storage, modern);
+
+  const drained = drainBuffer(storage);
+  assert.deepEqual(drained.map(e => e.event_id), ['evt_legacy', 'evt_modern'],
+    'the queue reordered or dropped an envelope across versions');
+  assert.equal(drained[0].event_version, 1, 'a queued v1 envelope was rewritten');
+  assert.equal('experiment_assignments' in drained[0], false,
+    'a v1 envelope gained an experiment claim while sitting in the queue');
+  assert.deepEqual(drained[1].experiment_assignments, {});
+});
+
+test('a v2 envelope keeps its causation chain through a failed delivery', () => {
+  // A failed flush puts the undelivered tail back, in order, so the chain a
+  // run reads as still reads as one chain after an outage.
+  const storage = memory();
+  const chain: EventEnvelope[] = [
+    { event_id: 'evt_a', event_version: 2, causation_id: null, correlation_id: 'run_1' },
+    { event_id: 'evt_b', event_version: 2, causation_id: 'evt_a', correlation_id: 'run_1' },
+    { event_id: 'evt_c', event_version: 2, causation_id: 'evt_b', correlation_id: 'run_1' },
+  ];
+  chain.forEach(e => bufferEvent(storage, e));
+
+  const drained = drainBuffer(storage);
+  // First delivery succeeds, the rest fail and go back.
+  restoreBuffer(storage, drained.slice(1));
+
+  const again = readBuffer(storage);
+  assert.deepEqual(again.map(e => e.event_id), ['evt_b', 'evt_c']);
+  assert.equal(again[0].causation_id, 'evt_a', 'the chain lost its link across the outage');
+  assert.equal(again[1].causation_id, 'evt_b');
+});

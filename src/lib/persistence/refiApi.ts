@@ -2,6 +2,7 @@ import type {
   ProfileSnapshot, TipRecord, DailyTapeSubmission, RemoteResult,
 } from './types';
 import type { EventEnvelope } from '../eventBuffer';
+import type { AcquisitionTouch } from '../attribution';
 import type { RunRecord } from '../runRecord';
 import type { MachineVersionRecord } from '../machineVersions';
 
@@ -36,6 +37,7 @@ export interface RefiRemote {
   loadMachineVersions(sessionId: string): Promise<RemoteResult<MachineVersionRecord[]>>;
   saveMachineVersion(sessionId: string, record: MachineVersionRecord): Promise<RemoteResult<null>>;
   deliverEvent(envelope: EventEnvelope): Promise<boolean>;
+  saveAcquisitionTouch(sessionId: string, touch: AcquisitionTouch): Promise<boolean>;
 }
 
 /** Default bound on any single remote request. A request that never answers
@@ -145,6 +147,18 @@ export function makeRefiRemote(
         sessionId,
         { method: 'PUT', body: JSON.stringify(record) },
       );
+    },
+
+    async saveAcquisitionTouch(sessionId: string, touch: AcquisitionTouch) {
+      // Session in the header, never in the body or the path: an identifier in
+      // a URL ends up in logs, referrers and share links. The body carries
+      // only fields 0003 can store, and no user id — the server resolves a
+      // claimed player through game_sessions, if there is one.
+      const answer = await call<null>('/v1/growth/touches', sessionId, {
+        method: 'POST',
+        body: JSON.stringify(touch),
+      });
+      return answer.kind === 'VALUE';
     },
 
     async deliverEvent(envelope: EventEnvelope) {

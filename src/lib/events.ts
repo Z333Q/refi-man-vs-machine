@@ -15,6 +15,7 @@
 // sees the future" auditable (§69 / §4.2).
 
 import { getSessionId } from './identity';
+import { parseAttribution } from './attribution';
 import { persistence } from './persistence';
 import {
   bufferEvent, drainBuffer, restoreBuffer, sinkConfigStatus, describeSinkStatus,
@@ -52,7 +53,12 @@ export type GameEventType =
   | 'gesture.cancelled'
   | 'gesture.dead_zone_released'
   | 'gesture.committed'
-  | 'gesture.focused_controls_opened';
+  | 'gesture.focused_controls_opened'
+  // Growth telemetry (PR D). campaign.attributed is the one genuinely new
+  // fact: an arrival that names its acquisition source. The rest of the
+  // funnel is already emitted above under names whose semantics are correct,
+  // and renaming them would orphan the records already written under them.
+  | 'campaign.attributed';
 
 // ─── Marketing-funnel attribution (§1.1 one-way bridge, §7) ──────────────────
 // First-touch attribution from the ReFi marketing funnel: UTM params plus a
@@ -81,16 +87,22 @@ export function captureFunnelAttribution(): FunnelAttribution {
   const existing = getFunnelAttribution();
   if (existing.capturedAt) return existing;
 
-  const params = new URLSearchParams(window.location.search);
-  const val = (k: string) => params.get(k) ?? undefined;
+  // The rules live in attribution.ts, which owns no browser and no clock. This
+  // function is the browser half and nothing else: read the environment, hand
+  // it over, store the answer.
+  const { facts } = parseAttribution({
+    url: window.location.href,
+    referrer: typeof document === 'undefined' ? null : document.referrer,
+    occurredAt: new Date().toISOString(),
+  });
   const attr: FunnelAttribution = {
-    source: val('utm_source'),
-    medium: val('utm_medium'),
-    campaign: val('utm_campaign'),
-    content: val('utm_content'),
-    term: val('utm_term'),
-    ref: val('ref') ?? val('aid'),
-    landing: window.location.pathname,
+    source: facts.source,
+    medium: facts.medium,
+    campaign: facts.campaign,
+    content: facts.content,
+    term: facts.term,
+    ref: facts.ref,
+    landing: facts.landingPath,
     capturedAt: new Date().toISOString(),
   };
   try {
@@ -118,6 +130,21 @@ interface EmitOptions {
   simulationTimestamp?: string | null;
   correlationId?: string | null;
   alphaPlayerId?: string | null;
+  /**
+   * Envelope version. 1 is the legacy envelope and stays the default, so
+   * events already buffered in browsers keep their meaning and no historical
+   * row is retroactively reinterpreted. 2 adds experiment_assignments.
+   */
+  version?: 1 | 2;
+  /**
+   * Which experiment variants the player was in when this happened.
+   *
+   * Only carried on version 2. An empty object is a claim, not a blank: it
+   * says this emitter looked and found none, which is different from a
+   * version 1 emitter that never looked. The database keeps that distinction
+   * (0003: NULL versus '{}').
+   */
+  experimentAssignments?: Record<string, string>;
 }
 
 function mkId(prefix: string): string {
@@ -245,10 +272,14 @@ export async function emitEvent(
 ): Promise<void> {
   const eventId = mkId('evt');
   const runId = opts.runId ?? currentRunId;
+  const version = opts.version ?? 1;
   const envelope = {
     event_id: eventId,
     event_type: eventType,
-    event_version: 1,
+    event_version: version,
+    ...(version >= 2
+      ? { experiment_assignments: opts.experimentAssignments ?? {} }
+      : {}),
     occurred_at: new Date().toISOString(),
     alpha_player_id: opts.alphaPlayerId ?? null,
     formal_user_id: null,
