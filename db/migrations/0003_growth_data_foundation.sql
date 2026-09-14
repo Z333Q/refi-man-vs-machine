@@ -43,31 +43,10 @@ BEGIN;
 -- Reserved names are deliberately not a CHECK. The list is policy that
 -- changes without a deploy, let alone a migration, and it belongs to the API
 -- (PR E).
-
-CREATE TABLE IF NOT EXISTS public_player_profiles (
-  user_id       uuid PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
-  handle        text NOT NULL UNIQUE,
-  -- Separate from the handle and Unicode-capable on purpose: the handle is an
-  -- address, the display name is a name. It is not unique, and its policy
-  -- (length, normalisation, impersonation) is API-side for the same reason
-  -- the reserved list is.
-  display_name  text,
-  avatar_url    text,
-  bio           text,
-  -- 'friends' is absent until a friend or crew relationship exists and the
-  -- API can enforce it. Shipping an authorization state with no authorization
-  -- semantics would be a promise the server cannot keep.
-  visibility    text NOT NULL DEFAULT 'public',
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT public_player_profiles_handle_check
-    CHECK (handle ~ '^[a-z0-9][a-z0-9_]{1,18}[a-z0-9]$'),
-  CONSTRAINT public_player_profiles_visibility_check
-    CHECK (visibility IN ('public', 'private'))
-);
-
-COMMENT ON TABLE public_player_profiles IS
-  'Durable public identity for a claimed player. Cascades with the user; the handle reservation in player_handle_history does not.';
+--
+-- The reservation table comes first because the profile depends on it. That
+-- ordering is the invariant: a name is reserved permanently, and only then
+-- can somebody be seen to hold it.
 
 -- Every handle a person has ever held, and the reason this table is separate
 -- from the profile: a retired handle is never reassigned, during or after the
@@ -88,7 +67,11 @@ CREATE TABLE IF NOT EXISTS player_handle_history (
   held_from    timestamptz NOT NULL DEFAULT now(),
   released_at  timestamptz,
   CONSTRAINT player_handle_history_handle_check
-    CHECK (handle ~ '^[a-z0-9][a-z0-9_]{1,18}[a-z0-9]$')
+    CHECK (handle ~ '^[a-z0-9][a-z0-9_]{1,18}[a-z0-9]$'),
+  -- Redundant as uniqueness, since handle is already the primary key. It
+  -- exists to be a foreign-key target: the profile references the holder of
+  -- a reservation, not merely the existence of one. See the key below.
+  CONSTRAINT player_handle_history_holder_unique UNIQUE (user_id, handle)
 );
 
 COMMENT ON TABLE player_handle_history IS
@@ -108,6 +91,63 @@ CREATE INDEX IF NOT EXISTS player_handle_history_user_idx
 CREATE UNIQUE INDEX IF NOT EXISTS player_handle_history_one_current_idx
   ON player_handle_history (user_id)
   WHERE released_at IS NULL AND user_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS public_player_profiles (
+  user_id       uuid PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
+  -- UNIQUE keeps two people off one name. The foreign key below keeps one
+  -- person off a name nobody reserved.
+  handle        text NOT NULL UNIQUE,
+  -- Separate from the handle and Unicode-capable on purpose: the handle is an
+  -- address, the display name is a name. It is not unique, and its policy
+  -- (length, normalisation, impersonation) is API-side for the same reason
+  -- the reserved list is.
+  display_name  text,
+  avatar_url    text,
+  bio           text,
+  -- 'friends' is absent until a friend or crew relationship exists and the
+  -- API can enforce it. Shipping an authorization state with no authorization
+  -- semantics would be a promise the server cannot keep.
+  visibility    text NOT NULL DEFAULT 'public',
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT public_player_profiles_handle_check
+    CHECK (handle ~ '^[a-z0-9][a-z0-9_]{1,18}[a-z0-9]$'),
+  CONSTRAINT public_player_profiles_visibility_check
+    CHECK (visibility IN ('public', 'private')),
+  -- The invariant, not a convenience, and it is deliberately on the pair
+  -- rather than on the handle alone.
+  --
+  -- Without any key here the two tables agree only for as long as the
+  -- application remembers to write both, and the failure is silent and
+  -- delayed: a claim that skipped the reservation looks perfectly healthy
+  -- until the account is deleted, at which point the profile cascades away,
+  -- no reservation was ever written, and a name somebody held for years is
+  -- free again.
+  --
+  -- A key on the handle alone would close that and leave a second door open.
+  -- After an account is deleted its reservation survives with user_id NULL,
+  -- so the row still exists, and a key that only asked "is this handle
+  -- reserved" would let the next person wear a retired name without ever
+  -- holding it. Referencing (user_id, handle) asks the question that
+  -- matters: is this handle reserved BY THIS PERSON. An emptied reservation
+  -- matches nobody, which is exactly what retired means.
+  --
+  -- No ON DELETE action on purpose: a reservation cannot be deleted while a
+  -- live profile still uses it. Account deletion does not need one, because
+  -- app_users empties the reservation rather than removing it, and the
+  -- profile has already cascaded away by the time this key is rechecked at
+  -- the end of the statement.
+  CONSTRAINT public_player_profiles_handle_reserved_fkey
+    FOREIGN KEY (user_id, handle)
+    REFERENCES player_handle_history (user_id, handle)
+);
+
+COMMENT ON TABLE public_player_profiles IS
+  'Durable public identity for a claimed player. Cascades with the user; the handle reservation in player_handle_history does not.';
+
+-- The claim and the rename both run reservation first, profile second, in one
+-- transaction (PR E). The foreign key makes that ordering mandatory rather
+-- than remembered.
 
 -- ─── Attribution and campaigns ───────────────────────────────────────────────
 
@@ -228,5 +268,16 @@ CREATE INDEX IF NOT EXISTS outbox_events_pending_idx
 -- loses data exactly when it is most interesting.
 ALTER TABLE game_events
   ADD COLUMN IF NOT EXISTS experiment_assignments jsonb;
+
+-- The ruled contract is a mapping of experiment id to variant. jsonb accepts
+-- any JSON value, so without this an array, a number or a bare string is a
+-- legal envelope, and the writer that produced it would be found by whoever
+-- later tried to read the column as a map.
+ALTER TABLE game_events
+  DROP CONSTRAINT IF EXISTS game_events_experiment_assignments_object;
+ALTER TABLE game_events
+  ADD CONSTRAINT game_events_experiment_assignments_object
+  CHECK (experiment_assignments IS NULL
+         OR jsonb_typeof(experiment_assignments) = 'object');
 
 COMMIT;

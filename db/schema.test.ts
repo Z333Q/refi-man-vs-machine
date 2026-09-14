@@ -309,6 +309,13 @@ describe('growth data foundation', { skip: DATABASE_URL ? false : 'DATABASE_URL 
     }
   }
 
+  /** Reserve a handle permanently, which is what has to happen before anyone
+   *  can be seen holding it. The order is the invariant, so the tests use it. */
+  async function reserve(c: Client, handle: string, user: string | null = null) {
+    await c.query(`INSERT INTO player_handle_history (handle, user_id) VALUES ($1, $2)`,
+      [handle, user]);
+  }
+
   test('the handle law is the column, not a convention', async () => {
     await inRollback(async c => {
       const user = await newUser(c);
@@ -329,6 +336,10 @@ describe('growth data foundation', { skip: DATABASE_URL ? false : 'DATABASE_URL 
         await rejects(c, () => claim(bad), /handle_check/, `"${bad}" was accepted as a handle`);
       }
 
+      // The CHECK fires before the foreign key does, so every rejection above
+      // is the handle law rather than a missing reservation. The valid one
+      // then needs the reservation, which is the point of the next test.
+      await reserve(c, 'z333q', user);
       await claim('z333q');
       const { rows } = await c.query(`SELECT handle FROM public_player_profiles WHERE user_id=$1`,
         [user]);
@@ -339,6 +350,7 @@ describe('growth data foundation', { skip: DATABASE_URL ? false : 'DATABASE_URL 
   test('two people cannot hold the same handle', async () => {
     await inRollback(async c => {
       const [a, b] = [await newUser(c), await newUser(c)];
+      await reserve(c, 'taken', a);
       await c.query(`INSERT INTO public_player_profiles (user_id, handle) VALUES ($1,'taken')`, [a]);
       await rejects(c,
         () => c.query(`INSERT INTO public_player_profiles (user_id, handle) VALUES ($1,'taken')`, [b]),
@@ -349,6 +361,10 @@ describe('growth data foundation', { skip: DATABASE_URL ? false : 'DATABASE_URL 
   test('visibility ships with only the states the API can enforce', async () => {
     await inRollback(async c => {
       const user = await newUser(c);
+      // Only the accepted handle needs a reservation: the visibility CHECK is
+      // evaluated before the foreign key, so the rejection below is about
+      // visibility either way.
+      await reserve(c, 'quiet', user);
       await rejects(c,
         () => c.query(`INSERT INTO public_player_profiles (user_id, handle, visibility)
                        VALUES ($1, 'friendly', 'friends')`, [user]),
@@ -360,38 +376,67 @@ describe('growth data foundation', { skip: DATABASE_URL ? false : 'DATABASE_URL 
     });
   });
 
-  // The architectural invariant, not an implementation detail: the profile is
-  // the person's page and goes when they do, the handle is a reservation and
-  // stays. Cascading the history too would release a retired name to the next
-  // person who asked for it.
-  test('a deleted account takes its profile and leaves its handle reserved', async () => {
-    await inRollback(async c => {
-      const user = await newUser(c);
-      await c.query(`INSERT INTO public_player_profiles (user_id, handle) VALUES ($1,'departed')`,
-        [user]);
-      await c.query(`INSERT INTO player_handle_history (handle, user_id) VALUES ('departed', $1)`,
-        [user]);
+  // The architectural invariant, not an implementation detail, and the reason
+  // the profile holds a foreign key into the reservation table.
+  //
+  // Without that key the two tables agree only while the application
+  // remembers to write both, and the failure is silent and delayed: a claim
+  // that skipped the reservation looks healthy for years, and the name is
+  // lost at the moment the account is deleted, when the profile cascades away
+  // and no reservation was ever written. So the lifecycle is checked end to
+  // end: a handle cannot be worn before it is reserved, the profile goes with
+  // the account, and the reservation never does.
+  test('a handle is reserved before it is worn, and stays reserved after the account is gone',
+    async () => {
+      await inRollback(async c => {
+        const user = await newUser(c);
 
-      await c.query(`DELETE FROM app_users WHERE id = $1`, [user]);
+        // A. A profile for a handle nobody reserved is refused outright.
+        await rejects(c,
+          () => c.query(`INSERT INTO public_player_profiles (user_id, handle)
+                         VALUES ($1, 'valuable')`, [user]),
+          /foreign key|violates/i,
+          'a live profile was allowed to wear a handle that was never reserved');
 
-      const { rows: profiles } = await c.query(
-        `SELECT count(*)::int AS n FROM public_player_profiles WHERE handle = 'departed'`);
-      assert.equal(profiles[0].n, 0, 'the public profile outlived the account');
+        // B. Reserve first, then the same claim succeeds. This is the order
+        //    PR E's claim transaction has to run in, now enforced.
+        await reserve(c, 'valuable', user);
+        await c.query(`INSERT INTO public_player_profiles (user_id, handle)
+                       VALUES ($1, 'valuable')`, [user]);
 
-      const { rows: history } = await c.query(
-        `SELECT user_id, released_at FROM player_handle_history WHERE handle = 'departed'`);
-      assert.equal(history.length, 1, 'the handle reservation was deleted with the account');
-      assert.equal(history[0].user_id, null, 'the reservation still names a user that is gone');
+        // And the reservation cannot be pulled out from under the live profile.
+        await rejects(c,
+          () => c.query(`DELETE FROM player_handle_history WHERE handle = 'valuable'`),
+          /foreign key|violates/i,
+          'a reservation was deleted while a profile still wore it');
 
-      // And it is still reserved against the next claimant.
-      const next = await newUser(c);
-      await rejects(c,
-        () => c.query(`INSERT INTO player_handle_history (handle, user_id) VALUES ('departed', $1)`,
-          [next]),
-        /duplicate key|unique/i,
-        'a retired handle was reassigned');
+        // C. Deleting the account takes the page and leaves the name.
+        await c.query(`DELETE FROM app_users WHERE id = $1`, [user]);
+
+        const { rows: profiles } = await c.query(
+          `SELECT count(*)::int AS n FROM public_player_profiles WHERE handle = 'valuable'`);
+        assert.equal(profiles[0].n, 0, 'the public profile outlived the account');
+
+        const { rows: history } = await c.query(
+          `SELECT user_id, released_at FROM player_handle_history WHERE handle = 'valuable'`);
+        assert.equal(history.length, 1, 'the handle reservation was deleted with the account');
+        assert.equal(history[0].user_id, null, 'the reservation still names a user that is gone');
+
+        // And it is still reserved against the next claimant, who cannot
+        // reserve it and therefore cannot wear it either.
+        const next = await newUser(c);
+        await rejects(c,
+          () => c.query(`INSERT INTO player_handle_history (handle, user_id) VALUES ('valuable', $1)`,
+            [next]),
+          /duplicate key|unique/i,
+          'a retired handle was reassigned');
+        await rejects(c,
+          () => c.query(`INSERT INTO public_player_profiles (user_id, handle)
+                         VALUES ($1, 'valuable')`, [next]),
+          /duplicate key|unique|foreign key|violates/i,
+          'a retired handle was worn by somebody else');
+      });
     });
-  });
 
   test('one account cannot hold two current handles', async () => {
     await inRollback(async c => {
@@ -405,13 +450,26 @@ describe('growth data foundation', { skip: DATABASE_URL ? false : 'DATABASE_URL 
         'a rename left two live reservations behind');
 
       // A rename closes the old row and opens the new one, in one transaction.
+      await c.query(`INSERT INTO public_player_profiles (user_id, handle) VALUES ($1,'first')`,
+        [user]);
       await c.query(`UPDATE player_handle_history SET released_at = now() WHERE handle = 'first'`);
       await c.query(`INSERT INTO player_handle_history (handle, user_id) VALUES ('second', $1)`,
         [user]);
+      await c.query(`UPDATE public_player_profiles SET handle = 'second' WHERE user_id = $1`,
+        [user]);
+
       const { rows } = await c.query(
         `SELECT count(*)::int AS n FROM player_handle_history
          WHERE user_id = $1 AND released_at IS NULL`, [user]);
       assert.equal(rows[0].n, 1);
+
+      // The old name is kept, not released: it still belongs to this person,
+      // which is what a redirect from the prior /@handle resolves through.
+      const { rows: old } = await c.query(
+        `SELECT user_id, released_at IS NOT NULL AS released
+         FROM player_handle_history WHERE handle = 'first'`);
+      assert.equal(old[0].user_id, user);
+      assert.equal(old[0].released, true);
     });
   });
 
@@ -553,6 +611,20 @@ describe('growth data foundation', { skip: DATABASE_URL ? false : 'DATABASE_URL 
       const { rows: reported } = await c.query(
         `SELECT experiment_assignments FROM game_events WHERE event_id = $1`, ['evt_post_d']);
       assert.deepEqual(reported[0].experiment_assignments, { hero_copy: 'B' });
+
+      // The ruled contract is a map of experiment id to variant. jsonb would
+      // otherwise accept an array, a number or a bare string, and the writer
+      // that produced one would be found by whoever later read the column.
+      for (const notAMap of ['["A","B"]', '42', '"control"', 'null']) {
+        await rejects(c,
+          () => c.query(
+            `INSERT INTO game_events (event_id, event_type, event_version, occurred_at,
+                                      experiment_assignments)
+             VALUES ($1, 'arena.started', 1, now(), $2::jsonb)`,
+            [`evt_bad_${notAMap.length}`, notAMap]),
+          /experiment_assignments_object/,
+          `${notAMap} was accepted as an experiment assignment map`);
+      }
     });
   });
 });
