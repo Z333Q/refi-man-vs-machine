@@ -48,6 +48,41 @@ anything that matters resolves the principal from a verified token and uses
 `app_users.id`; trusting the header instead would let any caller name any
 session.
 
+## Growth foundation (`0003`)
+
+Six tables that no screen reads yet. They exist before the features that need
+them so nothing has to be reconstructed from memory later.
+
+```
+public_player_profiles   the durable public identity of a claimed player
+  └── cascades with the user
+player_handle_history    every handle ever held. Never cascades.
+growth_campaigns         how a link was minted
+acquisition_touches      how a session arrived (first) and what made it stick
+experiment_assignments   sticky per session, so claiming never moves a cohort
+outbox_events            work that must survive the process that should do it
+```
+
+Two rules in that list are not obvious from the DDL:
+
+- **A retired handle is never reassigned.** `player_handle_history.handle` is
+  the primary key and it is permanent; `user_id` is nullable and
+  `ON DELETE SET NULL`. Deleting an account empties the row without releasing
+  the name, which is what lets a dead `/@handle` answer with a neutral
+  unavailable response instead of being handed to the next person who asks.
+  The profile itself cascades; the reservation does not.
+- **Attribution is session-scoped and never copied to the user.** It resolves
+  through `game_sessions.user_id`, so claiming an identity cannot rewrite how
+  the player arrived. `acquisition_touches` deliberately has no `user_id`
+  column, and a partial unique index makes a session unable to acquire a
+  second first touch.
+
+Migrations are owned per PR (`docs/REFI_ALPHA_GROWTH_ARCHITECTURE.md` §7), so
+a column whose target table arrives later is added by `ALTER` in the migration
+that creates that target, never written forward into an earlier file.
+`npm run schema-drift-gate` fails on any foreign key that does not resolve in
+migration order.
+
 ## Authorization lives in the API
 
 There are no row-level policies. The service resolves the principal, maps it to

@@ -93,9 +93,49 @@ function walk(dir, out = []) {
   return out;
 }
 
+/**
+ * Every foreign key, checked against the order the migrations actually run in.
+ *
+ * The growth schema arrives across five migrations owned by five different
+ * PRs, and the tempting way to write them is to copy the target DDL into the
+ * file that creates the table. That produces a foreign key to a table two
+ * migrations in the future: it reads correctly, it matches the architecture
+ * document, and it cannot be applied. A fresh database is the case that
+ * catches it, and a fresh database is the case nobody runs locally.
+ *
+ * File granularity, not statement granularity: the cross-migration law is
+ * about which file owns which table. A forward reference inside one file is
+ * caught by PostgreSQL itself, on the first apply.
+ */
+function foreignKeyOrderFindings() {
+  const created = new Set();
+  const bad = [];
+  for (const file of readdirSync(SCHEMA_DIR).filter(f => f.endsWith('.sql')).sort()) {
+    const sql = stripComments(readFileSync(join(SCHEMA_DIR, file), 'utf8'));
+    for (const m of sql.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?([a-z_][a-z0-9_]*)/gi)) {
+      created.add(m[1].toLowerCase());
+    }
+    for (const m of sql.matchAll(/REFERENCES\s+(?:public\.)?([a-z_][a-z0-9_]*)/gi)) {
+      const target = m[1].toLowerCase();
+      if (!created.has(target)) bad.push({ file, target });
+    }
+  }
+  return bad;
+}
+
 const tables = schemaTables();
 if (tables.size === 0) {
   console.error('schema-drift-gate FAILED: no tables found in db/migrations');
+  process.exit(1);
+}
+
+const forwardKeys = foreignKeyOrderFindings();
+if (forwardKeys.length > 0) {
+  console.error('schema-drift-gate FAILED: a migration holds a foreign key to a table no earlier migration creates.\n');
+  for (const f of forwardKeys) {
+    console.error(`  ${f.file}  REFERENCES ${f.target}  (created later, or never)`);
+  }
+  console.error('\nAdd the column by ALTER in the migration that creates its target.');
   process.exit(1);
 }
 
@@ -131,4 +171,4 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log(`schema-drift-gate OK — every table referenced by a service exists in the schema (${tables.size} tables)`);
+console.log(`schema-drift-gate OK — every table referenced by a service exists in the schema (${tables.size} tables), and every foreign key resolves in migration order`);

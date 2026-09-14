@@ -261,3 +261,416 @@ describe('founding schema', { skip: DATABASE_URL ? false : 'DATABASE_URL not set
     }
   });
 });
+
+// ─── Growth data foundation (0003) ───────────────────────────────────────────
+//
+// The growth schema makes four promises the DDL cannot keep on its own: that a
+// handle is spelled one way, that a retired handle is never handed to anybody
+// else, that a session has exactly one origin story, and that an experiment
+// cohort is decided once. Each is checked here against a real database,
+// because each is enforced by a constraint whose absence would be silent.
+
+describe('growth data foundation', { skip: DATABASE_URL ? false : 'DATABASE_URL not set' }, () => {
+  let db: Client;
+
+  before(async () => {
+    db = new Client({ connectionString: DATABASE_URL });
+    await db.connect();
+    await db.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;');
+    await db.query(migrationsSql());
+  });
+
+  after(async () => { await db?.end(); });
+
+  async function inRollback(fn: (c: Client) => Promise<void>) {
+    await db.query('BEGIN');
+    try { await fn(db); } finally { await db.query('ROLLBACK'); }
+  }
+
+  async function newUser(c: Client): Promise<string> {
+    const { rows } = await c.query(`INSERT INTO app_users DEFAULT VALUES RETURNING id`);
+    return rows[0].id;
+  }
+
+  /**
+   * Expect one statement to be rejected, without poisoning the block around it.
+   *
+   * A failed statement aborts the whole transaction in PostgreSQL, so a test
+   * that checks several constraints in one rollback block would see every
+   * later statement fail with 25P02 and pass or fail for the wrong reason.
+   * Each expected failure gets its own savepoint.
+   */
+  async function rejects(c: Client, run: () => Promise<unknown>, re: RegExp, msg?: string) {
+    await c.query('SAVEPOINT expect_failure');
+    try {
+      await assert.rejects(run(), re, msg);
+    } finally {
+      await c.query('ROLLBACK TO SAVEPOINT expect_failure');
+    }
+  }
+
+  /** Reserve a handle permanently, which is what has to happen before anyone
+   *  can be seen holding it. The order is the invariant, so the tests use it. */
+  async function reserve(c: Client, handle: string, user: string | null = null) {
+    await c.query(`INSERT INTO player_handle_history (handle, user_id) VALUES ($1, $2)`,
+      [handle, user]);
+  }
+
+  test('the handle law is the column, not a convention', async () => {
+    await inRollback(async c => {
+      const user = await newUser(c);
+      const claim = (handle: string) =>
+        c.query(`INSERT INTO public_player_profiles (user_id, handle) VALUES ($1, $2)`,
+          [user, handle]);
+
+      for (const bad of [
+        'ab',                    // shorter than three
+        'a'.repeat(21),          // longer than twenty
+        'Z333Q',                 // uppercase: canonical storage is lowercase
+        '_leading',              // must start alphanumeric
+        'trailing_',             // must end alphanumeric
+        'has space',
+        'has-hyphen',
+        'émoji_free',
+      ]) {
+        await rejects(c, () => claim(bad), /handle_check/, `"${bad}" was accepted as a handle`);
+      }
+
+      // The CHECK fires before the foreign key does, so every rejection above
+      // is the handle law rather than a missing reservation. The valid one
+      // then needs the reservation, which is the point of the next test.
+      await reserve(c, 'z333q', user);
+      await claim('z333q');
+      const { rows } = await c.query(`SELECT handle FROM public_player_profiles WHERE user_id=$1`,
+        [user]);
+      assert.equal(rows[0].handle, 'z333q');
+    });
+  });
+
+  test('two people cannot hold the same handle', async () => {
+    await inRollback(async c => {
+      const [a, b] = [await newUser(c), await newUser(c)];
+      await reserve(c, 'taken', a);
+      await c.query(`INSERT INTO public_player_profiles (user_id, handle) VALUES ($1,'taken')`, [a]);
+      await rejects(c,
+        () => c.query(`INSERT INTO public_player_profiles (user_id, handle) VALUES ($1,'taken')`, [b]),
+        /duplicate key|unique/i);
+    });
+  });
+
+  test('visibility ships with only the states the API can enforce', async () => {
+    await inRollback(async c => {
+      const user = await newUser(c);
+      // Only the accepted handle needs a reservation: the visibility CHECK is
+      // evaluated before the foreign key, so the rejection below is about
+      // visibility either way.
+      await reserve(c, 'quiet', user);
+      await rejects(c,
+        () => c.query(`INSERT INTO public_player_profiles (user_id, handle, visibility)
+                       VALUES ($1, 'friendly', 'friends')`, [user]),
+        /visibility_check/,
+        'friends visibility shipped before a friend graph existed');
+
+      await c.query(`INSERT INTO public_player_profiles (user_id, handle, visibility)
+                     VALUES ($1, 'quiet', 'private')`, [user]);
+    });
+  });
+
+  // The architectural invariant, not an implementation detail, and the reason
+  // the profile holds a foreign key into the reservation table.
+  //
+  // Without that key the two tables agree only while the application
+  // remembers to write both, and the failure is silent and delayed: a claim
+  // that skipped the reservation looks healthy for years, and the name is
+  // lost at the moment the account is deleted, when the profile cascades away
+  // and no reservation was ever written. So the lifecycle is checked end to
+  // end: a handle cannot be worn before it is reserved, the profile goes with
+  // the account, and the reservation never does.
+  test('a handle is reserved before it is worn, and stays reserved after the account is gone',
+    async () => {
+      await inRollback(async c => {
+        const user = await newUser(c);
+
+        // A. A profile for a handle nobody reserved is refused outright.
+        await rejects(c,
+          () => c.query(`INSERT INTO public_player_profiles (user_id, handle)
+                         VALUES ($1, 'valuable')`, [user]),
+          /foreign key|violates/i,
+          'a live profile was allowed to wear a handle that was never reserved');
+
+        // B. Reserve first, then the same claim succeeds. This is the order
+        //    PR E's claim transaction has to run in, now enforced.
+        await reserve(c, 'valuable', user);
+        await c.query(`INSERT INTO public_player_profiles (user_id, handle)
+                       VALUES ($1, 'valuable')`, [user]);
+
+        // And the reservation cannot be pulled out from under the live profile.
+        await rejects(c,
+          () => c.query(`DELETE FROM player_handle_history WHERE handle = 'valuable'`),
+          /foreign key|violates/i,
+          'a reservation was deleted while a profile still wore it');
+
+        // C. Deleting the account takes the page and leaves the name.
+        await c.query(`DELETE FROM app_users WHERE id = $1`, [user]);
+
+        const { rows: profiles } = await c.query(
+          `SELECT count(*)::int AS n FROM public_player_profiles WHERE handle = 'valuable'`);
+        assert.equal(profiles[0].n, 0, 'the public profile outlived the account');
+
+        const { rows: history } = await c.query(
+          `SELECT user_id, released_at FROM player_handle_history WHERE handle = 'valuable'`);
+        assert.equal(history.length, 1, 'the handle reservation was deleted with the account');
+        assert.equal(history[0].user_id, null, 'the reservation still names a user that is gone');
+
+        // And it is still reserved against the next claimant, who cannot
+        // reserve it and therefore cannot wear it either.
+        const next = await newUser(c);
+        await rejects(c,
+          () => c.query(`INSERT INTO player_handle_history (handle, user_id) VALUES ('valuable', $1)`,
+            [next]),
+          /duplicate key|unique/i,
+          'a retired handle was reassigned');
+        await rejects(c,
+          () => c.query(`INSERT INTO public_player_profiles (user_id, handle)
+                         VALUES ($1, 'valuable')`, [next]),
+          /duplicate key|unique|foreign key|violates/i,
+          'a retired handle was worn by somebody else');
+      });
+    });
+
+  test('one account cannot hold two current handles', async () => {
+    await inRollback(async c => {
+      const user = await newUser(c);
+      await c.query(`INSERT INTO player_handle_history (handle, user_id) VALUES ('first', $1)`,
+        [user]);
+      await rejects(c,
+        () => c.query(`INSERT INTO player_handle_history (handle, user_id) VALUES ('second', $1)`,
+          [user]),
+        /one_current/,
+        'a rename left two live reservations behind');
+
+      // A rename closes the old row and opens the new one, in one transaction.
+      await c.query(`INSERT INTO public_player_profiles (user_id, handle) VALUES ($1,'first')`,
+        [user]);
+      await c.query(`UPDATE player_handle_history SET released_at = now() WHERE handle = 'first'`);
+      await c.query(`INSERT INTO player_handle_history (handle, user_id) VALUES ('second', $1)`,
+        [user]);
+      await c.query(`UPDATE public_player_profiles SET handle = 'second' WHERE user_id = $1`,
+        [user]);
+
+      const { rows } = await c.query(
+        `SELECT count(*)::int AS n FROM player_handle_history
+         WHERE user_id = $1 AND released_at IS NULL`, [user]);
+      assert.equal(rows[0].n, 1);
+
+      // The old name is kept, not released: it still belongs to this person,
+      // which is what a redirect from the prior /@handle resolves through.
+      const { rows: old } = await c.query(
+        `SELECT user_id, released_at IS NOT NULL AS released
+         FROM player_handle_history WHERE handle = 'first'`);
+      assert.equal(old[0].user_id, user);
+      assert.equal(old[0].released, true);
+    });
+  });
+
+  test('a session has one first touch and as many meaningful ones as it earns', async () => {
+    await inRollback(async c => {
+      await c.query(`INSERT INTO game_sessions (id) VALUES ('ses_touch')`);
+      const touch = (kind: string, source: string) =>
+        c.query(`INSERT INTO acquisition_touches (session_id, kind, source)
+                 VALUES ('ses_touch', $1, $2)`, [kind, source]);
+
+      await touch('first', 'creator_link');
+      await rejects(c, () => touch('first', 'later_link'), /one_first/,
+        'a second origin story was written for one session');
+
+      await touch('meaningful', 'challenge');
+      await touch('meaningful', 'daily_tape');
+      await rejects(c, () => touch('bookmark', 'x'), /kind_check/);
+
+      const { rows } = await c.query(
+        `SELECT count(*)::int AS n FROM acquisition_touches WHERE session_id='ses_touch'`);
+      assert.equal(rows[0].n, 3);
+    });
+  });
+
+  test('attribution is session-scoped and reaches the person through the link', async () => {
+    // Never copied onto the user: claiming an identity must not rewrite how
+    // the player arrived, and there is only one path to the fact.
+    await inRollback(async c => {
+      const user = await newUser(c);
+      await c.query(`INSERT INTO game_sessions (id, user_id, linked_at)
+                     VALUES ('ses_attr', $1, now())`, [user]);
+      await c.query(`INSERT INTO acquisition_touches (session_id, kind, source, campaign)
+                     VALUES ('ses_attr', 'first', 'x', 'launch')`);
+
+      const { rows } = await c.query(
+        `SELECT t.campaign FROM acquisition_touches t
+         JOIN game_sessions s ON s.id = t.session_id WHERE s.user_id = $1`, [user]);
+      assert.equal(rows[0].campaign, 'launch');
+
+      const { rows: cols } = await c.query(
+        `SELECT count(*)::int AS n FROM information_schema.columns
+         WHERE table_name = 'acquisition_touches' AND column_name = 'user_id'`);
+      assert.equal(cols[0].n, 0, 'attribution grew a second source of truth');
+    });
+  });
+
+  test('deleting a session takes its touches and assignments with it', async () => {
+    await inRollback(async c => {
+      await c.query(`INSERT INTO game_sessions (id) VALUES ('ses_bye')`);
+      await c.query(`INSERT INTO acquisition_touches (session_id, kind) VALUES ('ses_bye','first')`);
+      await c.query(`INSERT INTO experiment_assignments (session_id, experiment_id, variant)
+                     VALUES ('ses_bye', 'hero_copy', 'B')`);
+      await c.query(`DELETE FROM game_sessions WHERE id = 'ses_bye'`);
+
+      for (const table of ['acquisition_touches', 'experiment_assignments']) {
+        const { rows } = await c.query(
+          `SELECT count(*)::int AS n FROM ${table} WHERE session_id = 'ses_bye'`);
+        assert.equal(rows[0].n, 0, `${table} outlived its session`);
+      }
+    });
+  });
+
+  test('a campaign outlives the creator who made it', async () => {
+    await inRollback(async c => {
+      const creator = await newUser(c);
+      await c.query(`INSERT INTO growth_campaigns (slug, kind, creator_id)
+                     VALUES ('kiu_desk', 'creator', $1)`, [creator]);
+      await rejects(c,
+        () => c.query(`INSERT INTO growth_campaigns (slug, kind) VALUES ('paid_x', 'billboard')`),
+        /kind_check/);
+
+      await c.query(`DELETE FROM app_users WHERE id = $1`, [creator]);
+      const { rows } = await c.query(
+        `SELECT creator_id FROM growth_campaigns WHERE slug = 'kiu_desk'`);
+      assert.equal(rows.length, 1, 'deleting the creator deleted how players arrived');
+      assert.equal(rows[0].creator_id, null);
+    });
+  });
+
+  test('an attributed campaign cannot be deleted out from under its arrivals', async () => {
+    await inRollback(async c => {
+      const { rows: [campaign] } = await c.query(
+        `INSERT INTO growth_campaigns (slug, kind) VALUES ('partner_a','partner') RETURNING id`);
+      await c.query(`INSERT INTO game_sessions (id) VALUES ('ses_camp')`);
+      await c.query(`INSERT INTO acquisition_touches (session_id, kind, campaign_id)
+                     VALUES ('ses_camp', 'first', $1)`, [campaign.id]);
+      await rejects(c,
+        () => c.query(`DELETE FROM growth_campaigns WHERE id = $1`, [campaign.id]),
+        /foreign key|violates/i);
+    });
+  });
+
+  test('an experiment cohort is decided once per session', async () => {
+    await inRollback(async c => {
+      await c.query(`INSERT INTO game_sessions (id) VALUES ('ses_exp')`);
+      await c.query(`INSERT INTO experiment_assignments (session_id, experiment_id, variant)
+                     VALUES ('ses_exp', 'start_cta', 'A')`);
+      await rejects(c,
+        () => c.query(`INSERT INTO experiment_assignments (session_id, experiment_id, variant)
+                       VALUES ('ses_exp', 'start_cta', 'B')`),
+        /duplicate key|unique/i,
+        'a player was moved between variants mid-test');
+
+      // A different experiment is a different row, not a conflict.
+      await c.query(`INSERT INTO experiment_assignments (session_id, experiment_id, variant)
+                     VALUES ('ses_exp', 'share_cta', 'B')`);
+    });
+  });
+
+  test('the outbox hands back the backlog in the order it was written', async () => {
+    await inRollback(async c => {
+      for (const topic of ['a', 'b', 'c']) {
+        await c.query(`INSERT INTO outbox_events (topic, payload) VALUES ($1, '{}'::jsonb)`,
+          [topic]);
+      }
+      await c.query(`UPDATE outbox_events SET processed_at = now() WHERE topic = 'a'`);
+      const { rows } = await c.query(
+        `SELECT topic FROM outbox_events WHERE processed_at IS NULL ORDER BY id`);
+      assert.deepEqual(rows.map(r => r.topic), ['b', 'c']);
+    });
+  });
+
+  test('an event that reports no experiments differs from one that reported nothing', async () => {
+    await inRollback(async c => {
+      await c.query(
+        `INSERT INTO game_events (event_id, event_type, event_version, occurred_at)
+         VALUES ('evt_pre_d', 'arena.started', 1, now())`);
+      await c.query(
+        `INSERT INTO game_events (event_id, event_type, event_version, occurred_at,
+                                  experiment_assignments)
+         VALUES ('evt_post_d', 'arena.started', 1, now(), '{"hero_copy":"B"}'::jsonb)`);
+
+      const { rows } = await c.query(
+        `SELECT event_id, experiment_assignments FROM game_events WHERE event_id = $1`,
+        ['evt_pre_d']);
+      assert.equal(rows[0].experiment_assignments, null,
+        'an event gained an experiment claim its emitter never made');
+
+      const { rows: reported } = await c.query(
+        `SELECT experiment_assignments FROM game_events WHERE event_id = $1`, ['evt_post_d']);
+      assert.deepEqual(reported[0].experiment_assignments, { hero_copy: 'B' });
+
+      // The ruled contract is a map of experiment id to variant. jsonb would
+      // otherwise accept an array, a number or a bare string, and the writer
+      // that produced one would be found by whoever later read the column.
+      for (const notAMap of ['["A","B"]', '42', '"control"', 'null']) {
+        await rejects(c,
+          () => c.query(
+            `INSERT INTO game_events (event_id, event_type, event_version, occurred_at,
+                                      experiment_assignments)
+             VALUES ($1, 'arena.started', 1, now(), $2::jsonb)`,
+            [`evt_bad_${notAMap.length}`, notAMap]),
+          /experiment_assignments_object/,
+          `${notAMap} was accepted as an experiment assignment map`);
+      }
+    });
+  });
+});
+
+// ─── Migration order (no database required) ──────────────────────────────────
+
+describe('migration ownership', () => {
+  const files = readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort();
+
+  test('no migration references a table a later migration creates', () => {
+    // The cross-migration law, checked against the files rather than the
+    // document: 0003 cannot point at challenges (0004) or seasons (0005),
+    // because a foreign key to a table that does not exist yet makes the
+    // migration unappliable in the order it actually runs.
+    const created = new Set<string>();
+    for (const file of files) {
+      const sql = readFileSync(MIGRATIONS + file, 'utf8')
+        .split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
+      for (const m of sql.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_][a-z0-9_]*)/gi)) {
+        created.add(m[1].toLowerCase());
+      }
+      for (const m of sql.matchAll(/REFERENCES\s+([a-z_][a-z0-9_]*)/gi)) {
+        const target = m[1].toLowerCase();
+        assert.ok(created.has(target),
+          `${file} references ${target}, which no migration up to and including it creates`);
+      }
+    }
+  });
+
+  test('0003 owns its tables and nothing a later PR owns', () => {
+    const sql = readFileSync(MIGRATIONS + '0003_growth_data_foundation.sql', 'utf8');
+    const created = [...sql.matchAll(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([a-z_][a-z0-9_]*)/gi)]
+      .map(m => m[1].toLowerCase()).sort();
+    assert.deepEqual(created, [
+      'acquisition_touches', 'experiment_assignments', 'growth_campaigns',
+      'outbox_events', 'player_handle_history', 'public_player_profiles',
+    ]);
+
+    const body = sql.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
+    for (const later of [
+      'challenges', 'challenge_attempts', 'result_cards', 'seasons', 'season_arenas',
+      'ranked_attempts', 'ranked_decisions', 'season_results', 'community_links',
+      'crews', 'crew_members', 'product_state_projections',
+    ]) {
+      assert.equal(new RegExp(`\\b${later}\\b`).test(body), false,
+        `0003 names ${later}, which a later migration owns`);
+    }
+  });
+});
