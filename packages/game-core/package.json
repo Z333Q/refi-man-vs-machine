@@ -1,0 +1,13 @@
+{
+  "name": "@refi/game-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic ReFi Alpha game rules. No environment, no I/O, no framework.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false,
+  "dependencies": {},
+  "devDependencies": {}
+}
