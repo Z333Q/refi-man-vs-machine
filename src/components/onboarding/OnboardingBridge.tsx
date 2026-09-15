@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { isProgressSaved, markProgressSaved } from '../../lib/alphaIdentity';
+import { claimedProfile, type ClaimedProfile } from '../../lib/claimedIdentity';
+import { authAvailability } from '../../lib/auth/provider';
+import { ClaimProfileModal } from './ClaimProfileModal';
 import { claimHandoff, HANDOFF_MODE, type IntendedDestination } from '../../lib/handoff';
 import { track } from '../../lib/growth';
 
@@ -34,7 +36,16 @@ const EXITS: { dest: IntendedDestination; label: string; note: string }[] = [
 ];
 
 export function OnboardingBridge() {
-  const [saved, setSaved] = useState(() => isProgressSaved());
+  // The local alp_... id that used to sit behind "SAVE YOUR RUN" is gone from
+  // this surface. It was never an account: nothing authorised it, no server
+  // knew it, and calling local storage "saved progress" next to a real
+  // sign-in would leave the player with two ideas of what having an account
+  // means. It still exists for telemetry continuity and it is no longer
+  // spoken about here. One concept of an account, and it is the claimed
+  // profile.
+  const [claimed, setClaimed] = useState<ClaimedProfile | null>(() => claimedProfile());
+  const [claiming, setClaiming] = useState(false);
+  const canClaim = authAvailability().kind === 'READY';
   const [open, setOpen] = useState(false);
   const [handoffPending, setHandoffPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,17 +118,26 @@ export function OnboardingBridge() {
       )}
 
       <div className="flex items-center gap-2">
-        {saved ? (
+        {claimed ? (
           <span className="text-paper-green text-xs tracking-widest border border-paper-green/30 bg-paper-green/5 rounded-terminal px-2.5 py-1.5">
-            ✓ PROGRESS SAVED
+            ✓ @{claimed.handle}
           </span>
-        ) : (
+        ) : canClaim ? (
           <button
-            onClick={() => { markProgressSaved(); setSaved(true); }}
+            onClick={() => { setClaiming(true); }}
             className="text-phosphor-mid text-xs tracking-widest border border-phosphor/30 rounded-terminal px-2.5 py-1.5 hover:text-phosphor hover:border-phosphor/50 transition-colors"
           >
-            ◇ SAVE YOUR RUN
+            ◇ CLAIM YOUR TRADER PROFILE
           </button>
+        ) : (
+          // No identity provider in this build. The truthful version of the
+          // old claim: the run is on this device, and that is all.
+          <span
+            className="text-phosphor-dim text-xs tracking-widest border border-phosphor-dim/25 rounded-terminal px-2.5 py-1.5"
+            title="Anonymous progress lives in this browser"
+          >
+            ◇ SAVED ON THIS DEVICE
+          </span>
         )}
         <button
           onClick={openMenu}
@@ -127,6 +147,13 @@ export function OnboardingBridge() {
           ENTER REFI ▸
         </button>
       </div>
+
+      {claiming && (
+        <ClaimProfileModal
+          onClose={() => { setClaiming(false); }}
+          onClaimed={profile => { setClaimed(profile); setClaiming(false); }}
+        />
+      )}
     </div>
   );
 }
