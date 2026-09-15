@@ -3,6 +3,7 @@ import type {
 } from './types';
 import type { EventEnvelope } from '../eventBuffer';
 import type { AcquisitionTouch } from '../attribution';
+import { getCredential } from '../auth/credential';
 import type { RunRecord } from '../runRecord';
 import type { MachineVersionRecord } from '../machineVersions';
 
@@ -40,6 +41,12 @@ export interface RefiRemote {
   saveAcquisitionTouch(sessionId: string, touch: AcquisitionTouch): Promise<boolean>;
 }
 
+/** The verified credential, when this page has one. Never stored on disk. */
+function authHeader(): Record<string, string> {
+  const token = getCredential();
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
 /** Default bound on any single remote request. A request that never answers
  *  must not pin its mirror queue forever. */
 export const DEFAULT_REMOTE_TIMEOUT_MS = 10_000;
@@ -65,7 +72,13 @@ export function makeRefiRemote(
         signal: controller.signal,
         headers: {
           'content-type': 'application/json',
+          // Which progress stream this is about.
           'x-alpha-session': sessionId,
+          // Who is allowed to touch it, when the player has claimed an
+          // identity. Absent for anonymous play, which stays fully playable:
+          // the API authorizes an unlinked session on the header alone and a
+          // linked one only for its owner.
+          ...authHeader(),
           ...(init?.headers ?? {}),
         },
       });
@@ -168,7 +181,7 @@ export function makeRefiRemote(
         const res = await fetch(`${root}/v1/events`, {
           method: 'POST',
           signal: controller.signal,
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', ...authHeader() },
           body: JSON.stringify(envelope),
         });
         return res.ok;
