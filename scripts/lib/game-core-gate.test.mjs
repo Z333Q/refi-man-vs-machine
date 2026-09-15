@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync, rmSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
@@ -90,4 +90,77 @@ test('a relative path that walks out and back in is judged by where it lands', (
     { [PROBE]: `export type { RunState } from './sub/../types';\n` },
     runGate);
   assert.equal(code, 0, out);
+});
+
+// ─── Globals: the word versus the read ────────────────────────────────────────
+//
+// `window` is the DOM global and also the right word for the historical period
+// an arena covers. The gate has to tell a data field from a browser
+// dependency, and getting it wrong in either direction is expensive: a false
+// positive pushes someone to rename good domain vocabulary to appease a lint
+// bug, and a false negative lets the package break in Node.
+
+test('a property named like a global is not a global read', () => {
+  const { code, out } = withFiles({
+    [PROBE]: 'export interface Probe {\n'
+      + '  window: string;\n'
+      + '  document?: string;\n'
+      + '}\n'
+      + 'export const read = (p: Probe) => p.window + p.document;\n',
+  }, runGate);
+  assert.equal(code, 0, out);
+});
+
+test('reaching for the global still fails, in every form that reaches', () => {
+  for (const body of [
+    'export const w = window;\n',
+    'export const has = typeof window !== "undefined";\n',
+    'export const href = window.location.href;\n',
+  ]) {
+    const { code, out } = withFiles({ [PROBE]: body }, runGate);
+    assert.equal(code, 1, `waved through: ${body}`);
+    assert.match(out, /uses window/);
+  }
+});
+
+// ─── Shims and adapters ───────────────────────────────────────────────────────
+
+test('an adapter that stops composing its content fails the gate', () => {
+  // The failure this catches is silent at build time and total at runtime: the
+  // core registry stays empty, and every run ends at its first checkpoint.
+  const ADAPTER = join(ROOT, 'src', 'lib', 'runEngine.ts');
+  const original = readFileSync(ADAPTER, 'utf8');
+  try {
+    writeFileSync(ADAPTER, `export * from '../../packages/game-core/src/runEngine';\n`);
+    const { code, out } = runGate();
+    assert.equal(code, 1, 'an adapter that composes nothing was waved through');
+    assert.match(out, /does not compose \.\/arenaIndex/);
+  } finally {
+    writeFileSync(ADAPTER, original);
+  }
+});
+
+test('an adapter may not grow logic beyond its one composing import', () => {
+  const ADAPTER = join(ROOT, 'src', 'lib', 'runEngine.ts');
+  const original = readFileSync(ADAPTER, 'utf8');
+  try {
+    writeFileSync(ADAPTER, original + 'export const extra = 1;\n');
+    const { code, out } = runGate();
+    assert.equal(code, 1, 'an adapter with logic in it was waved through');
+    assert.match(out, /adapter contains logic/);
+  } finally {
+    writeFileSync(ADAPTER, original);
+  }
+});
+
+test('an application file that reaches past the shims fails the gate', () => {
+  // The regression this exists for is quiet: importing the engine directly
+  // skips the file that registers the arenas, and the screen that did it gets
+  // an engine with an empty registry.
+  const APP_PROBE = join(ROOT, 'src', 'lib', '__gate_probe_app__.ts');
+  const { code, out } = withFiles(
+    { [APP_PROBE]: `export * from '../../packages/game-core/src/runEngine';\n` },
+    runGate);
+  assert.equal(code, 1, 'a direct import of the core from the app was waved through');
+  assert.match(out, /imports the core directly/);
 });
