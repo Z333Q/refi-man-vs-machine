@@ -1,0 +1,14 @@
+// The package's own tests.
+//
+// A separate config so the base one keeps `"types": []`. That is not tidiness:
+// an empty ambient type set is what makes `process` or `Buffer` in a core
+// source file a compile error rather than something the gate has to catch by
+// pattern. The tests legitimately need node's, so they get their own config
+// instead of relaxing the rule for everything.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src", "test"]
+}
