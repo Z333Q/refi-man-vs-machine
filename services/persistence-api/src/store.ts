@@ -33,20 +33,61 @@ import {
 // ─── Session boundary ─────────────────────────────────────────────────────────
 
 /**
- * Resolve the session for a scoped read. No row means nothing to read (404,
- * which the client maps to NOT_FOUND); a linked session is refused (403)
- * because the header proves nothing about who is asking.
+ * Who is asking, and about which browser session.
+ *
+ * Two independent facts, and keeping them apart is the whole authorization
+ * model. `sessionId` names the resource: which stream of progress this request
+ * is about. `userId` is the verified principal behind it, or null when the
+ * request carries no credential. The continuity header can say which session;
+ * only a verified credential can say who.
  */
-export async function resolveSessionForRead(pool: Pool, sessionId: string): Promise<void> {
+export interface Caller {
+  sessionId: string;
+  /** app_users.id of the verified principal, or null when there is none. */
+  userId: string | null;
+  /**
+   * Whether a credential was verified at all.
+   *
+   * Distinct from userId because a principal can be genuine and still have no
+   * account here: somebody who signed in but has never claimed a profile is
+   * authenticated and is nobody's owner. Collapsing the two would answer their
+   * request with "authenticate yourself", which they just did.
+   */
+  authenticated: boolean;
+}
+
+/**
+ * Resolve the session for a scoped read. No row means nothing to read (404,
+ * which the client maps to NOT_FOUND).
+ *
+ * A linked session belongs to somebody, and from then on the header alone is
+ * not enough: it is not a secret and proves nothing about who is holding it.
+ * The owner's own verified principal is enough, which is what makes a claimed
+ * player able to keep playing. Anybody else's is not.
+ */
+export async function resolveSessionForRead(pool: Pool, caller: Caller): Promise<void> {
   const { rows } = await pool.query(
     `SELECT user_id FROM game_sessions WHERE id = $1`,
-    [sessionId],
+    [caller.sessionId],
   );
   const row = rows[0];
   if (!row) throw new HttpError(404, 'unknown session');
-  if (row.user_id !== null) {
-    throw new HttpError(403, 'authentication_required');
-  }
+  authorize(row.user_id, caller);
+}
+
+/**
+ * The one place the linked-session rule is decided, for reads and writes
+ * alike. A rule written twice is a rule that will be relaxed once.
+ */
+function authorize(owner: string | null, caller: Caller): void {
+  if (owner === null) return;                      // anonymous: continuity is enough
+  if (caller.userId === owner) return;             // its owner, verified
+  // Authenticated but not the owner is a different answer from not
+  // authenticated at all, and the client can act on the difference: one is
+  // "sign in", the other is "this is not yours".
+  throw caller.authenticated
+    ? new HttpError(403, 'forbidden')
+    : new HttpError(403, 'authentication_required');
 }
 
 /**
@@ -62,23 +103,22 @@ export async function resolveSessionForRead(pool: Pool, sessionId: string): Prom
  * it cannot mutate an existing linked row — and the locked SELECT
  * immediately after is what establishes authorization.
  */
-async function resolveSessionForWrite(c: PoolClient, sessionId: string): Promise<void> {
+async function resolveSessionForWrite(c: PoolClient, caller: Caller): Promise<void> {
   await c.query(
     `INSERT INTO game_sessions (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`,
-    [sessionId],
+    [caller.sessionId],
   );
   const { rows } = await c.query(
     `SELECT user_id FROM game_sessions WHERE id = $1 FOR UPDATE`,
-    [sessionId],
+    [caller.sessionId],
   );
   const row = rows[0];
-  if (row && row.user_id !== null) {
-    throw new HttpError(403, 'authentication_required');
-  }
-  await c.query(`UPDATE game_sessions SET last_seen_at = now() WHERE id = $1`, [sessionId]);
+  if (row) authorize(row.user_id, caller);
+  await c.query(
+    `UPDATE game_sessions SET last_seen_at = now() WHERE id = $1`, [caller.sessionId]);
 }
 
-async function inTransaction<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): Promise<T> {
+export async function inTransaction<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): Promise<T> {
   const c = await pool.connect();
   try {
     await c.query('BEGIN');
@@ -111,8 +151,11 @@ function iso(v: unknown): string {
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
-export async function getProfile(pool: Pool, sessionId: string): Promise<WireProfile | null> {
-  await resolveSessionForRead(pool, sessionId);
+export async function getProfile(
+  pool: Pool, caller: Caller): Promise<WireProfile | null> {
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
+  await resolveSessionForRead(pool, caller);
   const { rows } = await pool.query(
     `SELECT handle, alpha_xp, rank_code, machine_beats, machine_attempts,
             current_streak, best_streak, archetype, decision_streak, last_active_date
@@ -179,9 +222,12 @@ export async function getProfile(pool: Pool, sessionId: string): Promise<WirePro
   };
 }
 
-export async function putProfile(pool: Pool, sessionId: string, p: WireProfile): Promise<void> {
+export async function putProfile(
+  pool: Pool, caller: Caller, p: WireProfile): Promise<void> {
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
   await inTransaction(pool, async c => {
-    await resolveSessionForWrite(c, sessionId);
+    await resolveSessionForWrite(c, caller);
 
     await c.query(
       `INSERT INTO player_profiles
@@ -254,9 +300,12 @@ export async function putProfile(pool: Pool, sessionId: string, p: WireProfile):
 
 // ─── Tips and guidance ────────────────────────────────────────────────────────
 
-export async function putTip(pool: Pool, sessionId: string, tip: WireTip): Promise<void> {
+export async function putTip(
+  pool: Pool, caller: Caller, tip: WireTip): Promise<void> {
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
   await inTransaction(pool, async c => {
-    await resolveSessionForWrite(c, sessionId);
+    await resolveSessionForWrite(c, caller);
     // Provenance is only what the record establishes. A missing lastShownAt
     // stays missing (never now()), completedAt only ever comes from the
     // record, and show_count is untouched in both directions: a TipRecord
@@ -275,9 +324,12 @@ export async function putTip(pool: Pool, sessionId: string, tip: WireTip): Promi
   });
 }
 
-export async function putGuidance(pool: Pool, sessionId: string, mode: string): Promise<void> {
+export async function putGuidance(
+  pool: Pool, caller: Caller, mode: string): Promise<void> {
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
   await inTransaction(pool, async c => {
-    await resolveSessionForWrite(c, sessionId);
+    await resolveSessionForWrite(c, caller);
     await c.query(
       `INSERT INTO guidance_settings (session_id, guidance_mode)
        VALUES ($1,$2)
@@ -292,10 +344,12 @@ export async function putGuidance(pool: Pool, sessionId: string, mode: string): 
 
 export async function getTape(
   pool: Pool,
-  sessionId: string,
+  caller: Caller,
   tapeDate: string,
 ): Promise<WireTape | null> {
-  await resolveSessionForRead(pool, sessionId);
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
+  await resolveSessionForRead(pool, caller);
   const { rows } = await pool.query(
     `SELECT tape_id, action_code, player_score
      FROM daily_tape_submissions WHERE session_id = $1 AND tape_date = $2`,
@@ -311,9 +365,12 @@ export async function getTape(
   };
 }
 
-export async function putTape(pool: Pool, sessionId: string, tape: WireTape): Promise<void> {
+export async function putTape(
+  pool: Pool, caller: Caller, tape: WireTape): Promise<void> {
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
   await inTransaction(pool, async c => {
-    await resolveSessionForWrite(c, sessionId);
+    await resolveSessionForWrite(c, caller);
     const { rows } = await c.query(
       `SELECT tape_id, action_code, player_score FROM daily_tape_submissions
        WHERE session_id = $1 AND tape_date = $2 FOR UPDATE`,
@@ -366,8 +423,11 @@ function rowToDecision(row: Record<string, unknown>): WireDecision {
   };
 }
 
-export async function listRuns(pool: Pool, sessionId: string): Promise<WireRunRecord[]> {
-  await resolveSessionForRead(pool, sessionId);
+export async function listRuns(
+  pool: Pool, caller: Caller): Promise<WireRunRecord[]> {
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
+  await resolveSessionForRead(pool, caller);
   const { rows } = await pool.query(
     `SELECT * FROM arena_runs WHERE session_id = $1 ORDER BY updated_at DESC LIMIT 50`,
     [sessionId],
@@ -518,9 +578,12 @@ async function insertDecisions(
   }
 }
 
-export async function putRun(pool: Pool, sessionId: string, run: WireRunRecord): Promise<void> {
+export async function putRun(
+  pool: Pool, caller: Caller, run: WireRunRecord): Promise<void> {
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
   await inTransaction(pool, async c => {
-    await resolveSessionForWrite(c, sessionId);
+    await resolveSessionForWrite(c, caller);
 
     const { rows } = await c.query(
       `SELECT * FROM arena_runs WHERE id = $1 FOR UPDATE`,
@@ -673,9 +736,11 @@ export async function putRun(pool: Pool, sessionId: string, run: WireRunRecord):
 
 export async function listMachineVersions(
   pool: Pool,
-  sessionId: string,
+  caller: Caller,
 ): Promise<WireMachineVersion[]> {
-  await resolveSessionForRead(pool, sessionId);
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
+  await resolveSessionForRead(pool, caller);
   const { rows } = await pool.query(
     `SELECT machine_name, version, configuration_json, build_hash, locked_at, created_at
      FROM player_machine_versions WHERE session_id = $1
@@ -708,11 +773,13 @@ export async function listMachineVersions(
 
 export async function putMachineVersion(
   pool: Pool,
-  sessionId: string,
+  caller: Caller,
   record: WireMachineVersion,
 ): Promise<void> {
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
   await inTransaction(pool, async c => {
-    await resolveSessionForWrite(c, sessionId);
+    await resolveSessionForWrite(c, caller);
 
     const { rows } = await c.query(
       `SELECT configuration_json, build_hash, locked_at, created_at
@@ -828,15 +895,17 @@ export async function insertEvent(pool: Pool, event: WireEvent): Promise<void> {
  * session legitimately has several.
  */
 export async function insertTouch(
-  pool: Pool, sessionId: string, touch: WireTouch,
+  pool: Pool, caller: Caller, touch: WireTouch,
 ): Promise<void> {
+  // The resource this request names; who is asking is caller.userId.
+  const { sessionId } = caller;
   await inTransaction(pool, async c => {
     // The same authorization every other write uses, unweakened: the session
     // row is created if this is the first thing it ever does, and a session
     // that already belongs to an account is refused, because the continuity
     // header proves nothing about who is holding it. Attribution for a
     // claimed player needs a verified principal, which PR E owns.
-    await resolveSessionForWrite(c, sessionId);
+    await resolveSessionForWrite(c, caller);
     // Two idempotency rules, because the two kinds have different guarantees.
     //
     // A first touch is structurally unique per session (0003 holds a partial

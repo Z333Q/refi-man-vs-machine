@@ -164,3 +164,37 @@ export function profileFixture() {
     },
   };
 }
+
+// ─── Test principal verifier (PR E) ───────────────────────────────────────────
+//
+// Automated tests never call Stytch. They call this, which turns a bearer
+// token of the form `test:<subject>` into a verified principal.
+//
+// It lives in the test tree, is injected into makeServer by the test, and is
+// unreachable from the service's own code: there is deliberately no
+// environment variable that turns a bypass like this on in production, because
+// that switch is one deploy away from being the authentication system.
+export function testVerifier(provider = 'stytch') {
+  return {
+    async verify(authorization: string | undefined) {
+      if (!authorization) return null;
+      const match = /^Bearer\s+test:([a-z0-9_.-]+)$/i.exec(authorization.trim());
+      if (!match) {
+        const { HttpError } = await import('../src/contract.js');
+        throw new HttpError(401, 'invalid_credential');
+      }
+      const subject = match[1] as string;
+      return {
+        provider,
+        subject,
+        email: `${subject}@example.test`,
+        emailVerified: true,
+      };
+    },
+  };
+}
+
+/** The Authorization header a test principal presents. */
+export function asUser(subject: string): Record<string, string> {
+  return { authorization: `Bearer test:${subject}` };
+}

@@ -8,7 +8,16 @@ import {
 import {
   getProfile, getTape, insertEvent, insertTouch, listMachineVersions, listRuns,
   putGuidance, putMachineVersion, putProfile, putRun, putTape, putTip,
+  type Caller,
 } from './store.js';
+import {
+  claimIdentity, identityOf, linkSession, patchOwnProfile, publicProfile,
+  userForPrincipal,
+} from './identityStore.js';
+import { canonicalHandle } from './handlePolicy.js';
+import {
+  verifierFromEnv, type PrincipalVerifier, type VerifiedPrincipal,
+} from './principal.js';
 
 // ─── persistence-api ──────────────────────────────────────────────────────────
 //
@@ -78,8 +87,11 @@ function db(): Pool {
 function setCors(res: ServerResponse): void {
   res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
   res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type, x-alpha-session');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, OPTIONS');
+  // authorization carries the verified credential; x-alpha-session still says
+  // which browser session the request is about. Two different questions.
+  res.setHeader('Access-Control-Allow-Headers',
+    'content-type, x-alpha-session, authorization');
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -117,6 +129,43 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   });
 }
 
+// The verifier is resolved once per process, not per request: building it
+// reads configuration, and a per-request build would turn a missing
+// environment variable into an intermittent failure instead of a loud one.
+let verifier: PrincipalVerifier | undefined;
+function defaultVerifier(): PrincipalVerifier {
+  verifier ??= verifierFromEnv();
+  return verifier;
+}
+
+/** A route that changes an account needs to know whose account it is. */
+function requirePrincipal(principal: VerifiedPrincipal | null): VerifiedPrincipal {
+  if (!principal) throw new HttpError(401, 'authentication_required');
+  return principal;
+}
+
+/** Optional free text, bounded. Absent stays absent; null is handled separately. */
+function optionalText(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') throw new HttpError(400, `${field} must be a string`);
+  const text = value.trim();
+  if (text.length > 280) throw new HttpError(400, `${field} is too long`);
+  return text === '' ? undefined : text;
+}
+
+/** An explicit null means "clear this field", which is different from absent. */
+function nullIfNull(value: unknown): null | undefined {
+  return value === null ? null : undefined;
+}
+
+function validVisibility(value: unknown): 'public' | 'private' | undefined {
+  if (value === undefined) return undefined;
+  if (value !== 'public' && value !== 'private') {
+    throw new HttpError(400, 'visibility must be public or private');
+  }
+  return value;
+}
+
 /**
  * Route one request. Exported so tests can drive the exact production paths
  * through an ordinary http server without mocking the routing.
@@ -125,8 +174,10 @@ export async function route(
   req: IncomingMessage,
   res: ServerResponse,
   poolOverride?: Pool,
+  verifierOverride?: PrincipalVerifier,
 ): Promise<void> {
   const p = poolOverride ?? db();
+  const verifier = verifierOverride ?? defaultVerifier();
   const url = new URL(req.url ?? '/', 'http://localhost');
   const path = url.pathname;
   const method = req.method ?? 'GET';
@@ -144,20 +195,106 @@ export async function route(
     return;
   }
 
+  // Who is asking. Null for the anonymous majority; a 401 if a credential was
+  // offered and did not hold up. Never taken from the body: a request that
+  // names its own provider and subject is a request, not a principal.
+  const principal = await verifier.verify(req.headers.authorization);
+
+  // ─── Claimed identity (merge point 1) ───────────────────────────────────────
+
+  if (path === '/v1/identity/me' && method === 'GET') {
+    const me = await identityOf(p, requirePrincipal(principal));
+    if (!me) {
+      json(res, 404, { error: 'not_claimed' });
+      return;
+    }
+    json(res, 200, me);
+    return;
+  }
+
+  if (path === '/v1/identity/claim' && method === 'POST') {
+    const who = requirePrincipal(principal);
+    const claimSession = validSessionId(req.headers['x-alpha-session']);
+    const body = await readJson(req);
+    if (typeof body !== 'object' || body === null) throw new HttpError(400, 'body must be an object');
+    const fields = body as Record<string, unknown>;
+
+    // Only the player's own choices are accepted. Ownership fields in a body
+    // are ignored rather than validated: there is no version of "the client
+    // told us which user this is" that is safe to read.
+    const result = await claimIdentity(p, who, claimSession, {
+      handle: canonicalHandle(fields['handle']),
+      displayName: optionalText(fields['displayName'], 'displayName'),
+    });
+    json(res, result.outcome === 'CLAIMED' ? 201 : 200, result);
+    return;
+  }
+
+  if (path === '/v1/identity/link-session' && method === 'POST') {
+    const who = requirePrincipal(principal);
+    const linkTarget = validSessionId(req.headers['x-alpha-session']);
+    json(res, 200, await linkSession(p, who, linkTarget));
+    return;
+  }
+
+  // ─── Profiles ───────────────────────────────────────────────────────────────
+
+  if (path === '/v1/profiles/me' && method === 'PATCH') {
+    const who = requirePrincipal(principal);
+    const userId = await userForPrincipal(p, who);
+    if (!userId) throw new HttpError(404, 'no_profile');
+    const body = await readJson(req);
+    if (typeof body !== 'object' || body === null) throw new HttpError(400, 'body must be an object');
+    const fields = body as Record<string, unknown>;
+
+    json(res, 200, await patchOwnProfile(p, userId, {
+      handle: fields['handle'] === undefined ? undefined : canonicalHandle(fields['handle']),
+      displayName: optionalText(fields['displayName'], 'displayName') ?? nullIfNull(fields['displayName']),
+      avatarUrl: optionalText(fields['avatarUrl'], 'avatarUrl') ?? nullIfNull(fields['avatarUrl']),
+      bio: optionalText(fields['bio'], 'bio') ?? nullIfNull(fields['bio']),
+      visibility: validVisibility(fields['visibility']),
+    }));
+    return;
+  }
+
+  const profileMatch = /^\/v1\/profiles\/([^/]+)$/.exec(path);
+  if (profileMatch && method === 'GET') {
+    // Public and unauthenticated on purpose: a profile page is a public page.
+    // It exposes only what a profile is, and never an email, a provider
+    // subject, a session id or anything from the formal product.
+    const found = await publicProfile(p, decodeURIComponent(profileMatch[1] as string).toLowerCase());
+    if (found.kind === 'PROFILE') { json(res, 200, found.profile); return; }
+    if (found.kind === 'MOVED') { json(res, 200, found); return; }
+    // A retired name is gone, not free. Saying so is what stops it looking
+    // available to whoever asks next.
+    if (found.kind === 'RETIRED') { json(res, 410, { error: 'handle_retired' }); return; }
+    json(res, 404, { error: 'not_found' });
+    return;
+  }
+
+  // ─── Session-scoped persistence ─────────────────────────────────────────────
+
   const sessionId = validSessionId(req.headers['x-alpha-session']);
+  // An anonymous session authorizes itself; a linked one needs its owner. The
+  // store decides, once, for every route below.
+  const caller: Caller = {
+    sessionId,
+    userId: principal ? await userForPrincipal(p, principal) : null,
+    authenticated: principal !== null,
+  };
 
   // How this session arrived (§7.4). Session-scoped like every other write
   // below, and carrying no user id: a touch reaches a claimed player through
   // game_sessions.user_id and is never copied onto the user.
   if (method === 'POST' && path === '/v1/growth/touches') {
-    await insertTouch(p, sessionId, validateTouch(await readJson(req)));
+    await insertTouch(p, caller, validateTouch(await readJson(req)));
     noContent(res);
     return;
   }
 
   if (path === '/v1/progress') {
     if (method === 'GET') {
-      const profile = await getProfile(p, sessionId);
+      const profile = await getProfile(p, caller);
       if (!profile) {
         json(res, 404, { error: 'not_found' });
         return;
@@ -166,27 +303,27 @@ export async function route(
       return;
     }
     if (method === 'PUT') {
-      await putProfile(p, sessionId, validateProfile(await readJson(req)));
+      await putProfile(p, caller, validateProfile(await readJson(req)));
       noContent(res);
       return;
     }
   }
 
   if (method === 'POST' && path === '/v1/tips') {
-    await putTip(p, sessionId, validateTip(await readJson(req)));
+    await putTip(p, caller, validateTip(await readJson(req)));
     noContent(res);
     return;
   }
 
   if (method === 'PUT' && path === '/v1/guidance') {
-    await putGuidance(p, sessionId, validateGuidance(await readJson(req)));
+    await putGuidance(p, caller, validateGuidance(await readJson(req)));
     noContent(res);
     return;
   }
 
   const tapeGet = path.match(/^\/v1\/daily-tape\/(\d{4}-\d{2}-\d{2})$/);
   if (method === 'GET' && tapeGet) {
-    const tape = await getTape(p, sessionId, tapeGet[1] as string);
+    const tape = await getTape(p, caller, tapeGet[1] as string);
     if (!tape) {
       json(res, 404, { error: 'not_found' });
       return;
@@ -196,26 +333,26 @@ export async function route(
   }
 
   if (method === 'POST' && path === '/v1/daily-tape') {
-    await putTape(p, sessionId, validateTape(await readJson(req)));
+    await putTape(p, caller, validateTape(await readJson(req)));
     noContent(res);
     return;
   }
 
   if (method === 'GET' && path === '/v1/runs') {
-    json(res, 200, await listRuns(p, sessionId));
+    json(res, 200, await listRuns(p, caller));
     return;
   }
 
   const runPut = path.match(/^\/v1\/runs\/([^/]+)$/);
   if (method === 'PUT' && runPut) {
     const runId = decodeURIComponent(runPut[1] as string);
-    await putRun(p, sessionId, validateRunRecord(await readJson(req), runId));
+    await putRun(p, caller, validateRunRecord(await readJson(req), runId));
     noContent(res);
     return;
   }
 
   if (method === 'GET' && path === '/v1/machine-versions') {
-    json(res, 200, await listMachineVersions(p, sessionId));
+    json(res, 200, await listMachineVersions(p, caller));
     return;
   }
 
@@ -225,7 +362,7 @@ export async function route(
     const version = Number(machinePut[2]);
     await putMachineVersion(
       p,
-      sessionId,
+      caller,
       validateMachineVersion(await readJson(req), machineName, version),
     );
     noContent(res);
@@ -235,7 +372,10 @@ export async function route(
   json(res, 404, { error: 'not_found' });
 }
 
-export function makeServer(poolOverride?: Pool): ReturnType<typeof createServer> {
+export function makeServer(
+  poolOverride?: Pool,
+  verifierOverride?: PrincipalVerifier,
+): ReturnType<typeof createServer> {
   return createServer((req, res) => {
     void (async () => {
       setCors(res);
@@ -248,7 +388,7 @@ export function makeServer(poolOverride?: Pool): ReturnType<typeof createServer>
         return;
       }
       try {
-        await route(req, res, poolOverride);
+        await route(req, res, poolOverride, verifierOverride);
       } catch (err) {
         if (err instanceof HttpError) {
           json(res, err.status, { error: err.message });

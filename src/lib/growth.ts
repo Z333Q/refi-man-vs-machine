@@ -103,6 +103,20 @@ export interface GrowthEventPayloads {
     deployedScore: number | null; checkpointsCompleted: number;
   };
 
+  // ── Claimed identity (PR E) ──
+  //
+  // Emitted only after the server transaction commits. A modal opening, an
+  // authentication starting and a handle being typed are not a claim: the
+  // account either exists afterwards or it does not.
+  'profile.claimed': {
+    handle: string;
+    /** Whether this claim created the profile or found one already there. */
+    outcome: 'CLAIMED' | 'ALREADY_CLAIMED';
+    /** Distinct arenas this device has finished. A fact, not an inference. */
+    arenasCompleted: number;
+    machineLocked: boolean;
+  };
+
   // ── Conversion (existing surfaces only) ──
   'conversion.paper_cta_viewed': { surface: string };
   'conversion.paper_started': { surface: string };
