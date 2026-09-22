@@ -19,14 +19,27 @@ export interface MintDeps {
   privateJwk: JWK;
   /** Investor shell origin, e.g. https://refi-us-sec-ia-web.vercel.app */
   shellBaseUrl: string;
+  /**
+   * Verify a Firebase bearer token → trustworthy identity. Injected so the
+   * server wires the real Google-JWKS verifier and tests wire a local one.
+   * When absent, no bearer verification happens (session-id identity only).
+   */
+  verifyIdentity?: (bearerToken: string) => Promise<{ uid: string }>;
+  /**
+   * Fail closed when true: reject requests without a verified bearer identity.
+   * Flip on once the game ships Firebase auth so `sub` is never a raw session id.
+   */
+  requireVerifiedIdentity?: boolean;
   /** Injected for tests. */
   nowMs?: () => number;
   newId?: () => string;
 }
 
 export interface MintRequest {
-  /** Player identity (session id today; auth uid once upgraded). */
+  /** Progress-key the game stores rows under (session id today). */
   sessionId: string;
+  /** Optional `Authorization: Bearer <firebase-id-token>` header value. */
+  authorization?: string;
   intendedDestination?: string;
   campaignSource?: string;
 }
@@ -52,6 +65,23 @@ export async function mintHandoff(
     throw new HttpError(400, "invalid intendedDestination");
   }
 
+  // Resolve the token subject. A verified Firebase uid is trustworthy; the
+  // session id is not. Prefer the verified identity; fall back to the session
+  // id only while the game has no auth (and never when requireVerifiedIdentity).
+  let sub = req.sessionId;
+  const bearer = req.authorization?.startsWith("Bearer ")
+    ? req.authorization.slice(7).trim()
+    : "";
+  if (bearer && deps.verifyIdentity) {
+    try {
+      sub = (await deps.verifyIdentity(bearer)).uid;
+    } catch {
+      throw new HttpError(401, "invalid identity token");
+    }
+  } else if (deps.requireVerifiedIdentity) {
+    throw new HttpError(401, "verified identity required");
+  }
+
   const nowMs = deps.nowMs ?? Date.now;
   const newId = deps.newId ?? randomUUID;
 
@@ -61,6 +91,7 @@ export async function mintHandoff(
 
   const input = await loadProgress({
     db: deps.db,
+    sub,
     sessionId: req.sessionId,
     progressSnapshotId,
     intendedDestination: dest,

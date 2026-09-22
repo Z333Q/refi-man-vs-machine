@@ -1,4 +1,5 @@
 import { getSessionId } from './identity';
+import { getFirebaseIdToken } from './firebase';
 import { getFunnelAttribution } from './events';
 import {
   marketingHandoffUrl, DEFAULT_SITE_URL, type IntendedDestination,
@@ -49,9 +50,15 @@ export async function claimHandoff(
     );
     return;
   }
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  // Attach the verified Firebase identity when available, so the shell binds a
+  // real uid rather than the session id. No-ops if Firebase isn't configured.
+  const idToken = await getFirebaseIdToken();
+  if (idToken) headers['authorization'] = `Bearer ${idToken}`;
+
   const res = await fetch(`${HANDOFF_URL.replace(/\/+$/, '')}/mint-handoff`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify({
       sessionId: getSessionId(),
       intendedDestination,
